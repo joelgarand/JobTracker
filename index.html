@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0a1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css?v=21">
+  <title>JobTracker</title>
+</head>
+<body>
+
+  <!-- Header Bar -->
+  <header class="app-header">
+    <div class="app-header-center">
+      <span class="app-header-title">JobTracker</span>
+      <svg class="app-header-swirl" width="90" height="10" viewBox="0 0 90 10" fill="none">
+        <path d="M5 8C20 2 35 2 45 5C55 8 70 8 85 3" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" opacity="0.85"/>
+      </svg>
+    </div>
+    <div class="app-header-actions">
+      <button type="button" id="header-theme-toggle" class="header-theme-toggle" aria-label="Theme wechseln">🌙</button>
+      <button type="button" id="header-rules-info-btn" class="header-rules-btn" aria-label="Arbeitsrecht-Info">ℹ️</button>
+    </div>
+  </header>
+
+  <!-- Error banner for localStorage errors -->
+  <div id="error-banner" class="error-banner" role="alert" aria-live="assertive">
+    <span id="error-banner-message">Speicher nicht verfügbar. Änderungen sind blockiert.</span>
+  </div>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- View: PWA Install Prompt (shown in browser, hidden when standalone) -->
+  <section id="view-pwa-install" class="view-section">
+    <div class="pwa-install-container">
+      <div class="pwa-install-brand">
+        <span class="pwa-install-title">JobTracker</span>
+        <svg class="pwa-install-swirl" width="120" height="12" viewBox="0 0 120 12" fill="none">
+          <path d="M5 10C25 2 45 2 60 6C75 10 95 10 115 3" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" opacity="0.85"/>
+        </svg>
+      </div>
+      <p class="pwa-install-subtitle">Für das beste Erlebnis, füge JobTracker zu deinem Home-Bildschirm hinzu.</p>
+
+      <div class="pwa-install-steps">
+        <div class="pwa-install-step">
+          <div class="pwa-install-step-number">1</div>
+          <div class="pwa-install-step-content">
+            <div class="pwa-install-step-icon">⋯</div>
+            <p class="pwa-install-step-text">Tippe auf die <strong>3 Punkte</strong> (⋯) in der Adressleiste</p>
+          </div>
+        </div>
+
+        <div class="pwa-install-step">
+          <div class="pwa-install-step-number">2</div>
+          <div class="pwa-install-step-content">
+            <div class="pwa-install-step-icon">⬆️</div>
+            <p class="pwa-install-step-text">Tippe auf <strong>„Teilen"</strong></p>
+          </div>
+        </div>
+
+        <div class="pwa-install-step">
+          <div class="pwa-install-step-number">3</div>
+          <div class="pwa-install-step-content">
+            <div class="pwa-install-step-icon">➕</div>
+            <p class="pwa-install-step-text">Scrolle ganz nach unten und tippe auf <strong>„Zum Home-Bildschirm"</strong></p>
+          </div>
+        </div>
+
+        <div class="pwa-install-step">
+          <div class="pwa-install-step-number">4</div>
+          <div class="pwa-install-step-content">
+            <div class="pwa-install-step-icon">✅</div>
+            <p class="pwa-install-step-text">Tippe oben rechts auf <strong>„Hinzufügen"</strong></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="pwa-install-hint">
+        <span class="pwa-install-hint-icon">💡</span>
+        <span>Öffne danach die App vom Home-Bildschirm — die Einrichtung startet automatisch.</span>
+      </div>
+
+      <button type="button" id="pwa-install-skip-btn" class="btn btn-secondary pwa-install-skip">Trotzdem im Browser fortfahren</button>
+    </div>
+  </section>
+
+  <!-- View: Onboarding -->
+  <section id="view-onboarding" class="view-section">
+    <h1 class="onboarding-title">JobTracker Einrichtung</h1>
+
+    <!-- Progress Indicator -->
+    <div class="onboarding-progress" aria-label="Einrichtungsfortschritt">
+      <div class="step-dot active" data-step="1" aria-label="Schritt 1: Persönliche Daten"></div>
+      <div class="step-dot" data-step="2" aria-label="Schritt 2: Job-Konfiguration"></div>
+      <div class="step-dot" data-step="3" aria-label="Schritt 3: Überprüfung"></div>
+    </div>
+
+    <!-- Step 1: Personal Data -->
+    <div id="onboarding-step-1" class="onboarding-step glass-surface layer-content" aria-labelledby="step-1-heading">
+      <h2 id="step-1-heading">Persönliche Daten</h2>
+      <p class="step-description">Gib deine Steuer- und Versicherungsinformationen ein.</p>
+
+      <div class="form-group">
+        <label class="form-label" for="onb-steuerklasse">Steuerklasse *</label>
+        <select id="onb-steuerklasse" class="form-select" required aria-required="true">
+          <option value="">— Auswählen —</option>
+          <option value="1">Steuerklasse I</option>
+          <option value="2">Steuerklasse II</option>
+          <option value="3">Steuerklasse III</option>
+          <option value="4">Steuerklasse IV</option>
+          <option value="5">Steuerklasse V</option>
+          <option value="6">Steuerklasse VI</option>
+        </select>
+        <span class="field-error" id="error-steuerklasse" role="alert"></span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="onb-bundesland">Bundesland *</label>
+        <select id="onb-bundesland" class="form-select" required aria-required="true">
+          <option value="">— Auswählen —</option>
+          <option value="Baden-Württemberg">Baden-Württemberg</option>
+          <option value="Bayern">Bayern</option>
+          <option value="Berlin">Berlin</option>
+          <option value="Brandenburg">Brandenburg</option>
+          <option value="Bremen">Bremen</option>
+          <option value="Hamburg">Hamburg</option>
+          <option value="Hessen">Hessen</option>
+          <option value="Mecklenburg-Vorpommern">Mecklenburg-Vorpommern</option>
+          <option value="Niedersachsen">Niedersachsen</option>
+          <option value="Nordrhein-Westfalen">Nordrhein-Westfalen</option>
+          <option value="Rheinland-Pfalz">Rheinland-Pfalz</option>
+          <option value="Saarland">Saarland</option>
+          <option value="Sachsen">Sachsen</option>
+          <option value="Sachsen-Anhalt">Sachsen-Anhalt</option>
+          <option value="Schleswig-Holstein">Schleswig-Holstein</option>
+          <option value="Thüringen">Thüringen</option>
+        </select>
+        <span class="field-error" id="error-bundesland" role="alert"></span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Kirchensteuer</label>
+        <div class="toggle-group">
+          <label class="toggle-label" for="onb-kirchensteuer">
+            <input type="checkbox" id="onb-kirchensteuer" class="toggle-input">
+            <span class="toggle-switch"></span>
+            <span class="toggle-text">Kirchensteuer zahlen</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Kinder</label>
+        <div class="toggle-group">
+          <label class="toggle-label" for="onb-has-children">
+            <input type="checkbox" id="onb-has-children" class="toggle-input">
+            <span class="toggle-switch"></span>
+            <span class="toggle-text">Ich habe Kinder (unter 25)</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Krankenversicherung *</label>
+        <div class="radio-group" role="radiogroup" aria-required="true">
+          <label class="radio-label">
+            <input type="radio" name="onb-krankenversicherung" value="gesetzlich" class="radio-input">
+            <span class="radio-custom"></span>
+            <span class="radio-text">Gesetzlich</span>
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="onb-krankenversicherung" value="privat" class="radio-input">
+            <span class="radio-custom"></span>
+            <span class="radio-text">Privat</span>
+          </label>
+        </div>
+        <span class="field-error" id="error-krankenversicherung" role="alert"></span>
+      </div>
+    </div>
+
+    <!-- Step 2: Job Configuration (merged from old step 2+3) -->
+    <div id="onboarding-step-2" class="onboarding-step glass-surface layer-content" style="display:none;" aria-labelledby="step-2-heading">
+      <h2 id="step-2-heading">Job-Konfiguration</h2>
+      <p class="step-description">Konfiguriere deinen Job.</p>
+
+      <div class="job-step-indicator" id="job-step-indicator">
+        <span id="job-step-label">Job 1</span>
+      </div>
+
+      <div id="job-config-container">
+        <div class="form-group">
+          <label class="form-label" for="onb-job-type">Job-Typ *</label>
+          <select id="onb-job-type" class="form-select" required aria-required="true">
+            <option value="">— Auswählen —</option>
+            <option value="KFB">KFB (Kurzfristige Beschäftigung)</option>
+            <option value="Minijob">Minijob</option>
+            <option value="Teilzeit">Teilzeit</option>
+            <option value="Vollzeit">Vollzeit</option>
+            <option value="Werkstudent">Werkstudent</option>
+          </select>
+          <span class="field-error" id="error-job-type" role="alert"></span>
+          <div id="onb-job-rules-info" class="onb-job-rules-info" style="display:none;"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="onb-employer-name">Arbeitgeber *</label>
+          <input type="text" id="onb-employer-name" class="form-input" maxlength="100" placeholder="z.B. Café Müller" required aria-required="true">
+          <span class="field-error" id="error-employer-name" role="alert"></span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="onb-employer-website">Website (für Logo, optional)</label>
+          <input type="text" id="onb-employer-website" class="form-input" maxlength="200" placeholder="z.B. mcdonalds.de">
+          <div id="onb-logo-preview" class="logo-preview" style="display:none;">
+            <img id="onb-logo-img" class="logo-preview-img" alt="Firmenlogo">
+            <span class="logo-preview-label">Logo gefunden ✓</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="onb-start-date">Startdatum *</label>
+          <input type="date" id="onb-start-date" class="form-input" required aria-required="true">
+          <span class="field-error" id="error-start-date" role="alert"></span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Gehaltsart *</label>
+          <div class="radio-group" role="radiogroup" aria-required="true">
+            <label class="radio-label">
+              <input type="radio" name="onb-salary-type" value="hourly" class="radio-input">
+              <span class="radio-custom"></span>
+              <span class="radio-text">Stundenlohn</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="onb-salary-type" value="fixed" class="radio-input">
+              <span class="radio-custom"></span>
+              <span class="radio-text">Festgehalt</span>
+            </label>
+          </div>
+          <span class="field-error" id="error-salary-type" role="alert"></span>
+        </div>
+
+        <div class="form-group" id="onb-hourly-rate-group" style="display:none;">
+          <label class="form-label" for="onb-hourly-rate">Stundenlohn (€) *</label>
+          <input type="number" id="onb-hourly-rate" class="form-input" min="0.01" max="999.99" step="0.01" placeholder="12,50">
+          <span class="field-error" id="error-hourly-rate" role="alert"></span>
+        </div>
+
+        <div class="form-group optional-section">
+          <h3 class="optional-heading">Optionale Einstellungen</h3>
+
+          <div class="toggle-group">
+            <label class="toggle-label" for="onb-has-provision">
+              <input type="checkbox" id="onb-has-provision" class="toggle-input">
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Provision erfassen</span>
+            </label>
+          </div>
+
+          <div class="toggle-group">
+            <label class="toggle-label" for="onb-has-tips">
+              <input type="checkbox" id="onb-has-tips" class="toggle-input">
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Trinkgeld erfassen</span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="onb-vacation-days">Urlaubsanspruch (Tage/Jahr)</label>
+            <input type="number" id="onb-vacation-days" class="form-input" min="0" max="365" step="1" placeholder="0">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="onb-billing-day">Abrechnungstag (Tag im Monat)</label>
+            <input type="number" id="onb-billing-day" class="form-input" min="1" max="31" step="1" placeholder="z.B. 20">
+            <span class="form-hint">Ab diesem Tag zählt der nächste Monat. Leer = Monatsende.</span>
+          </div>
+
+          <div class="toggle-group">
+            <label class="toggle-label" for="onb-sick-tracking">
+              <input type="checkbox" id="onb-sick-tracking" class="toggle-input">
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Krankheitstage erfassen</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Configured jobs list -->
+      <div id="onb-configured-jobs" class="onb-configured-jobs"></div>
+
+      <!-- Add another job button -->
+      <button type="button" id="onb-add-another-job" class="btn btn-secondary onb-add-job-btn">+ Weiteren Job hinzufügen</button>
+    </div>
+
+    <!-- Step 3: Review & Confirm (was step 4) -->
+    <div id="onboarding-step-3" class="onboarding-step glass-surface layer-content" style="display:none;" aria-labelledby="step-3-heading">
+      <h2 id="step-3-heading">Überprüfung & Bestätigung</h2>
+      <p class="step-description">Bitte überprüfe deine Konfiguration vor dem Absenden.</p>
+
+      <div id="onboarding-review-content" class="review-content">
+        <!-- Dynamically populated by OnboardingModule -->
+      </div>
+
+      <span class="field-error" id="error-onboarding-submit" role="alert"></span>
+    </div>
+
+    <!-- Navigation Buttons -->
+    <div class="onboarding-nav">
+      <button type="button" id="onb-btn-back" class="btn btn-secondary" style="visibility:hidden;" aria-label="Zum vorherigen Schritt">Zurück</button>
+      <button type="button" id="onb-btn-next" class="btn btn-primary" aria-label="Zum nächsten Schritt">Weiter</button>
+    </div>
+  </section>
+
+  <!-- View: Daily Tracking (Übersicht) -->
+  <section id="view-daily" class="view-section">
+    <div class="scroll-content">
+      <!-- Sub-navigation for Tracking views -->
+      <div class="sub-nav">
+        <button class="sub-nav-btn active" data-target="view-daily" type="button">Übersicht</button>
+        <button class="sub-nav-btn" data-target="view-monthly" type="button">Monat</button>
+        <button class="sub-nav-btn" data-target="view-yearly" type="button">Jahr</button>
+      </div>
+
+      <!-- Gesamtübersicht Card -->
+      <div id="daily-dashboard" class="glass-surface layer-content daily-dashboard-card">
+        <h2 class="daily-section-title">Gesamtübersicht</h2>
+        <div class="dashboard-stats">
+          <div class="dashboard-stat">
+            <span class="dashboard-stat-value" id="dashboard-total-hours">0</span>
+            <span class="dashboard-stat-label">Stunden</span>
+          </div>
+          <div class="dashboard-stat">
+            <span class="dashboard-stat-value" id="dashboard-total-brutto">0,00 €</span>
+            <span class="dashboard-stat-label">Brutto</span>
+          </div>
+          <div class="dashboard-stat">
+            <span class="dashboard-stat-value" id="dashboard-total-netto">0,00 €</span>
+            <span class="dashboard-stat-label">Netto</span>
+          </div>
+        </div>
+
+        <!-- Brutto/Netto Rechner Dropdown -->
+        <details class="dashboard-details-dropdown" id="dashboard-netto-details">
+          <summary class="dashboard-details-toggle">💰 Abzüge & Netto-Details</summary>
+          <div class="dashboard-details-content" id="dashboard-netto-breakdown">
+            <p class="dashboard-details-empty">Füge Arbeitstage hinzu, um die Berechnung zu sehen.</p>
+          </div>
+        </details>
+
+        <!-- Urlaub & Krankheit -->
+        <div class="dashboard-absence-row" id="dashboard-absence-row">
+          <div class="dashboard-absence-item" id="dashboard-vacation-item" style="display:none;">
+            <span class="dashboard-absence-icon">🏖️</span>
+            <span class="dashboard-absence-label">Urlaubstage</span>
+            <span class="dashboard-absence-value" id="dashboard-total-vacation">0</span>
+          </div>
+          <div class="dashboard-absence-item" id="dashboard-sick-item" style="display:none;">
+            <span class="dashboard-absence-icon">🤒</span>
+            <span class="dashboard-absence-label">Krankheitstage</span>
+            <span class="dashboard-absence-value" id="dashboard-total-sick">0</span>
+          </div>
+        </div>
+
+        <div class="dashboard-extras-row">
+          <span class="dashboard-extra-item" id="dashboard-total-tips">Trinkgeld: 0,00 €</span>
+        </div>
+      </div>
+
+      <!-- Job Cards Container -->
+      <div id="job-cards-container">
+        <!-- Dynamically populated by job card rendering modules -->
+        <div class="glass-surface layer-content daily-no-jobs-card" id="daily-no-jobs">
+          <div class="daily-no-jobs-content">
+            <span class="daily-no-jobs-icon">💼</span>
+            <h3 class="daily-no-jobs-heading">Keine Jobs konfiguriert</h3>
+            <p class="daily-no-jobs-text">Füge deinen ersten Job in den Einstellungen hinzu.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- View: Monthly Overview -->
+  <section id="view-monthly" class="view-section">
+    <div class="scroll-content">
+      <!-- Sub-navigation for Tracking views -->
+      <div class="sub-nav">
+        <button class="sub-nav-btn" data-target="view-daily" type="button">Übersicht</button>
+        <button class="sub-nav-btn active" data-target="view-monthly" type="button">Monat</button>
+        <button class="sub-nav-btn" data-target="view-yearly" type="button">Jahr</button>
+      </div>
+
+      <h1 class="monthly-title">Monatsübersicht</h1>
+
+      <div class="glass-surface layer-content monthly-selector-card">
+        <div class="monthly-selector">
+          <button type="button" id="monthly-prev-btn" class="btn btn-secondary monthly-nav-btn" aria-label="Vorheriger Monat">‹</button>
+          <span id="monthly-current-label" class="monthly-current-label">Januar 2026</span>
+          <button type="button" id="monthly-next-btn" class="btn btn-secondary monthly-nav-btn" aria-label="Nächster Monat">›</button>
+        </div>
+      </div>
+
+      <div class="glass-surface layer-content monthly-card">
+        <h2 class="monthly-section-title">Gesamt (Alle Jobs)</h2>
+        <div class="monthly-aggregate-stats">
+          <div class="monthly-stat">
+            <span class="monthly-stat-value" id="monthly-agg-hours">0</span>
+            <span class="monthly-stat-label">Stunden</span>
+          </div>
+          <div class="monthly-stat">
+            <span class="monthly-stat-value" id="monthly-agg-brutto">0,00 €</span>
+            <span class="monthly-stat-label">Brutto</span>
+          </div>
+          <div class="monthly-stat">
+            <span class="monthly-stat-value" id="monthly-agg-netto">0,00 €</span>
+            <span class="monthly-stat-label">Netto</span>
+          </div>
+        </div>
+        <div class="monthly-extras-row">
+          <span class="monthly-extra-item" id="monthly-agg-provisions">Provision: 0,00 €</span>
+          <span class="monthly-extra-item" id="monthly-agg-tips">Trinkgeld: 0,00 €</span>
+        </div>
+      </div>
+
+      <!-- Per-job monthly summaries -->
+      <div id="monthly-job-summaries" class="monthly-job-summaries">
+      </div>
+
+      <!-- Day-by-day list -->
+      <div class="glass-surface layer-content monthly-card">
+        <h2 class="monthly-section-title">Tag für Tag</h2>
+        <div id="monthly-day-list" class="monthly-day-list">
+          <p class="monthly-empty-state">Keine Einträge für diesen Monat.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- View: Yearly Overview -->
+  <section id="view-yearly" class="view-section">
+    <div class="scroll-content">
+      <!-- Sub-navigation for Tracking views -->
+      <div class="sub-nav">
+        <button class="sub-nav-btn" data-target="view-daily" type="button">Übersicht</button>
+        <button class="sub-nav-btn" data-target="view-monthly" type="button">Monat</button>
+        <button class="sub-nav-btn active" data-target="view-yearly" type="button">Jahr</button>
+      </div>
+
+      <h1 class="yearly-title">Jahresübersicht</h1>
+
+      <div class="glass-surface layer-content yearly-selector-card">
+        <div class="yearly-selector">
+          <button type="button" id="yearly-prev-btn" class="btn btn-secondary yearly-nav-btn" aria-label="Vorheriges Jahr">◀</button>
+          <span id="yearly-year-label" class="yearly-year-label">2026</span>
+          <button type="button" id="yearly-next-btn" class="btn btn-secondary yearly-nav-btn" aria-label="Nächstes Jahr">▶</button>
+        </div>
+      </div>
+
+      <div class="glass-surface layer-content yearly-aggregate-card">
+        <h2 class="yearly-section-title">Jahresgesamt (Alle Jobs)</h2>
+        <div class="yearly-aggregate-stats">
+          <div class="yearly-stat">
+            <span class="yearly-stat-value" id="yearly-total-hours">0</span>
+            <span class="yearly-stat-label">Stunden gesamt</span>
+          </div>
+          <div class="yearly-stat">
+            <span class="yearly-stat-value" id="yearly-total-days">0</span>
+            <span class="yearly-stat-label">Arbeitstage</span>
+          </div>
+          <div class="yearly-stat">
+            <span class="yearly-stat-value" id="yearly-total-brutto">0,00 €</span>
+            <span class="yearly-stat-label">Brutto</span>
+          </div>
+          <div class="yearly-stat">
+            <span class="yearly-stat-value" id="yearly-total-netto">0,00 €</span>
+            <span class="yearly-stat-label">Netto</span>
+          </div>
+        </div>
+        <div class="yearly-extras-row">
+          <div class="yearly-extra-item">
+            <span class="yearly-extra-label">Provision gesamt</span>
+            <span class="yearly-extra-value" id="yearly-total-provision">0,00 €</span>
+          </div>
+          <div class="yearly-extra-item">
+            <span class="yearly-extra-label">Trinkgeld gesamt</span>
+            <span class="yearly-extra-value" id="yearly-total-tips">0,00 €</span>
+          </div>
+        </div>
+        <div class="yearly-extras-row">
+          <div class="yearly-extra-item">
+            <span class="yearly-extra-label">Urlaubstage</span>
+            <span class="yearly-extra-value" id="yearly-total-vacation">0</span>
+          </div>
+          <div class="yearly-extra-item">
+            <span class="yearly-extra-label">Krankheitstage</span>
+            <span class="yearly-extra-value" id="yearly-total-sick">0</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="yearly-jobs-container">
+        <p class="yearly-empty-state" id="yearly-no-jobs">Keine Jobs konfiguriert.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- View: Entry (Eintragen) -->
+  <section id="view-entry" class="view-section">
+    <div class="scroll-content">
+      <h1 class="entry-title">Eintragen</h1>
+
+      <!-- Quick Entry Form -->
+      <div class="glass-surface layer-content entry-form-card">
+        <h2 class="entry-section-title">Neuer Eintrag</h2>
+        <form id="entry-form" novalidate>
+          <div class="form-group">
+            <label class="form-label" for="entry-job">Job *</label>
+            <select id="entry-job" class="form-select" required></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="entry-date">Datum *</label>
+            <div class="entry-date-nav">
+              <button type="button" id="entry-date-prev" class="btn btn-secondary entry-date-nav-btn" aria-label="Vorheriger Tag">‹</button>
+              <input type="date" id="entry-date" class="form-input" required>
+              <button type="button" id="entry-date-next" class="btn btn-secondary entry-date-nav-btn" aria-label="Nächster Tag">›</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="entry-status">Status</label>
+            <select id="entry-status" class="form-select">
+              <option value="worked">Gearbeitet</option>
+              <option value="vacation">Urlaub</option>
+              <option value="sick">Krank</option>
+              <option value="not_worked">Nicht gearbeitet</option>
+            </select>
+          </div>
+          <div class="form-group" id="entry-hours-group">
+            <label class="form-label" for="entry-hours">Stunden *</label>
+            <input type="number" id="entry-hours" class="form-input" min="0.25" max="24" step="0.25" placeholder="z.B. 8">
+          </div>
+          <div class="form-group" id="entry-provision-group" style="display:none;">
+            <label class="form-label" for="entry-provision">Provision (€)</label>
+            <input type="number" id="entry-provision" class="form-input" min="0" step="0.01" placeholder="0,00">
+          </div>
+          <div class="form-group" id="entry-tip-group" style="display:none;">
+            <label class="form-label" for="entry-tip">Trinkgeld (€)</label>
+            <input type="number" id="entry-tip" class="form-input" min="0" step="0.01" placeholder="0,00">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" style="width:100%;">Eintrag speichern</button>
+          </div>
+          <span class="field-error" id="entry-error" aria-live="polite"></span>
+        </form>
+      </div>
+
+      <!-- Recent Entries -->
+      <div class="glass-surface layer-content entry-recent-card">
+        <h2 class="entry-section-title">Letzte Einträge</h2>
+        <div id="entry-recent-list" class="entry-recent-list">
+          <p class="entry-empty-state">Noch keine Einträge vorhanden.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- View: Settings (Einstellungen) -->
+  <section id="view-settings" class="view-section">
+    <div class="scroll-content">
+      <h1 class="settings-title">Einstellungen</h1>
+
+      <!-- Year-Change Rule Confirmation Prompt (Req 13.5, 13.6) -->
+      <div id="year-change-prompt" class="glass-surface layer-content settings-card year-change-card" style="display:none;" role="alert" aria-live="polite">
+        <h3 class="year-change-heading">⚠️ Jahreswechsel-Bestätigung</h3>
+        <p class="year-change-description">Die Regelparameter für <span id="year-change-year"></span> sind:</p>
+        <div id="year-change-params" class="year-change-params"></div>
+        <p class="year-change-note">Bitte bestätige die Parameter für das neue Jahr oder verwerfe die Meldung.</p>
+        <div class="year-change-actions">
+          <button id="year-change-confirm-btn" class="btn btn-primary" type="button">Bestätigen</button>
+          <button id="year-change-dismiss-btn" class="btn btn-secondary" type="button">Später</button>
+        </div>
+      </div>
+
+      <!-- Theme Toggle -->
+      <div class="glass-surface layer-content settings-card">
+        <h2 class="settings-section-title">Darstellung</h2>
+        <div class="theme-toggle-group">
+          <label class="form-label" id="theme-toggle-label">Design</label>
+          <div class="theme-toggle-options" role="radiogroup" aria-labelledby="theme-toggle-label">
+            <button class="theme-option" data-theme="system" type="button" role="radio" aria-checked="false">
+              <span class="theme-option-icon">🖥️</span>
+              <span class="theme-option-label">System</span>
+            </button>
+            <button class="theme-option" data-theme="light" type="button" role="radio" aria-checked="false">
+              <span class="theme-option-icon">☀️</span>
+              <span class="theme-option-label">Hell</span>
+            </button>
+            <button class="theme-option active" data-theme="dark" type="button" role="radio" aria-checked="true">
+              <span class="theme-option-icon">🌙</span>
+              <span class="theme-option-label">Dunkel</span>
+            </button>
+          </div>
+        </div>
+        <div class="accent-color-group">
+          <label class="form-label">Akzentfarbe</label>
+          <div class="accent-color-options" id="accent-color-options">
+            <button class="accent-color-btn active" data-color="#4ecca3" type="button" style="background:#4ecca3;" aria-label="Grün"></button>
+            <button class="accent-color-btn" data-color="#3b82f6" type="button" style="background:#3b82f6;" aria-label="Blau"></button>
+            <button class="accent-color-btn" data-color="#8b5cf6" type="button" style="background:#8b5cf6;" aria-label="Lila"></button>
+            <button class="accent-color-btn" data-color="#f59e0b" type="button" style="background:#f59e0b;" aria-label="Orange"></button>
+            <button class="accent-color-btn" data-color="#ef4444" type="button" style="background:#ef4444;" aria-label="Rot"></button>
+            <button class="accent-color-btn" data-color="#ec4899" type="button" style="background:#ec4899;" aria-label="Pink"></button>
+            <button class="accent-color-btn" data-color="#14b8a6" type="button" style="background:#14b8a6;" aria-label="Türkis"></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Job List Section -->
+      <div class="glass-surface layer-content settings-card">
+        <div class="settings-section-header">
+          <h2 class="settings-section-title">Jobs</h2>
+          <button id="settings-add-job-btn" class="btn btn-primary" type="button">+ Job hinzufügen</button>
+        </div>
+        <div id="settings-job-list" class="settings-job-list">
+          <p class="settings-empty-state">Keine Jobs konfiguriert. Füge deinen ersten Job hinzu.</p>
+        </div>
+      </div>
+
+      <!-- Job Form (Add/Edit) -->
+      <div id="settings-job-form-container" class="glass-surface layer-content settings-card" style="display:none;">
+        <h2 id="settings-job-form-title" class="settings-section-title">Job hinzufügen</h2>
+        <form id="settings-job-form" novalidate>
+          <input type="hidden" id="settings-job-id" value="">
+
+          <div class="form-group">
+            <label class="form-label" for="settings-job-type">Job-Typ *</label>
+            <select id="settings-job-type" class="form-select" required aria-required="true">
+              <option value="">— Typ auswählen —</option>
+              <option value="KFB">KFB</option>
+              <option value="Minijob">Minijob</option>
+              <option value="Teilzeit">Teilzeit</option>
+              <option value="Vollzeit">Vollzeit</option>
+              <option value="Werkstudent">Werkstudent</option>
+            </select>
+            <span class="field-error" id="settings-job-type-error" aria-live="polite"></span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="settings-job-employer">Arbeitgeber *</label>
+            <input type="text" id="settings-job-employer" class="form-input" maxlength="100" required aria-required="true" placeholder="z.B. Mustermann GmbH">
+            <span class="field-error" id="settings-job-employer-error" aria-live="polite"></span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="settings-job-website">Website (für Logo, optional)</label>
+            <input type="text" id="settings-job-website" class="form-input" maxlength="200" placeholder="z.B. mcdonalds.de">
+            <div id="settings-logo-preview" class="logo-preview" style="display:none;">
+              <img id="settings-logo-img" class="logo-preview-img" alt="Firmenlogo">
+              <span class="logo-preview-label">Logo gefunden ✓</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="settings-job-start-date">Startdatum *</label>
+            <input type="date" id="settings-job-start-date" class="form-input" required aria-required="true">
+            <span class="field-error" id="settings-job-start-date-error" aria-live="polite"></span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" id="settings-salary-type-label">Gehaltsart *</label>
+            <div class="radio-group" role="radiogroup" aria-labelledby="settings-salary-type-label">
+              <label class="radio-label">
+                <input type="radio" name="settings-salary-type" value="hourly" class="radio-input" checked>
+                <span class="radio-custom"></span>
+                <span class="radio-text">Stundenlohn</span>
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="settings-salary-type" value="fixed" class="radio-input">
+                <span class="radio-custom"></span>
+                <span class="radio-text">Festgehalt</span>
+              </label>
+            </div>
+            <span class="field-error" id="settings-salary-type-error" aria-live="polite"></span>
+          </div>
+
+          <div class="form-group" id="settings-hourly-rate-group">
+            <label class="form-label" for="settings-job-hourly-rate">Stundenlohn (€) *</label>
+            <input type="number" id="settings-job-hourly-rate" class="form-input" min="0.01" max="999.99" step="0.01" placeholder="12,50">
+            <span class="field-error" id="settings-job-hourly-rate-error" aria-live="polite"></span>
+          </div>
+
+          <div class="form-group" id="settings-fixed-salary-group" style="display:none;">
+            <label class="form-label" for="settings-job-fixed-salary">Monatsgehalt (€) *</label>
+            <input type="number" id="settings-job-fixed-salary" class="form-input" min="0.01" max="99999.99" step="0.01" placeholder="2500,00">
+            <span class="field-error" id="settings-job-fixed-salary-error" aria-live="polite"></span>
+          </div>
+
+          <div class="form-group optional-section">
+            <h3 class="optional-heading">Optionale Einstellungen</h3>
+
+            <div class="toggle-group">
+              <label class="toggle-label" for="settings-job-provision">
+                <input type="checkbox" id="settings-job-provision" class="toggle-input">
+                <span class="toggle-switch"></span>
+                <span class="toggle-text">Provision erfassen</span>
+              </label>
+            </div>
+
+            <div class="toggle-group">
+              <label class="toggle-label" for="settings-job-tips">
+                <input type="checkbox" id="settings-job-tips" class="toggle-input">
+                <span class="toggle-switch"></span>
+                <span class="toggle-text">Trinkgeld erfassen</span>
+              </label>
+            </div>
+
+            <div class="toggle-group">
+              <label class="toggle-label" for="settings-job-sick">
+                <input type="checkbox" id="settings-job-sick" class="toggle-input">
+                <span class="toggle-switch"></span>
+                <span class="toggle-text">Krankheitstage erfassen</span>
+              </label>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="settings-job-vacation">Urlaubsanspruch (Tage/Jahr)</label>
+              <input type="number" id="settings-job-vacation" class="form-input" min="0" max="365" step="1" placeholder="0">
+              <span class="field-error" id="settings-job-vacation-error" aria-live="polite"></span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="settings-job-billing-day">Abrechnungstag (Tag im Monat)</label>
+              <input type="number" id="settings-job-billing-day" class="form-input" min="1" max="31" step="1" placeholder="z.B. 20">
+              <span class="form-hint">Ab diesem Tag zählt der nächste Monat. Leer = Monatsende.</span>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Job speichern</button>
+            <button type="button" id="settings-job-cancel-btn" class="btn btn-secondary">Abbrechen</button>
+            <button type="button" id="settings-job-delete-btn" class="btn btn-danger" style="display:none;">Job löschen</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Job Rules Info Section -->
+      <div class="glass-surface layer-content settings-card">
+        <h2 class="settings-section-title">📋 Arbeitsrecht-Info 2026</h2>
+        <p class="settings-description">Übersicht der wichtigsten Regeln für alle Beschäftigungsarten in Deutschland (Stand 2026).</p>
+        <div id="settings-rules-info" class="settings-rules-info">
+          <details class="rules-details">
+            <summary class="rules-summary">Minijob</summary>
+            <ul class="rules-list">
+              <li><strong>Verdienstgrenze:</strong> Max. 603 €/Monat (7.236 €/Jahr)</li>
+              <li><strong>Mindestlohn:</strong> 13,90 €/Stunde (2026)</li>
+              <li><strong>Rentenversicherung:</strong> 3,6% AN-Eigenanteil (Aufstockung auf 18,6%)</li>
+              <li><strong>Befreiung:</strong> RV-Befreiung auf Antrag möglich</li>
+              <li><strong>Keine Abzüge:</strong> Keine Lohnsteuer, keine KV/PV/AV für AN</li>
+              <li><strong>Kombination:</strong> 1 Minijob steuerfrei neben Hauptjob möglich</li>
+              <li><strong>Mehrere Minijobs:</strong> Werden zusammengerechnet — bei Überschreitung der 603€-Grenze volle SV-Pflicht</li>
+              <li><strong>Kombinierbar mit:</strong> Werkstudent, KFB, Teilzeit, Vollzeit (als Nebenjob)</li>
+            </ul>
+          </details>
+          <details class="rules-details">
+            <summary class="rules-summary">Kurzfristige Beschäftigung (KFB)</summary>
+            <ul class="rules-list">
+              <li><strong>Zeitgrenze:</strong> Max. 70 Arbeitstage oder 3 Monate im Kalenderjahr</li>
+              <li><strong>Keine Verdienstgrenze:</strong> Höhe des Verdienstes ist irrelevant</li>
+              <li><strong>Sozialversicherung:</strong> Komplett befreit (keine RV, KV, PV, AV)</li>
+              <li><strong>Lohnsteuer:</strong> Pauschale 25% (§40a Abs. 1 EStG) + 5,5% Soli + ggf. Kirchensteuer</li>
+              <li><strong>Voraussetzung:</strong> Nicht berufsmäßig ausgeübt (kein Haupterwerb)</li>
+              <li><strong>Kombinierbar mit:</strong> Minijob, Werkstudent, Teilzeit</li>
+              <li><strong>Nicht kombinierbar mit:</strong> Vollzeit (da berufsmäßig)</li>
+            </ul>
+          </details>
+          <details class="rules-details">
+            <summary class="rules-summary">Werkstudent</summary>
+            <ul class="rules-list">
+              <li><strong>Arbeitszeit:</strong> Max. 20 Std./Woche während Vorlesungszeit</li>
+              <li><strong>Semesterferien:</strong> Unbegrenzte Stunden erlaubt</li>
+              <li><strong>Werkstudentenprivileg:</strong> Befreit von KV, PV und AV</li>
+              <li><strong>Rentenversicherung:</strong> 9,3% AN-Anteil wird abgezogen</li>
+              <li><strong>Lohnsteuer:</strong> Nach Steuerklasse (meist Klasse I, mit Grundfreibetrag)</li>
+              <li><strong>26-Wochen-Regel:</strong> Bei Kombination mit Minijob/KFB max. 26 Wochen/Jahr über 20 Std.</li>
+              <li><strong>Überschreitung:</strong> Bei &gt;26 Wochen → volle Sozialversicherungspflicht</li>
+              <li><strong>Kombinierbar mit:</strong> Minijob, KFB</li>
+              <li><strong>Nicht kombinierbar mit:</strong> Vollzeit, Teilzeit (widerspricht Studentenstatus)</li>
+            </ul>
+          </details>
+          <details class="rules-details">
+            <summary class="rules-summary">Teilzeit</summary>
+            <ul class="rules-list">
+              <li><strong>Sozialversicherung:</strong> Volle Pflicht (RV 9,3%, KV ~8,75%, PV 1,8%/2,4%, AV 1,3%)</li>
+              <li><strong>Lohnsteuer:</strong> Nach Steuerklasse + Grundfreibetrag (1.029 €/Monat)</li>
+              <li><strong>Solidaritätszuschlag:</strong> 5,5% auf Lohnsteuer (mit Freigrenze)</li>
+              <li><strong>Kirchensteuer:</strong> 8% (BY, BW) oder 9% (andere) auf Lohnsteuer</li>
+              <li><strong>Abzüge gesamt:</strong> Ca. 30–40% je nach Steuerklasse und Einkommen</li>
+              <li><strong>Kombinierbar mit:</strong> Minijob, KFB</li>
+              <li><strong>Nicht kombinierbar mit:</strong> Vollzeit</li>
+            </ul>
+          </details>
+          <details class="rules-details">
+            <summary class="rules-summary">Vollzeit</summary>
+            <ul class="rules-list">
+              <li><strong>Sozialversicherung:</strong> Volle Pflicht (RV 9,3%, KV ~8,75%, PV 1,8%/2,4%, AV 1,3%)</li>
+              <li><strong>Lohnsteuer:</strong> Nach Steuerklasse + Grundfreibetrag (1.029 €/Monat)</li>
+              <li><strong>Solidaritätszuschlag:</strong> 5,5% auf Lohnsteuer (mit Freigrenze)</li>
+              <li><strong>Kirchensteuer:</strong> 8% (BY, BW) oder 9% (andere) auf Lohnsteuer</li>
+              <li><strong>Abzüge gesamt:</strong> Ca. 30–40% je nach Steuerklasse und Einkommen</li>
+              <li><strong>Kombinierbar mit:</strong> Minijob (als Nebenjob)</li>
+              <li><strong>Nicht kombinierbar mit:</strong> Teilzeit, Werkstudent, weitere Vollzeit</li>
+            </ul>
+          </details>
+        </div>
+      </div>
+
+      <!-- Personal Data Section -->
+      <div class="glass-surface layer-content settings-card">
+        <h2 class="settings-section-title">Persönliche Daten</h2>
+        <div id="settings-personal-data">
+          <!-- Dynamically populated by personal data management UI -->
+        </div>
+      </div>
+
+      <!-- Export/Import Section -->
+      <div class="glass-surface layer-content settings-card">
+        <h2 class="settings-section-title">Datenverwaltung</h2>
+        <p class="settings-description">Exportiere deine Daten als Backup oder importiere eine zuvor exportierte Datei.</p>
+        <div class="settings-data-actions">
+          <button id="settings-export-btn" class="btn btn-secondary" type="button">📤 Daten exportieren</button>
+          <button id="settings-import-btn" class="btn btn-secondary" type="button">📥 Daten importieren</button>
+          <input type="file" id="settings-import-file" accept=".json" style="display:none;" aria-hidden="true">
+        </div>
+        <div class="settings-danger-zone">
+          <h3 class="settings-danger-title">⚠️ Gefahrenzone</h3>
+          <p class="settings-danger-description">Alle Daten unwiderruflich löschen und von vorne beginnen (Onboarding wird erneut gestartet).</p>
+          <button id="settings-reset-all-btn" class="btn btn-danger" type="button">🗑️ Alle Daten löschen</button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Delete Job Confirmation Modal -->
+  <div id="delete-job-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-job-modal-title">
+    <div class="modal-content glass-surface layer-overlay">
+      <h3 id="delete-job-modal-title" class="modal-title">Job löschen?</h3>
+      <p class="modal-description">Dies löscht den Job <strong id="delete-job-modal-name"></strong> und alle zugehörigen Arbeitseinträge, Provisionen und Trinkgelder dauerhaft. Diese Aktion kann nicht rückgängig gemacht werden.</p>
+      <div class="modal-actions">
+        <button id="delete-job-confirm-btn" class="btn btn-danger" type="button">Löschen</button>
+        <button id="delete-job-cancel-btn" class="btn btn-secondary" type="button">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reset All Data Confirmation Modal -->
+  <div id="reset-all-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="reset-all-modal-title">
+    <div class="modal-content glass-surface layer-overlay">
+      <h3 id="reset-all-modal-title" class="modal-title">⚠️ Alle Daten löschen?</h3>
+      <p class="modal-description">Dies löscht <strong>alle</strong> deine Daten unwiderruflich: Jobs, Arbeitseinträge, Provisionen, Trinkgelder, persönliche Daten und Einstellungen. Das Onboarding wird erneut gestartet.</p>
+      <div class="modal-actions">
+        <button id="reset-all-confirm-btn" class="btn btn-danger" type="button">Alles löschen</button>
+        <button id="reset-all-cancel-btn" class="btn btn-secondary" type="button">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Entry Replace Modal -->
+  <div id="confirm-replace-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-replace-modal-title">
+    <div class="modal-content glass-surface layer-overlay">
+      <h3 id="confirm-replace-modal-title" class="modal-title">Eintrag ersetzen?</h3>
+      <p class="modal-description">Für dieses Datum existiert bereits ein Eintrag. Möchtest du ihn ersetzen?</p>
+      <div class="modal-actions">
+        <button id="confirm-replace-btn" class="btn btn-primary" type="button">Ersetzen</button>
+        <button id="confirm-replace-cancel-btn" class="btn btn-secondary" type="button">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rules Info Modal -->
+  <div id="rules-info-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="rules-info-modal-title">
+    <div class="modal-content glass-surface layer-overlay rules-info-modal-content">
+      <div class="rules-info-header">
+        <h3 id="rules-info-modal-title" class="modal-title">📋 Arbeitsrecht Deutschland 2026</h3>
+        <button type="button" id="rules-info-close-btn" class="rules-info-close-btn" aria-label="Schließen">✕</button>
+      </div>
+      <div class="rules-info-body">
+        <div class="rules-info-section">
+          <h4>Minijob</h4>
+          <ul>
+            <li>Max. 603 €/Monat Verdienstgrenze (2026)</li>
+            <li>Mindestlohn: 13,90 €/Stunde</li>
+            <li>Arbeitnehmer zahlt 3,6% Rentenversicherung (Aufstockung auf 18,6%)</li>
+            <li>Befreiung von RV-Pflicht auf Antrag möglich</li>
+            <li>Keine Lohnsteuer, keine KV/PV/AV für Arbeitnehmer</li>
+            <li>Max. 1 Minijob steuerfrei neben Hauptbeschäftigung</li>
+            <li>Mehrere Minijobs werden zusammengerechnet</li>
+            <li>Kombinierbar mit: Werkstudent, KFB, Teilzeit, Vollzeit (1 Minijob)</li>
+          </ul>
+        </div>
+        <div class="rules-info-section">
+          <h4>Kurzfristige Beschäftigung (KFB)</h4>
+          <ul>
+            <li>Max. 70 Arbeitstage oder 3 Monate im Kalenderjahr</li>
+            <li>Keine Verdienstgrenze</li>
+            <li>Keine Sozialversicherungspflicht</li>
+            <li>Pauschale Lohnsteuer 25% (§ 40a Abs. 1 EStG)</li>
+            <li>Alternativ: individuelle Besteuerung nach Steuerklasse</li>
+            <li>Darf nicht berufsmäßig ausgeübt werden</li>
+            <li>Kombinierbar mit: Minijob, Werkstudent, Teilzeit</li>
+            <li>Nicht kombinierbar mit: Vollzeit</li>
+          </ul>
+        </div>
+        <div class="rules-info-section">
+          <h4>Werkstudent</h4>
+          <ul>
+            <li>Max. 20 Std./Woche während Vorlesungszeit</li>
+            <li>In Semesterferien: unbegrenzt möglich</li>
+            <li>Werkstudentenprivileg: keine KV/PV/AV-Pflicht</li>
+            <li>Nur Rentenversicherung: 9,3% Arbeitnehmeranteil</li>
+            <li>Lohnsteuer nach Steuerklasse (mit Grundfreibetrag)</li>
+            <li>26-Wochen-Regel bei Kombination mit Minijob/KFB</li>
+            <li>Bei Überschreitung: volle Sozialversicherungspflicht</li>
+            <li>Kombinierbar mit: Minijob, KFB</li>
+            <li>Nicht kombinierbar mit: Vollzeit, Teilzeit</li>
+          </ul>
+        </div>
+        <div class="rules-info-section">
+          <h4>Teilzeit</h4>
+          <ul>
+            <li>Volle Sozialversicherungspflicht (RV, KV, PV, AV)</li>
+            <li>Lohnsteuer nach Steuerklasse</li>
+            <li>Solidaritätszuschlag: 5,5% auf Lohnsteuer (mit Freigrenze)</li>
+            <li>Ggf. Kirchensteuer: 8% (BY/BW) oder 9% (andere)</li>
+            <li>Anspruch auf Teilzeit nach 6 Monaten (§ 8 TzBfG)</li>
+            <li>Kombinierbar mit: Minijob, KFB</li>
+            <li>Nicht kombinierbar mit: Vollzeit, Werkstudent</li>
+          </ul>
+        </div>
+        <div class="rules-info-section">
+          <h4>Vollzeit</h4>
+          <ul>
+            <li>Volle Sozialversicherungspflicht (RV, KV, PV, AV)</li>
+            <li>Lohnsteuer nach Steuerklasse</li>
+            <li>Solidaritätszuschlag: 5,5% auf Lohnsteuer (mit Freigrenze)</li>
+            <li>Ggf. Kirchensteuer: 8% (BY/BW) oder 9% (andere)</li>
+            <li>Kombinierbar mit: 1 Minijob (steuerfrei)</li>
+            <li>Nicht kombinierbar mit: Teilzeit, Werkstudent, weitere Vollzeit</li>
+          </ul>
+        </div>
+        <div class="rules-info-section">
+          <h4>Sozialversicherungsbeiträge 2026 (AN-Anteil)</h4>
+          <ul>
+            <li>Rentenversicherung: 9,3%</li>
+            <li>Krankenversicherung: 7,3% + ~1,45% Zusatzbeitrag = ~8,75%</li>
+            <li>Pflegeversicherung: 1,8% (mit Kindern) / 2,4% (kinderlos ab 23)</li>
+            <li>Pflegeversicherung Sachsen: +0,5% AN-Anteil</li>
+            <li>Arbeitslosenversicherung: 1,3%</li>
+            <li>Beitragsbemessungsgrenze KV/PV: 5.812,50 €/Monat</li>
+            <li>Beitragsbemessungsgrenze RV/AV: 8.050 €/Monat (West) / 7.450 € (Ost)</li>
+          </ul>
+        </div>
+        <div class="rules-info-section">
+          <h4>Steuerliche Eckdaten 2026</h4>
+          <ul>
+            <li>Grundfreibetrag: 12.348 €/Jahr (1.029 €/Monat)</li>
+            <li>Mindestlohn: 13,90 €/Stunde</li>
+            <li>Minijob-Grenze: 603 €/Monat</li>
+            <li>Soli-Freigrenze: 18.130 € Lohnsteuer/Jahr (Single)</li>
+            <li>Kirchensteuer: 8% (Bayern, Baden-Württemberg) / 9% (andere)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation Bar — 3 visible tabs -->
+  <nav class="bottom-nav" aria-label="Hauptnavigation">
+    <button class="nav-tab active" data-view="view-daily" aria-label="Übersicht" aria-current="page">
+      <span class="nav-tab-icon">📊</span>
+      <span class="nav-tab-label">Übersicht</span>
+    </button>
+    <button class="nav-tab" data-view="view-entry" aria-label="Eintragen">
+      <span class="nav-tab-icon">✏️</span>
+      <span class="nav-tab-label">Eintragen</span>
+    </button>
+    <button class="nav-tab" data-view="view-settings" aria-label="Einstellungen">
+      <span class="nav-tab-icon">⚙️</span>
+      <span class="nav-tab-label">Einstellungen</span>
+    </button>
+  </nav>
+
+  <script src="app.js?v=21" defer></script>
+</body>
+</html>
