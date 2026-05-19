@@ -250,24 +250,65 @@ a {
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
   font-family: var(--font-family);
-  transition: color 0.2s ease;
+  transition: color 0.25s ease, transform 0.2s ease;
   -webkit-tap-highlight-color: transparent;
   min-width: 64px;
   min-height: 44px;
+  position: relative;
+  z-index: 1;
+}
+
+.nav-tab::before {
+  content: '';
+  position: absolute;
+  inset: 6px 8px;
+  border-radius: 16px;
+  background: transparent;
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
+  border: 1.5px solid transparent;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: -1;
+  opacity: 0;
+  transform: scale(0.85);
 }
 
 .nav-tab-icon {
   font-size: 22px;
   line-height: 1;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .nav-tab-label {
   font-size: var(--font-size-xs);
   font-weight: 500;
+  transition: font-weight 0.2s ease;
 }
 
 .nav-tab.active {
   color: var(--color-accent);
+}
+
+.nav-tab.active::before {
+  background: rgba(var(--accent-rgb), 0.12);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  border-color: rgba(var(--accent-rgb), 0.25);
+  box-shadow: 0 2px 12px rgba(var(--accent-rgb), 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  opacity: 1;
+  transform: scale(1);
+}
+
+.nav-tab.active .nav-tab-icon {
+  transform: translateY(-1px) scale(1.05);
+}
+
+.nav-tab.active .nav-tab-label {
+  font-weight: 600;
+}
+
+.nav-tab:active {
+  transform: scale(0.92);
 }
 
 .nav-tab:focus-visible {

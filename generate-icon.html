@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>JobTracker Icon Generator</title>
+  <style>
+    body { font-family: sans-serif; background: #222; color: #fff; padding: 40px; text-align: center; }
+    canvas { border: 1px solid #444; margin: 20px; }
+    a { display: inline-block; margin: 10px; padding: 12px 24px; background: #4ecca3; color: #000; text-decoration: none; border-radius: 8px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>JobTracker Icon Generator</h1>
+  <p>Klicke auf die Links um die Icons herunterzuladen, dann ersetze sie in <code>icons/</code></p>
+  
+  <canvas id="c512" width="512" height="512"></canvas>
+  <canvas id="c192" width="192" height="192"></canvas>
+  
+  <br>
+  <a id="dl512" download="icon-512.png">⬇️ icon-512.png herunterladen</a>
+  <a id="dl192" download="icon-192.png">⬇️ icon-192.png herunterladen</a>
+
+  <script>
+    function drawIcon(canvas) {
+      var ctx = canvas.getContext('2d');
+      var s = canvas.width;
+      var scale = s / 512;
+
+      // Background
+      ctx.fillStyle = '#0a0a1a';
+      ctx.beginPath();
+      ctx.roundRect(0, 0, s, s, 96 * scale);
+      ctx.fill();
+
+      // Inner surface
+      ctx.fillStyle = '#1a1a2e';
+      var m = 24 * scale;
+      ctx.beginPath();
+      ctx.roundRect(m, m, s - m*2, s - m*2, 80 * scale);
+      ctx.fill();
+
+      // "JobTracker" text — same style as in the app header
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'italic ' + Math.round(62 * scale) + 'px Georgia, "Times New Roman", serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('JobTracker', s/2, s * 0.44);
+
+      // Curved swirl line underneath
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 4 * scale;
+      ctx.lineCap = 'round';
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      var startX = 110 * scale;
+      var endX = 402 * scale;
+      var baseY = s * 0.54;
+      for (var i = 0; i <= 50; i++) {
+        var t = i / 50;
+        var x = startX + (endX - startX) * t;
+        var y = baseY + 18 * scale * Math.sin(t * Math.PI * 1.3 - 0.4);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
+    }
+
+    // Draw both sizes
+    drawIcon(document.getElementById('c512'));
+    drawIcon(document.getElementById('c192'));
+
+    // Set download links
+    document.getElementById('dl512').href = document.getElementById('c512').toDataURL('image/png');
+    document.getElementById('dl192').href = document.getElementById('c192').toDataURL('image/png');
+  </script>
+</body>
+</html>
