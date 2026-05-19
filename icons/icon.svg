@@ -1,15 +1,15 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
   <rect width="512" height="512" rx="96" fill="#0a0a1a"/>
-  <rect x="32" y="32" width="448" height="448" rx="80" fill="#1a1a2e"/>
-  <rect x="64" y="64" width="384" height="384" rx="64" fill="#0a0a1a"/>
-  <!-- Chart line -->
-  <path d="M128 352L192 272L256 304L336 208L384 240" stroke="#4ecca3" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Briefcase top -->
-  <rect x="192" y="128" width="128" height="32" rx="16" fill="#4ecca3" opacity="0.7"/>
-  <!-- Briefcase body -->
-  <rect x="160" y="152" width="192" height="120" rx="16" stroke="#4ecca3" stroke-width="12" fill="none" opacity="0.4"/>
-  <!-- Dots on chart -->
-  <circle cx="192" cy="272" r="12" fill="#4ecca3"/>
-  <circle cx="256" cy="304" r="12" fill="#4ecca3"/>
-  <circle cx="336" cy="208" r="12" fill="#4ecca3"/>
+  <!-- Inner surface -->
+  <rect x="24" y="24" width="464" height="464" rx="80" fill="#1a1a2e"/>
+  <!-- "JT" monogram in elegant style -->
+  <!-- J letter -->
+  <path d="M180 180L180 310C180 340 165 360 140 360C125 360 115 350 115 340" stroke="#ffffff" stroke-width="10" stroke-linecap="round" fill="none"/>
+  <!-- T letter -->
+  <path d="M220 180L320 180M270 180L270 340" stroke="#ffffff" stroke-width="10" stroke-linecap="round" fill="none"/>
+  <!-- Curved swirl line underneath -->
+  <path d="M120 380C180 355 230 355 270 368C310 381 350 381 400 360" stroke="#ffffff" stroke-width="7" stroke-linecap="round" fill="none" opacity="0.9"/>
+  <!-- Small accent dot -->
+  <circle cx="270" cy="155" r="8" fill="#4ecca3"/>
 </svg>

@@ -2,7 +2,7 @@
   "name": "JobTracker",
   "short_name": "JobTracker",
   "description": "Verfolge mehrere Jobs, berechne Einkommen und überwache gesetzliche Grenzen",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#0a0a1a",
