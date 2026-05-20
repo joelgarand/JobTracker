@@ -5605,6 +5605,32 @@ const JobTracker = (function () {
      */
     function getEntriesForMonth(year, month, jobId) {
       var workdays = AppState.getState().workdays;
+
+      // If jobId is provided, check if that job has a billing day
+      if (jobId) {
+        var jobs = AppState.getState().jobs;
+        var job = null;
+        for (var j = 0; j < jobs.length; j++) {
+          if (jobs[j].id === jobId) { job = jobs[j]; break; }
+        }
+        if (job && job.billingDay) {
+          // Use billing period: previous month's (billingDay+1) to this month's billingDay
+          var prevMonth = month - 1;
+          var prevYear = year;
+          if (prevMonth < 1) { prevMonth = 12; prevYear--; }
+          var startDay = job.billingDay + 1;
+          var daysInPrev = new Date(prevYear, prevMonth, 0).getDate();
+          if (startDay > daysInPrev) startDay = daysInPrev;
+          var endDay = Math.min(job.billingDay, new Date(year, month, 0).getDate());
+          var startDate = prevYear + '-' + String(prevMonth).padStart(2, '0') + '-' + String(startDay).padStart(2, '0');
+          var endDate = year + '-' + String(month).padStart(2, '0') + '-' + String(endDay).padStart(2, '0');
+          return workdays.filter(function (w) {
+            return w.jobId === jobId && w.date && w.date >= startDate && w.date <= endDate;
+          });
+        }
+      }
+
+      // Standard calendar month filtering
       var prefix = year + '-' + String(month).padStart(2, '0');
       return workdays.filter(function (w) {
         if (!w.date || !w.date.startsWith(prefix)) return false;
@@ -9904,11 +9930,19 @@ const JobTracker = (function () {
 
     /**
      * Returns the current year and month (1-based).
+     * If a job is provided and has a billingDay, adjusts the period accordingly.
+     * @param {object} [job] - Optional job object with billingDay
      * @returns {{ year: number, month: number }}
      */
-    function _getCurrentPeriod() {
+    function _getCurrentPeriod(job) {
       var now = new Date();
-      return { year: now.getFullYear(), month: now.getMonth() + 1 };
+      var year = now.getFullYear();
+      var month = now.getMonth() + 1;
+      if (job && job.billingDay && now.getDate() > job.billingDay) {
+        month++;
+        if (month > 12) { month = 1; year++; }
+      }
+      return { year: year, month: month };
     }
 
     /**
@@ -10015,7 +10049,7 @@ const JobTracker = (function () {
      * @returns {string} HTML string
      */
     function _renderKFBContent(job) {
-      var period = _getCurrentPeriod();
+      var period = _getCurrentPeriod(job);
       var nettoResult = IncomeEngine.calculateMonthlyNetto(job.id, period.year, period.month);
       var brutto = IncomeEngine.calculateMonthlyBrutto(job.id, period.year, period.month);
 
@@ -10293,7 +10327,7 @@ const JobTracker = (function () {
      * @param {HTMLElement} container
      */
     function _renderJobCard(job, container) {
-      var period = _getCurrentPeriod();
+      var period = _getCurrentPeriod(job);
       var year = period.year;
       var month = period.month;
 
