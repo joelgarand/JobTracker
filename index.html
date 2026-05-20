@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=25">
+  <link rel="stylesheet" href="style.css?v=26">
   <title>JobTracker</title>
 </head>
 <body>
@@ -18,7 +18,7 @@
     <div class="app-header-center">
       <span class="app-header-title">JobTracker</span>
       <svg class="app-header-swirl" width="90" height="10" viewBox="0 0 90 10" fill="none">
-        <path d="M5 8C20 2 35 2 45 5C55 8 70 8 85 3" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" opacity="0.85"/>
+        <path d="M5 8C20 2 35 2 45 5C55 8 70 8 85 3" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
       </svg>
     </div>
     <div class="app-header-actions">
@@ -341,7 +341,12 @@
 
       <!-- Gesamtübersicht Card -->
       <div id="daily-dashboard" class="glass-surface layer-content daily-dashboard-card">
-        <h2 class="daily-section-title">Gesamtübersicht</h2>
+        <div class="dashboard-header-row">
+          <h2 class="daily-section-title">Gesamtübersicht</h2>
+          <button type="button" id="dashboard-period-toggle" class="dashboard-period-btn" aria-label="Zeitraum wechseln">
+            <span id="dashboard-period-label">Aktueller Monat</span>
+          </button>
+        </div>
         <div class="dashboard-stats">
           <div class="dashboard-stat">
             <span class="dashboard-stat-value" id="dashboard-total-hours">0</span>
@@ -1022,6 +1027,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=25" defer></script>
+  <script src="app.js?v=26" defer></script>
 </body>
 </html>

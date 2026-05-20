@@ -8352,9 +8352,9 @@ const JobTracker = (function () {
         return;
       }
 
-      // Sort entries by date chronologically
+      // Sort entries by date descending (most recent first)
       entries.sort(function (a, b) {
-        return a.date.localeCompare(b.date);
+        return b.date.localeCompare(a.date);
       });
 
       var html = '<div class="monthly-day-entries">';
@@ -9509,6 +9509,7 @@ const JobTracker = (function () {
   // Requirements: 12.1, 12.2, 12.3, 12.4, 12.5
   const GesamtübersichtModule = (function () {
     let _initialized = false;
+    let _showAllTime = false; // false = current billing period, true = all time
 
     /**
      * Formats a number as German currency string: "1.234,56 €"
@@ -9565,8 +9566,12 @@ const JobTracker = (function () {
       var month = now.getMonth() + 1; // 1-based
       var day = now.getDate();
 
-      // For the Gesamtübersicht, we aggregate per-job using each job's billing period.
-      // If a job has billingDay and today > billingDay, that job is in the next month's period.
+      // Update period label
+      var periodLabel = document.getElementById('dashboard-period-label');
+      if (periodLabel) {
+        periodLabel.textContent = _showAllTime ? 'Gesamt' : 'Aktueller Monat';
+      }
+
       var jobs = AppState.getState().jobs;
       var totalHours = 0;
       var totalBrutto = 0;
@@ -9578,97 +9583,91 @@ const JobTracker = (function () {
       var nettoAvailable = true;
       var perJob = [];
 
-      for (var ji = 0; ji < jobs.length; ji++) {
-        var job = jobs[ji];
-        // Determine the billing month for this job
-        var billingMonth = month;
-        var billingYear = year;
-        if (job.billingDay && day > job.billingDay) {
-          billingMonth++;
-          if (billingMonth > 12) { billingMonth = 1; billingYear++; }
-        }
-        var brutto = IncomeEngine.calculateMonthlyBrutto(job.id, billingYear, billingMonth);
-        var nettoResult = IncomeEngine.calculateMonthlyNetto(job.id, billingYear, billingMonth);
-        var tips = IncomeEngine.getTipTotal(job.id, billingYear, billingMonth);
-        var provisions = IncomeEngine.getProvisionTotal(job.id, billingYear, billingMonth);
-
-        // Get hours from workdays in billing period
-        var entries = TimeTrackerModule.getEntriesForMonth(billingYear, billingMonth, job.id);
-        var jobHours = 0;
-        var jobWorkDays = 0;
-        var jobVacDays = 0;
-        var jobSickDays = 0;
-        for (var ei = 0; ei < entries.length; ei++) {
-          if (entries[ei].status === 'worked' && entries[ei].hours) {
-            jobHours += entries[ei].hours;
-            jobWorkDays++;
-          } else if (entries[ei].status === 'vacation') {
-            jobVacDays++;
-          } else if (entries[ei].status === 'sick') {
-            jobSickDays++;
+      if (_showAllTime) {
+        // All-time mode: use yearly aggregation for current year
+        var aggregatedYearly = IncomeEngine.getAggregatedYearly(year);
+        totalHours = aggregatedYearly.hours || 0;
+        totalBrutto = aggregatedYearly.totalBrutto || 0;
+        totalNetto = aggregatedYearly.totalNetto || 0;
+        totalTips = aggregatedYearly.totalTips || 0;
+        totalProvision = aggregatedYearly.provision || 0;
+        totalVacationDays = aggregatedYearly.vacationDays || 0;
+        totalSickDays = aggregatedYearly.sickDays || 0;
+        nettoAvailable = aggregatedYearly.nettoAvailable !== false;
+        perJob = aggregatedYearly.perJob || [];
+        var nettoCashflow = totalNetto + totalTips;
+        var aggregated = {
+          hours: totalHours, brutto: totalBrutto, netto: totalNetto,
+          tips: totalTips, provision: totalProvision,
+          vacationDays: totalVacationDays, sickDays: totalSickDays,
+          totalBrutto: totalBrutto, totalNetto: totalNetto, totalTips: totalTips,
+          nettoCashflow: nettoCashflow, nettoAvailable: nettoAvailable, perJob: perJob
+        };
+        _renderDashboard(aggregated, year, month);
+      } else {
+        // Current billing period mode (per-job billing day)
+        for (var ji = 0; ji < jobs.length; ji++) {
+          var job = jobs[ji];
+          var billingMonth = month;
+          var billingYear = year;
+          if (job.billingDay && day > job.billingDay) {
+            billingMonth++;
+            if (billingMonth > 12) { billingMonth = 1; billingYear++; }
           }
+          var brutto = IncomeEngine.calculateMonthlyBrutto(job.id, billingYear, billingMonth);
+          var nettoResult = IncomeEngine.calculateMonthlyNetto(job.id, billingYear, billingMonth);
+          var tips = IncomeEngine.getTipTotal(job.id, billingYear, billingMonth);
+          var provisions = IncomeEngine.getProvisionTotal(job.id, billingYear, billingMonth);
+
+          var entries = TimeTrackerModule.getEntriesForMonth(billingYear, billingMonth, job.id);
+          var jobHours = 0, jobVacDays = 0, jobSickDays = 0;
+          for (var ei = 0; ei < entries.length; ei++) {
+            if (entries[ei].status === 'worked' && entries[ei].hours) jobHours += entries[ei].hours;
+            else if (entries[ei].status === 'vacation') jobVacDays++;
+            else if (entries[ei].status === 'sick') jobSickDays++;
+          }
+
+          totalHours += jobHours;
+          totalBrutto += brutto;
+          totalTips += tips;
+          totalProvision += provisions;
+          totalVacationDays += jobVacDays;
+          totalSickDays += jobSickDays;
+          if (nettoResult.available) { totalNetto += nettoResult.netto; } else { nettoAvailable = false; }
+
+          perJob.push({
+            jobId: job.id, employerName: job.employerName, type: job.type,
+            brutto: brutto, netto: nettoResult.available ? nettoResult.netto : null,
+            nettoAvailable: nettoResult.available, tips: tips, provisions: provisions
+          });
         }
 
-        totalHours += jobHours;
-        totalBrutto += brutto;
-        totalTips += tips;
-        totalProvision += provisions;
-        totalVacationDays += jobVacDays;
-        totalSickDays += jobSickDays;
-
-        if (nettoResult.available) {
-          totalNetto += nettoResult.netto;
-        } else {
-          nettoAvailable = false;
-        }
-
-        perJob.push({
-          jobId: job.id,
-          employerName: job.employerName,
-          type: job.type,
-          brutto: brutto,
-          netto: nettoResult.available ? nettoResult.netto : null,
-          nettoAvailable: nettoResult.available,
-          tips: tips,
-          provisions: provisions
-        });
+        var nettoCashflow = totalNetto + totalTips;
+        var aggregated = {
+          hours: totalHours, brutto: totalBrutto, netto: totalNetto,
+          tips: totalTips, provision: totalProvision,
+          vacationDays: totalVacationDays, sickDays: totalSickDays,
+          totalBrutto: totalBrutto, totalNetto: totalNetto, totalTips: totalTips,
+          nettoCashflow: nettoCashflow, nettoAvailable: nettoAvailable, perJob: perJob
+        };
+        _renderDashboard(aggregated, year, month);
       }
+    }
 
-      var nettoCashflow = totalNetto + totalTips;
-      var aggregated = {
-        hours: totalHours,
-        brutto: totalBrutto,
-        netto: totalNetto,
-        tips: totalTips,
-        provision: totalProvision,
-        vacationDays: totalVacationDays,
-        sickDays: totalSickDays,
-        totalBrutto: totalBrutto,
-        totalNetto: totalNetto,
-        totalTips: totalTips,
-        nettoCashflow: nettoCashflow,
-        nettoAvailable: nettoAvailable,
-        perJob: perJob
-      };
-
-      // Update DOM elements
+    /**
+     * Renders the dashboard DOM with aggregated data.
+     */
+    function _renderDashboard(aggregated, year, month) {
       var hoursEl = document.getElementById('dashboard-total-hours');
       var bruttoEl = document.getElementById('dashboard-total-brutto');
       var nettoEl = document.getElementById('dashboard-total-netto');
       var tipsEl = document.getElementById('dashboard-total-tips');
 
-      if (hoursEl) {
-        hoursEl.textContent = _formatHours(aggregated.hours);
-      }
-      if (bruttoEl) {
-        bruttoEl.textContent = _formatCurrency(aggregated.brutto);
-      }
-      if (nettoEl) {
-        // Netto cashflow includes tips added to netto
-        nettoEl.textContent = _formatCurrency(aggregated.nettoCashflow);
-      }
+      if (hoursEl) hoursEl.textContent = _formatHours(aggregated.hours);
+      if (bruttoEl) bruttoEl.textContent = _formatCurrency(aggregated.brutto);
+      if (nettoEl) nettoEl.textContent = _formatCurrency(aggregated.nettoCashflow);
+
       if (tipsEl) {
-        // Only show Trinkgeld if any job has tip tracking enabled
         var jobs = AppState.getState().jobs;
         var hasTipTracking = false;
         for (var t = 0; t < jobs.length; t++) {
@@ -9682,10 +9681,7 @@ const JobTracker = (function () {
         }
       }
 
-      // ── Brutto/Netto Breakdown Dropdown ──
       _updateNettoBreakdown(aggregated, year, month);
-
-      // ── Vacation & Sick Days ──
       _updateAbsenceRow(aggregated);
     }
 
@@ -9810,6 +9806,15 @@ const JobTracker = (function () {
     function init() {
       if (_initialized) return;
       _initialized = true;
+
+      // Bind period toggle button
+      var periodToggle = document.getElementById('dashboard-period-toggle');
+      if (periodToggle) {
+        periodToggle.addEventListener('click', function () {
+          _showAllTime = !_showAllTime;
+          _update();
+        });
+      }
 
       // Initial render
       _update();
@@ -10730,8 +10735,18 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '1.2.0';
+  const APP_VERSION = '1.3.0';
   const APP_CHANGELOG = [
+    {
+      version: '1.3.0',
+      date: '2026-05-20',
+      changes: [
+        'Gesamtübersicht zeigt aktuellen Abrechnungszeitraum (Toggle für Gesamt)',
+        'Monats-Tab: Tage nach Datum absteigend sortiert',
+        'Logo-Linie im Hell-Modus sichtbar',
+        'Liquid Glass Tabs vergrößert'
+      ]
+    },
     {
       version: '1.2.0',
       date: '2026-05-20',
