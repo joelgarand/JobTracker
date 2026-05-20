@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=28">
+  <link rel="stylesheet" href="style.css?v=29">
   <title>JobTracker</title>
 </head>
 <body>
@@ -253,6 +253,11 @@
               <span class="radio-custom"></span>
               <span class="radio-text">Festgehalt</span>
             </label>
+            <label class="radio-label">
+              <input type="radio" name="onb-salary-type" value="daily" class="radio-input">
+              <span class="radio-custom"></span>
+              <span class="radio-text">Tagessatz</span>
+            </label>
           </div>
           <span class="field-error" id="error-salary-type" role="alert"></span>
         </div>
@@ -261,6 +266,12 @@
           <label class="form-label" for="onb-hourly-rate">Stundenlohn (€) *</label>
           <input type="number" id="onb-hourly-rate" class="form-input" min="0.01" max="999.99" step="0.01" placeholder="12,50">
           <span class="field-error" id="error-hourly-rate" role="alert"></span>
+        </div>
+
+        <div class="form-group" id="onb-daily-rate-group" style="display:none;">
+          <label class="form-label" for="onb-daily-rate">Standard-Tagessatz (€)</label>
+          <input type="number" id="onb-daily-rate" class="form-input" min="0.01" max="99999.99" step="0.01" placeholder="z.B. 450,00">
+          <span class="form-hint">Optional — kann bei jedem Eintrag individuell angepasst werden.</span>
         </div>
 
         <div class="form-group optional-section">
@@ -563,6 +574,10 @@
             <label class="form-label" for="entry-hours">Stunden *</label>
             <input type="number" id="entry-hours" class="form-input" min="0.25" max="24" step="0.25" placeholder="z.B. 8">
           </div>
+          <div class="form-group" id="entry-daily-rate-group" style="display:none;">
+            <label class="form-label" for="entry-daily-rate">Tagessatz (€) *</label>
+            <input type="number" id="entry-daily-rate" class="form-input" min="0.01" max="99999.99" step="0.01" placeholder="z.B. 450,00">
+          </div>
           <div class="form-group" id="entry-provision-group" style="display:none;">
             <label class="form-label" for="entry-provision">Provision (€)</label>
             <input type="number" id="entry-provision" class="form-input" min="0" step="0.01" placeholder="0,00">
@@ -703,6 +718,11 @@
                 <span class="radio-custom"></span>
                 <span class="radio-text">Festgehalt</span>
               </label>
+              <label class="radio-label">
+                <input type="radio" name="settings-salary-type" value="daily" class="radio-input">
+                <span class="radio-custom"></span>
+                <span class="radio-text">Tagessatz</span>
+              </label>
             </div>
             <span class="field-error" id="settings-salary-type-error" aria-live="polite"></span>
           </div>
@@ -717,6 +737,12 @@
             <label class="form-label" for="settings-job-fixed-salary">Monatsgehalt (€) *</label>
             <input type="number" id="settings-job-fixed-salary" class="form-input" min="0.01" max="99999.99" step="0.01" placeholder="2500,00">
             <span class="field-error" id="settings-job-fixed-salary-error" aria-live="polite"></span>
+          </div>
+
+          <div class="form-group" id="settings-daily-rate-group" style="display:none;">
+            <label class="form-label" for="settings-job-daily-rate">Standard-Tagessatz (€)</label>
+            <input type="number" id="settings-job-daily-rate" class="form-input" min="0.01" max="99999.99" step="0.01" placeholder="z.B. 450,00">
+            <span class="form-hint">Optional — kann bei jedem Eintrag individuell angepasst werden.</span>
           </div>
 
           <div class="form-group optional-section">
@@ -1027,6 +1053,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=28" defer></script>
+  <script src="app.js?v=29" defer></script>
 </body>
 </html>

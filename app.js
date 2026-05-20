@@ -1584,13 +1584,16 @@ const JobTracker = (function () {
      */
     function _handleSalaryTypeChange() {
       var hourlyRadio = document.querySelector('input[name="onb-salary-type"][value="hourly"]');
+      var dailyRadio = document.querySelector('input[name="onb-salary-type"][value="daily"]');
       var hourlyGroup = document.getElementById('onb-hourly-rate-group');
+      var dailyGroup = document.getElementById('onb-daily-rate-group');
       if (!hourlyRadio || !hourlyGroup) return;
 
       var radios = document.querySelectorAll('input[name="onb-salary-type"]');
       for (var i = 0; i < radios.length; i++) {
         radios[i].addEventListener('change', function () {
           hourlyGroup.style.display = hourlyRadio.checked ? '' : 'none';
+          if (dailyGroup) dailyGroup.style.display = (dailyRadio && dailyRadio.checked) ? '' : 'none';
         });
       }
     }
@@ -1701,7 +1704,7 @@ const JobTracker = (function () {
   const JobManager = (function () {
     const STORAGE_KEY = 'jt_jobs';
     const VALID_JOB_TYPES = ['KFB', 'Minijob', 'Teilzeit', 'Vollzeit', 'Werkstudent'];
-    const VALID_SALARY_TYPES = ['hourly', 'fixed'];
+    const VALID_SALARY_TYPES = ['hourly', 'fixed', 'daily'];
 
     let _initialized = false;
     let _editingJobId = null;
@@ -1827,7 +1830,7 @@ const JobTracker = (function () {
 
       // Salary type validation
       if (!data.salaryType || VALID_SALARY_TYPES.indexOf(data.salaryType) === -1) {
-        errors.push('Bitte eine gültige Gehaltsart auswählen (hourly, fixed).');
+        errors.push('Bitte eine gültige Gehaltsart auswählen (hourly, fixed, daily).');
       }
 
       // Hourly rate required if salary type is hourly
@@ -1888,6 +1891,7 @@ const JobTracker = (function () {
         salaryType: jobData.salaryType,
         defaultHourlyRate: jobData.salaryType === 'hourly' ? Number(jobData.defaultHourlyRate) : null,
         fixedMonthlySalary: jobData.salaryType === 'fixed' ? Number(jobData.fixedMonthlySalary) : null,
+        defaultDailyRate: jobData.salaryType === 'daily' && jobData.defaultDailyRate ? Number(jobData.defaultDailyRate) : null,
         standardHoursPerDay: jobData.standardHoursPerDay != null ? Number(jobData.standardHoursPerDay) : null,
         standardDaysPerWeek: jobData.standardDaysPerWeek != null ? Number(jobData.standardDaysPerWeek) : null,
         hasProvision: !!jobData.hasProvision,
@@ -1958,6 +1962,7 @@ const JobTracker = (function () {
       if (updates.salaryType !== undefined) updatedJob.salaryType = updates.salaryType;
       if (updates.defaultHourlyRate !== undefined) updatedJob.defaultHourlyRate = updates.defaultHourlyRate != null ? Number(updates.defaultHourlyRate) : null;
       if (updates.fixedMonthlySalary !== undefined) updatedJob.fixedMonthlySalary = updates.fixedMonthlySalary != null ? Number(updates.fixedMonthlySalary) : null;
+      if (updates.defaultDailyRate !== undefined) updatedJob.defaultDailyRate = updates.defaultDailyRate != null ? Number(updates.defaultDailyRate) : null;
       if (updates.standardHoursPerDay !== undefined) updatedJob.standardHoursPerDay = updates.standardHoursPerDay != null ? Number(updates.standardHoursPerDay) : null;
       if (updates.standardDaysPerWeek !== undefined) updatedJob.standardDaysPerWeek = updates.standardDaysPerWeek != null ? Number(updates.standardDaysPerWeek) : null;
       if (updates.hasProvision !== undefined) updatedJob.hasProvision = !!updates.hasProvision;
@@ -2263,8 +2268,11 @@ const JobTracker = (function () {
     function _showHourlyRateGroup(showHourly) {
       var hourlyGroup = document.getElementById('settings-hourly-rate-group');
       var fixedGroup = document.getElementById('settings-fixed-salary-group');
-      if (hourlyGroup) hourlyGroup.style.display = showHourly ? '' : 'none';
-      if (fixedGroup) fixedGroup.style.display = showHourly ? 'none' : '';
+      var dailyGroup = document.getElementById('settings-daily-rate-group');
+      var selected = _getSelectedSalaryType();
+      if (hourlyGroup) hourlyGroup.style.display = (selected === 'hourly') ? '' : 'none';
+      if (fixedGroup) fixedGroup.style.display = (selected === 'fixed') ? '' : 'none';
+      if (dailyGroup) dailyGroup.style.display = (selected === 'daily') ? '' : 'none';
     }
 
     /**
@@ -2289,6 +2297,8 @@ const JobTracker = (function () {
       // Rates
       document.getElementById('settings-job-hourly-rate').value = job.defaultHourlyRate != null ? job.defaultHourlyRate : '';
       document.getElementById('settings-job-fixed-salary').value = job.fixedMonthlySalary != null ? job.fixedMonthlySalary : '';
+      var dailyRateField = document.getElementById('settings-job-daily-rate');
+      if (dailyRateField) dailyRateField.value = job.defaultDailyRate != null ? job.defaultDailyRate : '';
 
       // Optional fields
       document.getElementById('settings-job-vacation').value = job.vacationEntitlement != null ? job.vacationEntitlement : '';
@@ -2491,6 +2501,7 @@ const JobTracker = (function () {
       var salaryType = _getSelectedSalaryType();
       var hourlyRate = salaryType === 'hourly' ? parseFloat(document.getElementById('settings-job-hourly-rate').value) : null;
       var fixedSalary = salaryType === 'fixed' ? parseFloat(document.getElementById('settings-job-fixed-salary').value) : null;
+      var dailyRate = salaryType === 'daily' ? (function() { var dr = document.getElementById('settings-job-daily-rate'); return dr && dr.value ? parseFloat(dr.value) : null; })() : null;
       var vacationInput = document.getElementById('settings-job-vacation').value;
       var vacation = (vacationInput !== '' && vacationInput !== null) ? parseInt(vacationInput, 10) : null;
       var websiteInput = document.getElementById('settings-job-website');
@@ -2521,6 +2532,7 @@ const JobTracker = (function () {
         salaryType: salaryType,
         defaultHourlyRate: hourlyRate,
         fixedMonthlySalary: fixedSalary,
+        defaultDailyRate: dailyRate,
         standardHoursPerDay: null,
         standardDaysPerWeek: null,
         hasProvision: document.getElementById('settings-job-provision').checked,
@@ -2947,6 +2959,7 @@ const JobTracker = (function () {
         endDate: null,
         salaryType: salaryType,
         defaultHourlyRate: salaryType === 'hourly' ? parseFloat(hourlyRate.value) : null,
+        defaultDailyRate: salaryType === 'daily' ? (function() { var dr = document.getElementById('onb-daily-rate'); return dr && dr.value ? parseFloat(dr.value) : null; })() : null,
         fixedMonthlySalary: null,
         standardHoursPerDay: null,
         standardDaysPerWeek: null,
@@ -3185,9 +3198,12 @@ const JobTracker = (function () {
         html += '<dl class="review-list">';
         html += '<dt>Typ</dt><dd>' + _escapeHTML(job.type) + '</dd>';
         html += '<dt>Startdatum</dt><dd>' + _escapeHTML(job.startDate) + '</dd>';
-        html += '<dt>Gehaltsart</dt><dd>' + (job.salaryType === 'hourly' ? 'Stundenlohn' : 'Festgehalt') + '</dd>';
+        html += '<dt>Gehaltsart</dt><dd>' + (job.salaryType === 'hourly' ? 'Stundenlohn' : job.salaryType === 'daily' ? 'Tagessatz' : 'Festgehalt') + '</dd>';
         if (job.salaryType === 'hourly' && job.defaultHourlyRate !== null) {
           html += '<dt>Stundenlohn</dt><dd>' + job.defaultHourlyRate.toFixed(2) + ' €</dd>';
+        }
+        if (job.salaryType === 'daily' && job.defaultDailyRate !== null) {
+          html += '<dt>Standard-Tagessatz</dt><dd>' + job.defaultDailyRate.toFixed(2) + ' €</dd>';
         }
         if (job.hasProvision) html += '<dt>Provision</dt><dd>Aktiviert</dd>';
         if (job.hasTipTracking) html += '<dt>Trinkgeld</dt><dd>Aktiviert</dd>';
@@ -4076,6 +4092,16 @@ const JobTracker = (function () {
           var overtimeHours = totalWorkedHours - standardMonthlyHours;
           if (overtimeHours > 0) {
             brutto += overtimeHours * job.defaultHourlyRate;
+          }
+        }
+      } else if (job.salaryType === 'daily') {
+        // Daily rate: sum of dailyRateOverride (or defaultDailyRate) for each worked day
+        for (var d = 0; d < workdays.length; d++) {
+          if (workdays[d].status === 'worked') {
+            var dayRate = (workdays[d].dailyRateOverride !== null && workdays[d].dailyRateOverride !== undefined)
+              ? workdays[d].dailyRateOverride
+              : (job.defaultDailyRate || 0);
+            brutto += dayRate;
           }
         }
       }
@@ -5549,11 +5575,12 @@ const JobTracker = (function () {
         errors.push('Gültiger Status ist erforderlich.');
       }
 
-      // Hours validation (only for worked status)
+      // Hours validation (only for worked status, not required for daily rate jobs)
       if (entry.status === 'worked') {
-        if (entry.hours === null || entry.hours === undefined || entry.hours === '') {
+        var hasDailyRate = entry.dailyRateOverride !== null && entry.dailyRateOverride !== undefined && entry.dailyRateOverride !== '';
+        if (!hasDailyRate && (entry.hours === null || entry.hours === undefined || entry.hours === '')) {
           errors.push('Stunden sind für Arbeitseinträge erforderlich.');
-        } else {
+        } else if (entry.hours !== null && entry.hours !== undefined && entry.hours !== '') {
           var h = parseFloat(entry.hours);
           if (isNaN(h) || h < 0.25 || h > 24) {
             errors.push('Stunden müssen zwischen 0,25 und 24 liegen.');
@@ -5681,8 +5708,9 @@ const JobTracker = (function () {
         jobId: entry.jobId,
         date: entry.date,
         status: entry.status,
-        hours: entry.status === 'worked' ? parseFloat(entry.hours) : null,
+        hours: entry.status === 'worked' && entry.hours ? parseFloat(entry.hours) : null,
         hourlyRateOverride: (entry.hourlyRateOverride !== null && entry.hourlyRateOverride !== undefined && entry.hourlyRateOverride !== '') ? parseFloat(entry.hourlyRateOverride) : null,
+        dailyRateOverride: (entry.dailyRateOverride !== null && entry.dailyRateOverride !== undefined && entry.dailyRateOverride !== '') ? parseFloat(entry.dailyRateOverride) : null,
         note: entry.note || null,
         paidSickLeave: entry.paidSickLeave || false,
         createdAt: now,
@@ -9263,6 +9291,8 @@ const JobTracker = (function () {
       var jobSelect = document.getElementById('entry-job');
       var provisionGroup = document.getElementById('entry-provision-group');
       var tipGroup = document.getElementById('entry-tip-group');
+      var dailyRateGroup = document.getElementById('entry-daily-rate-group');
+      var hoursGroup = document.getElementById('entry-hours-group');
       if (!jobSelect) return;
 
       var selectedJobId = jobSelect.value;
@@ -9274,6 +9304,18 @@ const JobTracker = (function () {
 
       if (provisionGroup) provisionGroup.style.display = (selectedJob && selectedJob.hasProvision) ? '' : 'none';
       if (tipGroup) tipGroup.style.display = (selectedJob && selectedJob.hasTipTracking) ? '' : 'none';
+
+      // Show daily rate field for daily salary type, hide hours
+      var isDaily = selectedJob && selectedJob.salaryType === 'daily';
+      if (dailyRateGroup) dailyRateGroup.style.display = isDaily ? '' : 'none';
+      if (hoursGroup && isDaily) hoursGroup.style.display = 'none';
+      if (hoursGroup && !isDaily) hoursGroup.style.display = '';
+
+      // Pre-fill daily rate with default if available
+      if (isDaily && selectedJob.defaultDailyRate) {
+        var drInput = document.getElementById('entry-daily-rate');
+        if (drInput && !drInput.value) drInput.value = selectedJob.defaultDailyRate;
+      }
     }
 
     /**
@@ -9306,24 +9348,52 @@ const JobTracker = (function () {
         return;
       }
 
+      // Determine if this is a daily-rate job
+      var jobs = JobManager.getActiveJobs();
+      var selectedJob = null;
+      for (var ji = 0; ji < jobs.length; ji++) {
+        if (jobs[ji].id === jobId) { selectedJob = jobs[ji]; break; }
+      }
+      var isDaily = selectedJob && selectedJob.salaryType === 'daily';
+      var dailyRateInput = document.getElementById('entry-daily-rate');
+      var dailyRateValue = null;
+
       if (status === 'worked') {
-        hours = parseFloat(hoursInput ? hoursInput.value : '');
-        if (isNaN(hours) || hours < 0.25 || hours > 24) {
-          if (errorEl) errorEl.textContent = 'Stunden müssen zwischen 0,25 und 24 liegen.';
-          return;
-        }
-        if (Math.round(hours * 4) !== hours * 4) {
-          if (errorEl) errorEl.textContent = 'Stunden müssen in 0,25-Schritten angegeben werden.';
-          return;
+        if (isDaily) {
+          // Daily rate: validate the rate, hours are optional
+          dailyRateValue = parseFloat(dailyRateInput ? dailyRateInput.value : '');
+          if (isNaN(dailyRateValue) || dailyRateValue <= 0) {
+            if (errorEl) errorEl.textContent = 'Bitte einen gültigen Tagessatz eingeben.';
+            return;
+          }
+          // Hours optional for daily rate — use value if provided
+          var hoursVal = parseFloat(hoursInput ? hoursInput.value : '');
+          hours = (!isNaN(hoursVal) && hoursVal > 0) ? hoursVal : null;
+        } else {
+          hours = parseFloat(hoursInput ? hoursInput.value : '');
+          if (isNaN(hours) || hours < 0.25 || hours > 24) {
+            if (errorEl) errorEl.textContent = 'Stunden müssen zwischen 0,25 und 24 liegen.';
+            return;
+          }
+          if (Math.round(hours * 4) !== hours * 4) {
+            if (errorEl) errorEl.textContent = 'Stunden müssen in 0,25-Schritten angegeben werden.';
+            return;
+          }
         }
       }
 
-      var result = TimeTrackerModule.createEntry({
+      var entryData = {
         jobId: jobId,
         date: date,
         status: status,
         hours: hours
-      });
+      };
+      // Store daily rate override on the entry
+      if (isDaily && dailyRateValue) {
+        entryData.dailyRateOverride = dailyRateValue;
+      }
+
+      var result = TimeTrackerModule.createEntry(entryData);
 
       if (result.success) {
         // Save provision if entered
@@ -10822,8 +10892,18 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '1.3.0';
+  const APP_VERSION = '1.4.0';
   const APP_CHANGELOG = [
+    {
+      version: '1.4.0',
+      date: '2026-05-20',
+      changes: [
+        'Neue Gehaltsart: Tagessatz — individueller Betrag pro Arbeitstag',
+        'Job-Cards zeigen Daten passend zum Gesamtübersicht-Toggle',
+        'Monats-Tab: Tage absteigend sortiert (neueste oben)',
+        'Logo-Linie im Hell-Modus sichtbar'
+      ]
+    },
     {
       version: '1.3.0',
       date: '2026-05-20',
