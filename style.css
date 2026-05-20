@@ -2909,6 +2909,18 @@ a {
   color: var(--color-accent);
 }
 
+.job-card-body {
+  transition: max-height 0.3s ease, opacity 0.2s ease;
+  overflow: hidden;
+}
+
+.job-card-body.job-card-collapsed {
+  max-height: 0 !important;
+  opacity: 0;
+  margin: 0;
+  padding: 0;
+}
+
 .job-card-content {
   margin-bottom: var(--spacing-sm);
 }

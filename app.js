@@ -5164,15 +5164,21 @@ const JobTracker = (function () {
         };
       }
 
-      // Count working days for this KFB job in the year
+      // Count working days for ALL KFB jobs in the year (legally they're combined)
       var workdays = AppState.getState().workdays;
+      var allJobs = AppState.getState().jobs;
+      var kfbJobIds = [];
+      for (var j = 0; j < allJobs.length; j++) {
+        if (allJobs[j].type === 'KFB') kfbJobIds.push(allJobs[j].id);
+      }
+
       var yearPrefix = String(year) + '-';
       var workedDays = 0;
       var hasAnyData = false;
 
       for (var i = 0; i < workdays.length; i++) {
         var wd = workdays[i];
-        if (wd.jobId !== jobId || !wd.date || !wd.date.startsWith(yearPrefix)) continue;
+        if (kfbJobIds.indexOf(wd.jobId) === -1 || !wd.date || !wd.date.startsWith(yearPrefix)) continue;
         hasAnyData = true;
         if (wd.status === 'worked') {
           workedDays++;
@@ -5484,16 +5490,19 @@ const JobTracker = (function () {
       }
 
       // Calculate total monthly income across all jobs
+      // KFB is EXCLUDED — it's SV-frei and doesn't count towards FV limit
+      // (employer pays flat 25% tax, no employee income for FV purposes)
       var jobs = AppState.getState().jobs;
       var totalIncome = 0;
       var hasMinijob = false;
       for (var i = 0; i < jobs.length; i++) {
+        if (jobs[i].type === 'KFB') continue; // KFB doesn't count
         var brutto = IncomeEngine.calculateMonthlyBrutto(jobs[i].id, year, month);
         totalIncome += brutto;
         if (jobs[i].type === 'Minijob') hasMinijob = true;
       }
 
-      // Limit depends on whether income is from Minijob
+      // Limit: 565€/month general, 603€ if only Minijob income
       var limit = hasMinijob ? 603 : 565;
       var percentage = limit > 0 ? Math.round((totalIncome / limit) * 100) : 0;
       var warningLevel = percentage >= 100 ? 'critical' : (percentage >= 80 ? 'warning' : 'safe');
@@ -9710,22 +9719,33 @@ const JobTracker = (function () {
       var statusSelect = document.getElementById('entry-status');
       var provisionInput = document.getElementById('entry-provision');
       var dailyRateInput = document.getElementById('entry-daily-rate');
+      var dateInput = document.getElementById('entry-date');
+
+      // Set today's date if empty
+      if (dateInput && !dateInput.value) {
+        var today = new Date();
+        dateInput.value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+      }
 
       if (jobSelect && t.jobId) jobSelect.value = t.jobId;
-      if (hoursInput && t.hours) hoursInput.value = t.hours;
       if (statusSelect) statusSelect.value = 'worked';
       _updateExtraFields();
-      // Fill provision/daily rate after _updateExtraFields shows the fields
+      if (hoursInput && t.hours) hoursInput.value = t.hours;
       if (provisionInput && t.provision) provisionInput.value = t.provision;
       if (dailyRateInput && t.dailyRate) dailyRateInput.value = t.dailyRate;
-      showToast('Vorlage "' + t.name + '" angewendet ✓');
+
+      // Auto-submit the form
+      var form = document.getElementById('entry-form');
+      if (form) {
+        form.dispatchEvent(new Event('submit', { cancelable: true }));
+      }
     }
 
     function _bindAddTemplate() {
       var btn = document.getElementById('entry-add-template-btn');
       if (!btn) return;
       btn.addEventListener('click', function () {
-        var name = prompt('Name der Vorlage (z.B. "Frühschicht"):');
+        var name = prompt('Name der Vorlage (z.B. "Frühschicht 8h"):');
         if (!name || !name.trim()) return;
 
         var jobSelect = document.getElementById('entry-job');
@@ -9733,9 +9753,15 @@ const JobTracker = (function () {
         var provisionInput = document.getElementById('entry-provision');
         var dailyRateInput = document.getElementById('entry-daily-rate');
 
+        // Validate: at least job must be selected
+        if (!jobSelect || !jobSelect.value) {
+          showToast('Bitte zuerst einen Job auswählen');
+          return;
+        }
+
         var template = {
           name: name.trim(),
-          jobId: jobSelect ? jobSelect.value : null,
+          jobId: jobSelect.value,
           hours: hoursInput && hoursInput.value ? parseFloat(hoursInput.value) : null,
           provision: provisionInput && provisionInput.value ? parseFloat(provisionInput.value) : null,
           dailyRate: dailyRateInput && dailyRateInput.value ? parseFloat(dailyRateInput.value) : null
@@ -10709,8 +10735,24 @@ const JobTracker = (function () {
       // 3. Limit/rules info box placeholder
       var limitsHtml = '<div class="job-card-limits" id="job-card-limits-' + job.id + '"></div>';
 
-      card.innerHTML = headerHtml + contentHtml + limitsHtml;
+      // Wrap content in collapsible container
+      var collapsed = AppState.get('jobCardCollapsed_' + job.id) || false;
+      var collapseClass = collapsed ? ' job-card-collapsed' : '';
+      card.innerHTML = headerHtml + '<div class="job-card-body' + collapseClass + '">' + contentHtml + limitsHtml + '</div>';
       container.appendChild(card);
+
+      // Make header clickable to toggle collapse
+      var header = card.querySelector('.job-card-header');
+      if (header) {
+        header.style.cursor = 'pointer';
+        header.addEventListener('click', function () {
+          var body = card.querySelector('.job-card-body');
+          if (body) {
+            body.classList.toggle('job-card-collapsed');
+            AppState.set('jobCardCollapsed_' + job.id, body.classList.contains('job-card-collapsed'));
+          }
+        });
+      }
 
       // Render limit/rules info box via LimitMonitorUI
       var limitsContainer = document.getElementById('job-card-limits-' + job.id);
@@ -11121,8 +11163,19 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '1.7.0';
+  const APP_VERSION = '1.8.0';
   const APP_CHANGELOG = [
+    {
+      version: '1.8.0',
+      date: '2026-05-21',
+      changes: [
+        '🐛 KFB-Tage werden jetzt über ALLE KFB-Jobs zusammengezählt (70-Tage-Regel)',
+        '🐛 Familienversicherung: KFB-Einkommen zählt nicht zur 565€-Grenze',
+        '⚡ Templates: Ein Tap = automatisch eingetragen (kein manuelles Speichern mehr)',
+        '📂 Job-Cards einklappbar (Tap auf Header zum Ein-/Ausklappen)',
+        'Tab-Bubbles gleichmäßig zentriert'
+      ]
+    },
     {
       version: '1.7.0',
       date: '2026-05-20',
