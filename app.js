@@ -9839,6 +9839,10 @@ const JobTracker = (function () {
         periodToggle.addEventListener('click', function () {
           _showAllTime = !_showAllTime;
           _update();
+          // Also re-render job cards to match the period
+          if (typeof JobCardRenderer !== 'undefined' && JobCardRenderer.render) {
+            JobCardRenderer.render();
+          }
         });
       }
 
@@ -9867,6 +9871,7 @@ const JobTracker = (function () {
 
     return {
       init: init,
+      isShowingAllTime: function () { return _showAllTime; },
       // Exposed for testing
       _formatCurrency: _formatCurrency,
       _formatHours: _formatHours,
@@ -9938,11 +9943,15 @@ const JobTracker = (function () {
       var now = new Date();
       var year = now.getFullYear();
       var month = now.getMonth() + 1;
+      // If GesamtübersichtModule is in "all time" mode, return null month to signal yearly
+      if (typeof GesamtübersichtModule !== 'undefined' && GesamtübersichtModule.isShowingAllTime && GesamtübersichtModule.isShowingAllTime()) {
+        return { year: year, month: null, allTime: true };
+      }
       if (job && job.billingDay && now.getDate() > job.billingDay) {
         month++;
         if (month > 12) { month = 1; year++; }
       }
-      return { year: year, month: month };
+      return { year: year, month: month, allTime: false };
     }
 
     /**
@@ -10322,6 +10331,48 @@ const JobTracker = (function () {
     }
 
     /**
+     * Renders all-time (yearly) summary content for a job card.
+     * @param {object} job
+     * @param {number} year
+     * @returns {string} HTML string
+     */
+    function _renderAllTimeContent(job, year) {
+      var brutto = IncomeEngine.calculateYearlyBrutto(job.id, year);
+      var nettoResult = IncomeEngine.calculateYearlyNetto(job.id, year);
+      var totalHours = 0;
+      // Sum hours across all months
+      for (var m = 1; m <= 12; m++) {
+        totalHours += _getMonthlyHours(job.id, year, m);
+      }
+
+      var html = '<div class="job-card-content job-card-alltime">';
+      html += '<div class="job-card-stats">';
+      html += '<span>' + _formatHours(totalHours) + ' Std. gesamt</span>';
+      html += '</div>';
+      html += '<div class="job-card-earnings">';
+      html += '<div class="job-card-stat"><span class="job-card-stat-label">Brutto</span><span class="job-card-stat-value">' + _formatCurrency(brutto) + '</span></div>';
+      if (nettoResult && nettoResult.available) {
+        html += '<div class="job-card-stat"><span class="job-card-stat-label">Netto</span><span class="job-card-stat-value accent">' + _formatCurrency(nettoResult.netto) + '</span></div>';
+      }
+      html += '</div>';
+
+      // Provision/tip totals
+      if (job.hasProvision || job.hasTipTracking) {
+        html += '<div class="job-card-extras">';
+        if (job.hasProvision) {
+          html += '<span>Provision: ' + _formatCurrency(IncomeEngine.getProvisionTotal(job.id, year)) + '</span>';
+        }
+        if (job.hasTipTracking) {
+          html += '<span>Trinkgeld: ' + _formatCurrency(IncomeEngine.getTipTotal(job.id, year)) + '</span>';
+        }
+        html += '</div>';
+      }
+
+      html += '</div>';
+      return html;
+    }
+
+    /**
      * Renders a single job card into the container.
      * @param {object} job
      * @param {HTMLElement} container
@@ -10329,7 +10380,7 @@ const JobTracker = (function () {
     function _renderJobCard(job, container) {
       var period = _getCurrentPeriod(job);
       var year = period.year;
-      var month = period.month;
+      var month = period.allTime ? (new Date().getMonth() + 1) : period.month;
 
       // Create card element
       var card = document.createElement('div');
@@ -10343,14 +10394,16 @@ const JobTracker = (function () {
 
       // 2. Type-specific content
       var contentHtml = '';
-      if (job.type === 'KFB') {
+      if (period.allTime) {
+        // All-time mode: show yearly totals in a simple summary
+        contentHtml = _renderAllTimeContent(job, year);
+      } else if (job.type === 'KFB') {
         contentHtml = _renderKFBContent(job);
       } else if (job.type === 'Minijob') {
         contentHtml = _renderMinijobContent(job, year, month);
       } else if ((job.type === 'Teilzeit' || job.type === 'Vollzeit') && job.salaryType === 'fixed') {
         contentHtml = _renderFixedSalaryContent(job, year, month);
       } else {
-        // Werkstudent or hourly Teilzeit/Vollzeit
         contentHtml = _renderHourlyContent(job, year, month);
       }
 
