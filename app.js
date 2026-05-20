@@ -11210,10 +11210,12 @@ const JobTracker = (function () {
           html += '</ul>';
           bodyEl.innerHTML = html;
           bannerEl.style.display = '';
+          // Save version only when banner is dismissed
+          return; // Don't save yet
         }
       }
     }
-    // Always update the stored version
+    // No update or no banner — save version immediately
     AppState.set('lastSeenVersion', APP_VERSION);
   }
 
@@ -11244,8 +11246,30 @@ const JobTracker = (function () {
       navigator.serviceWorker.register('./sw.js').then(function (registration) {
         // Check for updates on every page load
         registration.update();
-      }).catch(function () {
-        // Service worker registration failed — app continues without offline support
+
+        // When a new SW is waiting, tell it to activate immediately
+        registration.addEventListener('updatefound', function () {
+          var newWorker = registration.installing;
+          if (newWorker) {
+            newWorker.addEventListener('statechange', function () {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // New SW installed while old one is still active — activate it
+                newWorker.postMessage('skipWaiting');
+              }
+            });
+          }
+        });
+      }).catch(function () {});
+
+      // When the new SW takes control, reload to get fresh assets
+      // The version check has already saved lastSeenVersion by this point,
+      // so the changelog banner will show correctly after reload.
+      var refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
       });
     }
   }
@@ -11475,10 +11499,7 @@ const JobTracker = (function () {
     // ── Phase 7: Utilities ──
     _initNumericValidation();
 
-    // ── Phase 8: Service Worker Registration ──
-    _registerServiceWorker();
-
-    // ── Phase 9: Version Check & Changelog ──
+    // ── Phase 8: Version Check & Changelog ──
     _checkForVersionUpdate();
     _renderSettingsChangelog();
 
@@ -11488,8 +11509,13 @@ const JobTracker = (function () {
       updateBannerClose.addEventListener('click', function () {
         var banner = document.getElementById('update-banner');
         if (banner) banner.style.display = 'none';
+        // Save version so banner doesn't show again
+        AppState.set('lastSeenVersion', APP_VERSION);
       });
     }
+
+    // ── Phase 9: Service Worker Registration ──
+    _registerServiceWorker();
   });
 
   // ─── Module Exports (Public API for debugging) ─────────────────────────────
