@@ -859,6 +859,127 @@ a {
 }
 
 /* ============================================================
+   Update Banner
+   ============================================================ */
+.update-banner {
+  position: fixed;
+  bottom: calc(var(--nav-height) + var(--spacing-md));
+  left: var(--spacing-md);
+  right: var(--spacing-md);
+  z-index: calc(var(--z-glass-overlay) + 5);
+  animation: slideUpBanner 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideUpBanner {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.update-banner-content {
+  background: var(--color-surface);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.update-banner-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.update-banner-icon {
+  font-size: 20px;
+}
+
+.update-banner-title {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.update-banner-body {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-bottom: var(--spacing-md);
+}
+
+.update-banner-body ul {
+  margin: var(--spacing-xs) 0 0 var(--spacing-md);
+  padding: 0;
+}
+
+.update-banner-body li {
+  margin-bottom: 2px;
+}
+
+.update-banner-close-btn {
+  width: 100%;
+}
+
+/* Settings changelog */
+.settings-version-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+.settings-version-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.settings-version-number {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.settings-changelog {
+  margin-top: var(--spacing-sm);
+}
+
+.settings-changelog-toggle {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  padding: var(--spacing-sm) 0;
+}
+
+.settings-changelog-content {
+  padding: var(--spacing-sm) 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.settings-changelog-content h4 {
+  color: var(--color-accent);
+  font-size: var(--font-size-sm);
+  margin: var(--spacing-md) 0 var(--spacing-xs) 0;
+}
+
+.settings-changelog-content h4:first-child {
+  margin-top: 0;
+}
+
+.settings-changelog-content ul {
+  margin: 0 0 0 var(--spacing-md);
+  padding: 0;
+}
+
+.settings-changelog-content li {
+  margin-bottom: 2px;
+}
+
+/* ============================================================
    PWA Install Prompt
    ============================================================ */
 .pwa-install-container {

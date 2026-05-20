@@ -35,6 +35,18 @@
   <!-- Toast notification -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <!-- Update Banner (shown after app update) -->
+  <div id="update-banner" class="update-banner" style="display:none;" role="alert">
+    <div class="update-banner-content">
+      <div class="update-banner-header">
+        <span class="update-banner-icon">🎉</span>
+        <span class="update-banner-title">Update installiert!</span>
+      </div>
+      <div class="update-banner-body" id="update-banner-body"></div>
+      <button type="button" id="update-banner-close" class="btn btn-primary update-banner-close-btn">Verstanden</button>
+    </div>
+  </div>
+
   <!-- View: PWA Install Prompt (shown in browser, hidden when standalone) -->
   <section id="view-pwa-install" class="view-section">
     <div class="pwa-install-container">
@@ -827,6 +839,19 @@
         <div id="settings-personal-data">
           <!-- Dynamically populated by personal data management UI -->
         </div>
+      </div>
+
+      <!-- Version & Changelog Section -->
+      <div class="glass-surface layer-content settings-card">
+        <h2 class="settings-section-title">Version & Updates</h2>
+        <div class="settings-version-info">
+          <span class="settings-version-label">Aktuelle Version</span>
+          <span class="settings-version-number" id="settings-app-version">1.2.0</span>
+        </div>
+        <details class="settings-changelog" id="settings-changelog">
+          <summary class="settings-changelog-toggle">📋 Was ist neu?</summary>
+          <div class="settings-changelog-content" id="settings-changelog-content"></div>
+        </details>
       </div>
 
       <!-- Export/Import Section -->

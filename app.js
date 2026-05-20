@@ -10729,6 +10729,93 @@ const JobTracker = (function () {
     // (IncomeEngine subscribes to earnings:saved/deleted internally)
   }
 
+  // ─── App Version & Changelog ─────────────────────────────────────────────────
+  const APP_VERSION = '1.2.0';
+  const APP_CHANGELOG = [
+    {
+      version: '1.2.0',
+      date: '2026-05-20',
+      changes: [
+        'Liquid Glass Tab-Indikator (iOS 26 Stil)',
+        'Firmenlogo via Website-Feld',
+        'Abrechnungstag pro Job einstellbar',
+        'Datum-Pfeile im Eintragen-Tab',
+        'Einträge löschen in "Letzte Einträge"',
+        'Akzentfarben funktionieren jetzt überall',
+        'PWA Install-Anleitung für Safari',
+        'Auto-Updates ohne Neuinstallation'
+      ]
+    },
+    {
+      version: '1.1.0',
+      date: '2026-05-19',
+      changes: [
+        'Neuer Eintragen-Tab (getrennt von Übersicht)',
+        'Brutto/Netto-Rechner mit Abzüge-Details',
+        'Arbeitsrecht-Info über ℹ️ Button',
+        'Hell/Dunkel-Modus mit Akzentfarben',
+        'Monats- und Jahresübersicht',
+        'Job-Kombinationsregeln (Greying-out)'
+      ]
+    },
+    {
+      version: '1.0.0',
+      date: '2026-05-18',
+      changes: [
+        'Erste Version: Onboarding, Job-Verwaltung, Zeiterfassung',
+        'Steuerberechnung für alle Jobarten (2026 Deutschland)',
+        'Minijob/KFB/Werkstudent Limit-Überwachung'
+      ]
+    }
+  ];
+
+  /**
+   * Checks if the app version changed and shows the update banner.
+   */
+  function _checkForVersionUpdate() {
+    var lastVersion = AppState.get('lastSeenVersion');
+    if (lastVersion && lastVersion !== APP_VERSION) {
+      // Version changed — show update banner
+      var currentChangelog = APP_CHANGELOG.find(function (c) { return c.version === APP_VERSION; });
+      if (currentChangelog) {
+        var bannerEl = document.getElementById('update-banner');
+        var bodyEl = document.getElementById('update-banner-body');
+        if (bannerEl && bodyEl) {
+          var html = '<strong>Version ' + APP_VERSION + '</strong><ul>';
+          for (var i = 0; i < currentChangelog.changes.length; i++) {
+            html += '<li>' + currentChangelog.changes[i] + '</li>';
+          }
+          html += '</ul>';
+          bodyEl.innerHTML = html;
+          bannerEl.style.display = '';
+        }
+      }
+    }
+    // Always update the stored version
+    AppState.set('lastSeenVersion', APP_VERSION);
+  }
+
+  /**
+   * Renders the changelog in the settings view.
+   */
+  function _renderSettingsChangelog() {
+    var versionEl = document.getElementById('settings-app-version');
+    var contentEl = document.getElementById('settings-changelog-content');
+    if (versionEl) versionEl.textContent = APP_VERSION;
+    if (contentEl) {
+      var html = '';
+      for (var i = 0; i < APP_CHANGELOG.length; i++) {
+        var entry = APP_CHANGELOG[i];
+        html += '<h4>v' + entry.version + ' — ' + entry.date + '</h4><ul>';
+        for (var j = 0; j < entry.changes.length; j++) {
+          html += '<li>' + entry.changes[j] + '</li>';
+        }
+        html += '</ul>';
+      }
+      contentEl.innerHTML = html;
+    }
+  }
+
   // ─── Service Worker Registration (Req 19.2) ────────────────────────────────
   function _registerServiceWorker() {
     if ('serviceWorker' in navigator) {
@@ -10978,6 +11065,19 @@ const JobTracker = (function () {
 
     // ── Phase 8: Service Worker Registration ──
     _registerServiceWorker();
+
+    // ── Phase 9: Version Check & Changelog ──
+    _checkForVersionUpdate();
+    _renderSettingsChangelog();
+
+    // Bind update banner close button
+    var updateBannerClose = document.getElementById('update-banner-close');
+    if (updateBannerClose) {
+      updateBannerClose.addEventListener('click', function () {
+        var banner = document.getElementById('update-banner');
+        if (banner) banner.style.display = 'none';
+      });
+    }
   });
 
   // ─── Module Exports (Public API for debugging) ─────────────────────────────
