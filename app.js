@@ -11002,32 +11002,10 @@ const JobTracker = (function () {
   function _registerServiceWorker() {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').then(function (registration) {
-        // Check for updates immediately on every page load
+        // Check for updates on every page load
         registration.update();
-
-        // When a new SW is found and installed, auto-reload the page
-        registration.addEventListener('updatefound', function () {
-          var newWorker = registration.installing;
-          if (newWorker) {
-            newWorker.addEventListener('statechange', function () {
-              if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
-                // New version activated — reload to get fresh assets
-                window.location.reload();
-              }
-            });
-          }
-        });
       }).catch(function () {
         // Service worker registration failed — app continues without offline support
-      });
-
-      // Also reload when the controlling SW changes (e.g., skipWaiting was called)
-      var refreshing = false;
-      navigator.serviceWorker.addEventListener('controllerchange', function () {
-        if (!refreshing) {
-          refreshing = true;
-          window.location.reload();
-        }
       });
     }
   }
