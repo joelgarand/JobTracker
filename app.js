@@ -9659,12 +9659,13 @@ const JobTracker = (function () {
       var list = document.getElementById('entry-templates-list');
       if (!card || !list) return;
 
+      // Always show the card (so user can add first template)
+      card.style.display = '';
+
       if (templates.length === 0) {
-        card.style.display = 'none';
+        list.innerHTML = '<span style="font-size:13px;color:var(--color-text-tertiary);">Noch keine Vorlagen. Fülle das Formular aus und tippe "+ Vorlage".</span>';
         return;
       }
-
-      card.style.display = '';
       var html = '';
       for (var i = 0; i < templates.length; i++) {
         var t = templates[i];
