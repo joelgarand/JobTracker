@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jobtracker-v35';
+const CACHE_NAME = 'jobtracker-v36';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

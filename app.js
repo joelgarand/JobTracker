@@ -9708,12 +9708,17 @@ const JobTracker = (function () {
       var jobSelect = document.getElementById('entry-job');
       var hoursInput = document.getElementById('entry-hours');
       var statusSelect = document.getElementById('entry-status');
+      var provisionInput = document.getElementById('entry-provision');
+      var dailyRateInput = document.getElementById('entry-daily-rate');
 
       if (jobSelect && t.jobId) jobSelect.value = t.jobId;
       if (hoursInput && t.hours) hoursInput.value = t.hours;
       if (statusSelect) statusSelect.value = 'worked';
       _updateExtraFields();
-      showToast('Vorlage "' + t.name + '" angewendet');
+      // Fill provision/daily rate after _updateExtraFields shows the fields
+      if (provisionInput && t.provision) provisionInput.value = t.provision;
+      if (dailyRateInput && t.dailyRate) dailyRateInput.value = t.dailyRate;
+      showToast('Vorlage "' + t.name + '" angewendet ✓');
     }
 
     function _bindAddTemplate() {
@@ -9725,18 +9730,22 @@ const JobTracker = (function () {
 
         var jobSelect = document.getElementById('entry-job');
         var hoursInput = document.getElementById('entry-hours');
+        var provisionInput = document.getElementById('entry-provision');
+        var dailyRateInput = document.getElementById('entry-daily-rate');
 
         var template = {
           name: name.trim(),
           jobId: jobSelect ? jobSelect.value : null,
-          hours: hoursInput && hoursInput.value ? parseFloat(hoursInput.value) : null
+          hours: hoursInput && hoursInput.value ? parseFloat(hoursInput.value) : null,
+          provision: provisionInput && provisionInput.value ? parseFloat(provisionInput.value) : null,
+          dailyRate: dailyRateInput && dailyRateInput.value ? parseFloat(dailyRateInput.value) : null
         };
 
         var templates = _loadTemplates();
         templates.push(template);
         _saveTemplates(templates);
         _renderTemplates();
-        showToast('Vorlage "' + name.trim() + '" gespeichert');
+        showToast('Vorlage "' + name.trim() + '" gespeichert ✓');
       });
     }
 
@@ -11112,8 +11121,17 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '1.6.0';
+  const APP_VERSION = '1.7.0';
   const APP_CHANGELOG = [
+    {
+      version: '1.7.0',
+      date: '2026-05-20',
+      changes: [
+        '⚡ Schichtvorlagen: speichert Job + Stunden + Provision + Tagessatz',
+        'Tab-Bubbles gleichmäßig zentriert (mehr Platz oben)',
+        'Updates werden jetzt nach 1x Schließen aktiv'
+      ]
+    },
     {
       version: '1.6.0',
       date: '2026-05-20',

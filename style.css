@@ -245,8 +245,8 @@ a {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: var(--spacing-sm) var(--spacing-xs);
+  gap: 3px;
+  padding: 10px var(--spacing-xs);
   border: none;
   background: none;
   cursor: pointer;
@@ -256,7 +256,7 @@ a {
   transition: color 0.25s ease, transform 0.2s ease;
   -webkit-tap-highlight-color: transparent;
   flex: 1;
-  min-height: 44px;
+  min-height: 52px;
   position: relative;
   z-index: 1;
 }
@@ -264,7 +264,7 @@ a {
 .nav-tab::before {
   content: '';
   position: absolute;
-  inset: 4px 2px;
+  inset: 6px 2px;
   border-radius: 16px;
   background: transparent;
   backdrop-filter: blur(0px);
