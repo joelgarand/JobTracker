@@ -5470,11 +5470,49 @@ const JobTracker = (function () {
       _onDataChange();
     }
 
+    /**
+     * Checks if the user is approaching the Familienversicherung income limit.
+     * Limit: 565 €/month total income (603 € for Minijob).
+     * @param {number} year
+     * @param {number} month
+     * @returns {object|null} { current, limit, percentage, warningLevel } or null if not familienversichert
+     */
+    function checkFamilienversicherungLimit(year, month) {
+      var profile = AppState.getState().userProfile;
+      if (!profile || profile.krankenversicherung !== 'familienversicherung') {
+        return null;
+      }
+
+      // Calculate total monthly income across all jobs
+      var jobs = AppState.getState().jobs;
+      var totalIncome = 0;
+      var hasMinijob = false;
+      for (var i = 0; i < jobs.length; i++) {
+        var brutto = IncomeEngine.calculateMonthlyBrutto(jobs[i].id, year, month);
+        totalIncome += brutto;
+        if (jobs[i].type === 'Minijob') hasMinijob = true;
+      }
+
+      // Limit depends on whether income is from Minijob
+      var limit = hasMinijob ? 603 : 565;
+      var percentage = limit > 0 ? Math.round((totalIncome / limit) * 100) : 0;
+      var warningLevel = percentage >= 100 ? 'critical' : (percentage >= 80 ? 'warning' : 'safe');
+
+      return {
+        current: Math.round(totalIncome * 100) / 100,
+        limit: limit,
+        percentage: percentage,
+        warningLevel: warningLevel,
+        displayWarningLevel: warningLevel
+      };
+    }
+
     return {
       init: init,
       checkMinijobLimit: checkMinijobLimit,
       check26WeekRule: check26WeekRule,
       checkKFBDays: checkKFBDays,
+      checkFamilienversicherungLimit: checkFamilienversicherungLimit,
       getWarningLevel: getWarningLevel,
       hasCalculationData: hasCalculationData,
       getProjection: getProjection,
@@ -9570,6 +9608,10 @@ const JobTracker = (function () {
         form.addEventListener('submit', _handleSubmit);
       }
 
+      // Initialize shift templates
+      _renderTemplates();
+      _bindAddTemplate();
+
       // Render recent entries
       _renderRecentEntries();
 
@@ -9596,6 +9638,106 @@ const JobTracker = (function () {
       EventBus.on('data:imported', function () {
         _populateJobSelect();
         _renderRecentEntries();
+      });
+    }
+
+    }
+
+    // ── Shift Templates ──
+    var TEMPLATES_KEY = 'jt_shift_templates';
+
+    function _loadTemplates() {
+      var result = LocalStorageManager.load(TEMPLATES_KEY);
+      return (result.success && Array.isArray(result.data)) ? result.data : [];
+    }
+
+    function _saveTemplates(templates) {
+      LocalStorageManager.save(TEMPLATES_KEY, templates);
+    }
+
+    function _renderTemplates() {
+      var templates = _loadTemplates();
+      var card = document.getElementById('entry-templates-card');
+      var list = document.getElementById('entry-templates-list');
+      if (!card || !list) return;
+
+      if (templates.length === 0) {
+        card.style.display = 'none';
+        return;
+      }
+
+      card.style.display = '';
+      var html = '';
+      for (var i = 0; i < templates.length; i++) {
+        var t = templates[i];
+        html += '<div class="entry-template-chip" data-template-idx="' + i + '">';
+        html += '<span>' + t.name + '</span>';
+        html += '<button type="button" class="entry-template-delete" data-del-idx="' + i + '" aria-label="Löschen">✕</button>';
+        html += '</div>';
+      }
+      list.innerHTML = html;
+
+      // Bind template clicks
+      var chips = list.querySelectorAll('.entry-template-chip');
+      for (var c = 0; c < chips.length; c++) {
+        chips[c].addEventListener('click', function (e) {
+          if (e.target.classList.contains('entry-template-delete')) return;
+          var idx = parseInt(this.getAttribute('data-template-idx'), 10);
+          _applyTemplate(idx);
+        });
+      }
+
+      // Bind delete buttons
+      var delBtns = list.querySelectorAll('.entry-template-delete');
+      for (var d = 0; d < delBtns.length; d++) {
+        delBtns[d].addEventListener('click', function (e) {
+          e.stopPropagation();
+          var idx = parseInt(this.getAttribute('data-del-idx'), 10);
+          var tpls = _loadTemplates();
+          tpls.splice(idx, 1);
+          _saveTemplates(tpls);
+          _renderTemplates();
+        });
+      }
+    }
+
+    function _applyTemplate(idx) {
+      var templates = _loadTemplates();
+      var t = templates[idx];
+      if (!t) return;
+
+      var jobSelect = document.getElementById('entry-job');
+      var hoursInput = document.getElementById('entry-hours');
+      var statusSelect = document.getElementById('entry-status');
+
+      if (jobSelect && t.jobId) jobSelect.value = t.jobId;
+      if (hoursInput && t.hours) hoursInput.value = t.hours;
+      if (statusSelect) statusSelect.value = 'worked';
+      _updateExtraFields();
+      showToast('Vorlage "' + t.name + '" angewendet');
+    }
+
+    function _bindAddTemplate() {
+      var btn = document.getElementById('entry-add-template-btn');
+      if (!btn) return;
+      btn.addEventListener('click', function () {
+        var name = prompt('Name der Vorlage (z.B. "Frühschicht"):');
+        if (!name || !name.trim()) return;
+
+        var jobSelect = document.getElementById('entry-job');
+        var hoursInput = document.getElementById('entry-hours');
+
+        var template = {
+          name: name.trim(),
+          jobId: jobSelect ? jobSelect.value : null,
+          hours: hoursInput && hoursInput.value ? parseFloat(hoursInput.value) : null
+        };
+
+        var templates = _loadTemplates();
+        templates.push(template);
+        _saveTemplates(templates);
+        _renderTemplates();
+        showToast('Vorlage "' + name.trim() + '" gespeichert');
       });
     }
 
@@ -9785,6 +9927,79 @@ const JobTracker = (function () {
 
       _updateNettoBreakdown(aggregated, year, month);
       _updateAbsenceRow(aggregated);
+      _updateFVWarning(year, month);
+      _updatePrognose(aggregated);
+    }
+
+    /**
+     * Calculates and displays a monthly income prognosis based on current pace.
+     */
+    function _updatePrognose(aggregated) {
+      var prognoseEl = document.getElementById('dashboard-prognose');
+      var textEl = document.getElementById('dashboard-prognose-text');
+      if (!prognoseEl || !textEl) return;
+
+      // Only show prognose in current-month mode and if there's some data
+      if (_showAllTime || aggregated.brutto === 0) {
+        prognoseEl.style.display = 'none';
+        return;
+      }
+
+      var now = new Date();
+      var dayOfMonth = now.getDate();
+      var daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+      // Don't show prognose in the last 3 days (data is basically complete)
+      if (dayOfMonth > daysInMonth - 3) {
+        prognoseEl.style.display = 'none';
+        return;
+      }
+
+      // Project: (current brutto / days elapsed) * total days in month
+      var projectedBrutto = (aggregated.brutto / dayOfMonth) * daysInMonth;
+      var projectedNetto = aggregated.nettoAvailable ? (aggregated.nettoCashflow / dayOfMonth) * daysInMonth : null;
+
+      prognoseEl.style.display = '';
+      var text = 'Prognose: ~' + _formatCurrency(projectedBrutto) + ' Brutto';
+      if (projectedNetto !== null) {
+        text += ' / ~' + _formatCurrency(projectedNetto) + ' Netto';
+      }
+      text += ' bis Monatsende';
+      textEl.textContent = text;
+    }
+
+    /**
+     * Shows/hides the Familienversicherung income limit warning.
+     */
+    function _updateFVWarning(year, month) {
+      var warningEl = document.getElementById('dashboard-fv-warning');
+      if (!warningEl) {
+        // Create the warning element if it doesn't exist
+        var dashboard = document.getElementById('daily-dashboard');
+        if (!dashboard) return;
+        warningEl = document.createElement('div');
+        warningEl.id = 'dashboard-fv-warning';
+        warningEl.className = 'dashboard-fv-warning';
+        dashboard.appendChild(warningEl);
+      }
+
+      var fvStatus = LimitMonitor.checkFamilienversicherungLimit(year, month);
+      if (!fvStatus) {
+        warningEl.style.display = 'none';
+        return;
+      }
+
+      warningEl.style.display = '';
+      var levelClass = fvStatus.warningLevel === 'critical' ? 'fv-critical' : (fvStatus.warningLevel === 'warning' ? 'fv-warning' : 'fv-safe');
+      warningEl.className = 'dashboard-fv-warning ' + levelClass;
+      warningEl.innerHTML =
+        '<div class="fv-warning-header">' +
+        '<span class="fv-warning-icon">' + (fvStatus.warningLevel === 'critical' ? '🚨' : fvStatus.warningLevel === 'warning' ? '⚠️' : '✅') + '</span>' +
+        '<span class="fv-warning-title">Familienversicherung</span>' +
+        '<span class="fv-warning-badge status-badge ' + fvStatus.warningLevel + '">' + fvStatus.percentage + '%</span>' +
+        '</div>' +
+        '<div class="fv-warning-bar"><div class="progress-bar"><div class="progress-bar-fill ' + fvStatus.warningLevel + '" style="width:' + Math.min(fvStatus.percentage, 100) + '%"></div></div></div>' +
+        '<span class="fv-warning-detail">' + _formatCurrency(fvStatus.current) + ' / ' + _formatCurrency(fvStatus.limit) + ' Einkommensgrenze</span>';
     }
 
     /**
@@ -10898,8 +11113,18 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '1.5.0';
+  const APP_VERSION = '1.6.0';
   const APP_CHANGELOG = [
+    {
+      version: '1.6.0',
+      date: '2026-05-20',
+      changes: [
+        '🔴 Familienversicherung-Warnung mit Fortschrittsbalken (565€/603€ Grenze)',
+        '📊 Einkommensprognose: "Bei diesem Tempo verdienst du ca. X€"',
+        '⚡ Schichtvorlagen: Schnelleintrag mit gespeicherten Templates',
+        'Changelog-Banner bleibt jetzt sichtbar bis "Verstanden" geklickt wird'
+      ]
+    },
     {
       version: '1.5.0',
       date: '2026-05-20',

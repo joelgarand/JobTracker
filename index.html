@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=31">
+  <link rel="stylesheet" href="style.css?v=32">
   <title>JobTracker</title>
 </head>
 <body>
@@ -412,6 +412,12 @@
         <div class="dashboard-extras-row">
           <span class="dashboard-extra-item" id="dashboard-total-tips">Trinkgeld: 0,00 €</span>
         </div>
+
+        <!-- Prognose -->
+        <div class="dashboard-prognose" id="dashboard-prognose" style="display:none;">
+          <span class="dashboard-prognose-icon">📈</span>
+          <span class="dashboard-prognose-text" id="dashboard-prognose-text"></span>
+        </div>
       </div>
 
       <!-- Job Cards Container -->
@@ -558,6 +564,15 @@
   <section id="view-entry" class="view-section">
     <div class="scroll-content">
       <h1 class="entry-title">Eintragen</h1>
+
+      <!-- Shift Templates -->
+      <div class="glass-surface layer-content entry-templates-card" id="entry-templates-card" style="display:none;">
+        <div class="entry-templates-header">
+          <h2 class="entry-section-title">⚡ Schnelleintrag</h2>
+          <button type="button" id="entry-add-template-btn" class="btn btn-secondary" style="font-size:12px;padding:4px 10px;min-height:32px;">+ Vorlage</button>
+        </div>
+        <div class="entry-templates-list" id="entry-templates-list"></div>
+      </div>
 
       <!-- Quick Entry Form -->
       <div class="glass-surface layer-content entry-form-card">
@@ -1079,6 +1094,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=31" defer></script>
+  <script src="app.js?v=32" defer></script>
 </body>
 </html>
