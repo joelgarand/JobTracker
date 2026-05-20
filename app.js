@@ -9641,8 +9641,6 @@ const JobTracker = (function () {
       });
     }
 
-    }
-
     // ── Shift Templates ──
     var TEMPLATES_KEY = 'jt_shift_templates';
 
