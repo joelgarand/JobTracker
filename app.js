@@ -2792,7 +2792,7 @@ const JobTracker = (function () {
       }
       if (!kvSelected) {
         errors.push('Krankenversicherung ist erforderlich');
-        _setError('error-krankenversicherung', 'Bitte gesetzlich oder privat auswählen');
+        _setError('error-krankenversicherung', 'Bitte eine Versicherungsart auswählen');
       }
 
       return { valid: errors.length === 0, errors: errors };
@@ -4372,7 +4372,7 @@ const JobTracker = (function () {
       var careContrib = 0;
       var unemploymentContrib = brutto * socialRates.unemployment; // 1.3%
 
-      // Health insurance: only for gesetzlich (private insurance is not deducted from brutto)
+      // Health insurance: only for gesetzlich (private/familienversicherung = no KV/PV deduction)
       if (kvTyp === 'gesetzlich') {
         healthContrib = brutto * socialRates.health;           // 8.75% (7.3% + avg 1.45% Zusatzbeitrag)
         // Pflegeversicherung: 1.8% with children, 2.4% childless (23+)
@@ -4387,6 +4387,7 @@ const JobTracker = (function () {
         }
         careContrib = brutto * careRate;
       }
+      // Familienversicherung: keine KV/PV-Beiträge (healthContrib + careContrib bleiben 0)
 
       var totalSocialDeductions = pensionContrib + healthContrib + careContrib + unemploymentContrib;
 
@@ -7531,7 +7532,7 @@ const JobTracker = (function () {
       var steuerklasse = profile && profile.steuerklasse ? STEUERKLASSE_LABELS[profile.steuerklasse] || profile.steuerklasse : '—';
       var bundesland = profile && profile.bundesland ? profile.bundesland : '—';
       var kirchensteuer = profile && profile.kirchensteuer ? 'Ja' : 'Nein';
-      var kvTyp = profile && profile.krankenversicherung ? (profile.krankenversicherung === 'gesetzlich' ? 'Gesetzlich' : 'Privat') : '—';
+      var kvTyp = profile && profile.krankenversicherung ? (profile.krankenversicherung === 'gesetzlich' ? 'Gesetzlich' : profile.krankenversicherung === 'familienversicherung' ? 'Familienversicherung' : 'Privat') : '—';
       var hasChildren = profile && profile.hasChildren ? 'Ja' : 'Nein';
 
       var html = '';
@@ -7636,6 +7637,11 @@ const JobTracker = (function () {
       html += '<input type="radio" name="pd-krankenversicherung" value="privat" class="radio-input"' + (currentKV === 'privat' ? ' checked' : '') + '>';
       html += '<span class="radio-custom"></span>';
       html += '<span class="radio-text">Privat</span>';
+      html += '</label>';
+      html += '<label class="radio-label">';
+      html += '<input type="radio" name="pd-krankenversicherung" value="familienversicherung" class="radio-input"' + (currentKV === 'familienversicherung' ? ' checked' : '') + '>';
+      html += '<span class="radio-custom"></span>';
+      html += '<span class="radio-text">Familienversicherung</span>';
       html += '</label>';
       html += '</div>';
       html += '<span class="field-error" id="pd-kv-error" aria-live="polite"></span>';
@@ -10892,8 +10898,18 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '1.4.0';
+  const APP_VERSION = '1.5.0';
   const APP_CHANGELOG = [
+    {
+      version: '1.5.0',
+      date: '2026-05-20',
+      changes: [
+        'Familienversicherung als Krankenversicherungs-Option',
+        'Keine KV/PV-Abzüge bei Familienversicherung',
+        'Einkommensgrenze-Warnung (565 €/Monat bzw. 603 € bei Minijob)',
+        'Regeln in der ℹ️ Info-Übersicht ergänzt'
+      ]
+    },
     {
       version: '1.4.0',
       date: '2026-05-20',
@@ -11144,6 +11160,18 @@ const JobTracker = (function () {
         // Persist
         AppState.set('accentColor', color);
       });
+    }
+
+    // ── Familienversicherung Info Toggle (Onboarding) ──
+    var kvRadios = document.querySelectorAll('input[name="onb-krankenversicherung"]');
+    var fvInfo = document.getElementById('onb-familienversicherung-info');
+    if (kvRadios.length > 0 && fvInfo) {
+      for (var kvi = 0; kvi < kvRadios.length; kvi++) {
+        kvRadios[kvi].addEventListener('change', function () {
+          var selected = document.querySelector('input[name="onb-krankenversicherung"]:checked');
+          fvInfo.style.display = (selected && selected.value === 'familienversicherung') ? '' : 'none';
+        });
+      }
     }
 
     // ── PWA Install Skip Button ──

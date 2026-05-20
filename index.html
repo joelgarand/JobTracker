@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=30">
+  <link rel="stylesheet" href="style.css?v=31">
   <title>JobTracker</title>
 </head>
 <body>
@@ -190,6 +190,20 @@
             <span class="radio-custom"></span>
             <span class="radio-text">Privat</span>
           </label>
+          <label class="radio-label">
+            <input type="radio" name="onb-krankenversicherung" value="familienversicherung" class="radio-input">
+            <span class="radio-custom"></span>
+            <span class="radio-text">Familienversicherung</span>
+          </label>
+        </div>
+        <div id="onb-familienversicherung-info" class="onb-job-rules-info" style="display:none;">
+          <h4>ℹ️ Familienversicherung 2026</h4>
+          <ul>
+            <li>Keine eigenen KV/PV-Beiträge</li>
+            <li>Einkommensgrenze: max. 565 €/Monat Gesamteinkommen</li>
+            <li>Bei Minijob: max. 603 €/Monat</li>
+            <li>Achtung: Bei Überschreitung endet die Familienversicherung!</li>
+          </ul>
         </div>
         <span class="field-error" id="error-krankenversicherung" role="alert"></span>
       </div>
@@ -1033,6 +1047,18 @@
             <li>Kirchensteuer: 8% (Bayern, Baden-Württemberg) / 9% (andere)</li>
           </ul>
         </div>
+        <div class="rules-info-section">
+          <h4>Familienversicherung 2026</h4>
+          <ul>
+            <li>Keine eigenen KV- und PV-Beiträge</li>
+            <li>Einkommensgrenze: max. 565 €/Monat Gesamteinkommen</li>
+            <li>Bei Minijob: max. 603 €/Monat</li>
+            <li>Gilt für: Ehepartner, eingetragene Lebenspartner, Kinder</li>
+            <li>Voraussetzung: Hauptversicherter ist gesetzlich versichert</li>
+            <li>Bei Überschreitung der Grenze: eigene Versicherungspflicht</li>
+            <li>Werkstudenten: Familienversicherung möglich bis 25 Jahre</li>
+          </ul>
+        </div>
       </div>
     </div>
   </div>
@@ -1053,6 +1079,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=30" defer></script>
+  <script src="app.js?v=31" defer></script>
 </body>
 </html>
