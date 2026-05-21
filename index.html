@@ -35,6 +35,9 @@
   <!-- Toast notification -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <!-- Rule Warning Container (fixed-position for live rule-check toasts) -->
+  <div id="rule-warning-container" class="rule-warning-container" aria-live="assertive"></div>
+
   <!-- Update Banner (shown after app update) -->
   <div id="update-banner" class="update-banner" style="display:none;" role="alert">
     <div class="update-banner-content">
@@ -357,11 +360,34 @@
   <!-- View: Daily Tracking (Übersicht) -->
   <section id="view-daily" class="view-section">
     <div class="scroll-content">
+      <!-- Pull-to-Refresh Indicator -->
+      <div id="pull-refresh-indicator" class="pull-indicator" aria-hidden="true">
+        <span class="pull-indicator__spinner"></span>
+        <span class="pull-indicator__text">Aktualisieren…</span>
+      </div>
+      <div id="pull-refresh-error" class="pull-indicator pull-indicator--error" style="display:none;" role="alert">
+        <span class="pull-indicator__text">Aktualisierung fehlgeschlagen.</span>
+      </div>
       <!-- Sub-navigation for Tracking views -->
       <div class="sub-nav">
         <button class="sub-nav-btn active" data-target="view-daily" type="button">Übersicht</button>
         <button class="sub-nav-btn" data-target="view-monthly" type="button">Monat</button>
         <button class="sub-nav-btn" data-target="view-yearly" type="button">Jahr</button>
+      </div>
+
+      <!-- Punch Clock -->
+      <div id="punch-clock-container" class="glass-surface layer-content punch-clock">
+        <button type="button" id="punch-start-btn" class="punch-btn punch-btn--start">Schicht starten</button>
+        <div id="punch-timer-display" class="punch-timer" aria-live="polite" style="display:none;">00:00:00</div>
+        <button type="button" id="punch-stop-btn" class="punch-btn punch-btn--stop" style="display:none;">Schicht beenden</button>
+        <!-- 16-hour warning banner -->
+        <div id="punch-warning-banner" class="punch-warning" style="display:none;" role="alert">
+          <p>⚠️ Schicht läuft seit über 16 Stunden. Vergessen zu beenden?</p>
+          <div class="punch-warning-actions">
+            <button type="button" id="punch-warning-end-btn" class="btn btn-danger">Schicht beenden</button>
+            <button type="button" id="punch-warning-continue-btn" class="btn btn-secondary">Weiter arbeiten</button>
+          </div>
+        </div>
       </div>
 
       <!-- Gesamtübersicht Card -->
@@ -411,12 +437,85 @@
 
         <div class="dashboard-extras-row">
           <span class="dashboard-extra-item" id="dashboard-total-tips">Trinkgeld: 0,00 €</span>
+          <span id="sparkline-tip-container" class="sparkline-container"></span>
+          <span class="dashboard-extra-item" id="dashboard-total-provision">Provision: 0,00 €</span>
+          <span id="sparkline-provision-container" class="sparkline-container"></span>
         </div>
 
         <!-- Prognose -->
         <div class="dashboard-prognose" id="dashboard-prognose" style="display:none;">
           <span class="dashboard-prognose-icon">📈</span>
           <span class="dashboard-prognose-text" id="dashboard-prognose-text"></span>
+        </div>
+      </div>
+
+      <!-- Tax Simulator Widget (collapsed by default) -->
+      <div id="tax-simulator-widget" class="glass-surface layer-content tax-simulator tax-simulator--collapsed">
+        <button type="button" id="tax-simulator-toggle" class="tax-simulator__header" aria-expanded="false" aria-controls="tax-simulator-body">
+          <span class="tax-simulator__title">💶 Steuer-Simulator</span>
+          <span class="tax-simulator__chevron" aria-hidden="true">▼</span>
+        </button>
+        <div id="tax-simulator-body" class="tax-simulator__body" hidden>
+          <!-- Missing profile message -->
+          <p id="tax-simulator-missing-profile" class="tax-missing-msg" style="display:none;">
+            ⚠️ Steuerprofil unvollständig. <a href="#" data-navigate="view-settings">Einstellungen öffnen</a>
+          </p>
+          <!-- Job selection -->
+          <div class="form-group">
+            <label class="form-label" for="tax-simulator-job-select">Job auswählen</label>
+            <select id="tax-simulator-job-select" class="form-select"></select>
+          </div>
+          <!-- Slider -->
+          <div class="form-group">
+            <label class="form-label" for="tax-simulator-slider">Zusätzliche Stunden: <span id="tax-simulator-slider-value">0</span></label>
+            <input type="range" id="tax-simulator-slider" class="tax-slider" min="0" max="80" value="0" step="1" aria-label="Zusätzliche Stunden" aria-valuemin="0" aria-valuemax="80" aria-valuenow="0">
+          </div>
+          <!-- Result displays -->
+          <div class="tax-result-grid">
+            <div class="tax-result-item">
+              <span class="tax-result-label">Brutto zusätzlich</span>
+              <span class="tax-result-value" id="tax-simulator-gross-add">0,00 €</span>
+            </div>
+            <div class="tax-result-item">
+              <span class="tax-result-label">Netto zusätzlich</span>
+              <span class="tax-result-value" id="tax-simulator-net-add">0,00 €</span>
+            </div>
+            <div class="tax-result-item">
+              <span class="tax-result-label">Effektiver Steuersatz</span>
+              <span class="tax-result-value" id="tax-simulator-rate">0,0 %</span>
+            </div>
+          </div>
+          <!-- Comparison bar -->
+          <div class="tax-comparison-bar" id="tax-simulator-bar" aria-label="Einkommensvergleich">
+            <div class="tax-bar-segment--current" id="tax-simulator-bar-current"></div>
+            <div class="tax-bar-segment--simulated" id="tax-simulator-bar-simulated"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Minijob Forecast Widget -->
+      <div id="minijob-forecast-widget" class="glass-surface layer-content forecast-widget forecast-widget--hidden">
+        <h3 class="forecast-widget__title">📊 Minijob-Jahresprognose</h3>
+        <div class="forecast-widget__stats">
+          <div class="forecast-widget__stat">
+            <span class="forecast-widget__label">Bisher (YTD)</span>
+            <span class="forecast-widget__value" id="minijob-forecast-ytd">0,00 €</span>
+          </div>
+          <div class="forecast-widget__stat">
+            <span class="forecast-widget__label">Hochrechnung</span>
+            <span class="forecast-widget__value" id="minijob-forecast-projected">0,00 €</span>
+          </div>
+          <div class="forecast-widget__stat">
+            <span class="forecast-widget__label">Verbleibend</span>
+            <span class="forecast-widget__value" id="minijob-forecast-remaining">7.236,00 €</span>
+          </div>
+        </div>
+        <div class="forecast-progress-bar">
+          <div class="forecast-progress-fill" style="width: 0%;"></div>
+        </div>
+        <div class="forecast-widget__footer">
+          <span id="minijob-forecast-status" class="forecast-status forecast-status--safe" aria-label="Status"></span>
+          <span id="minijob-forecast-warning" class="forecast-widget__warning" style="display:none;"></span>
         </div>
       </div>
 
@@ -652,6 +751,18 @@
         <div class="year-change-actions">
           <button id="year-change-confirm-btn" class="btn btn-primary" type="button">Bestätigen</button>
           <button id="year-change-dismiss-btn" class="btn btn-secondary" type="button">Später</button>
+        </div>
+      </div>
+
+      <!-- Preferences -->
+      <div class="glass-surface layer-content settings-card">
+        <h2 class="settings-section-title">Einstellungen</h2>
+        <div class="toggle-group">
+          <label class="toggle-label" for="haptic-toggle">
+            <input type="checkbox" id="haptic-toggle" class="toggle-input" checked>
+            <span class="toggle-switch"></span>
+            <span class="toggle-text">Haptisches Feedback</span>
+          </label>
         </div>
       </div>
 

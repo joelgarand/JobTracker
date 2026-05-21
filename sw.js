@@ -62,9 +62,59 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Listen for messages from the app (e.g., force update)
+// Notification click handler: focus existing window or open new one
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  var action = event.action;
+  var data = event.notification.data || {};
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      // Try to focus an existing window
+      for (var i = 0; i < clientList.length; i++) {
+        var client = clientList[i];
+        if (client.url.indexOf(self.registration.scope) !== -1 && 'focus' in client) {
+          return client.focus().then(function(focusedClient) {
+            // Handle log-hours action: navigate to entry view
+            if (action === 'log-hours') {
+              focusedClient.postMessage({
+                type: 'navigate',
+                view: 'entry',
+                jobId: data.jobId || null
+              });
+            }
+            return focusedClient;
+          });
+        }
+      }
+
+      // No existing window found, open a new one
+      var url = './';
+      if (action === 'log-hours') {
+        url = './?action=log-hours' + (data.jobId ? '&jobId=' + data.jobId : '');
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});
+
+// Listen for messages from the app (e.g., force update, navigation)
 self.addEventListener('message', (event) => {
   if (event.data === 'skipWaiting') {
     self.skipWaiting();
+  }
+
+  // Handle navigate type messages from clients
+  if (event.data && event.data.type === 'navigate') {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        clientList[i].postMessage({
+          type: 'navigate',
+          view: event.data.view || 'entry',
+          jobId: event.data.jobId || null
+        });
+      }
+    });
   }
 });

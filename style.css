@@ -61,6 +61,22 @@
   --z-background: 0;
   --z-content: 10;
   --z-glass-overlay: 100;
+
+  /* Sparkline colors */
+  --sparkline-up: var(--color-success);
+  --sparkline-down: var(--color-danger);
+  --sparkline-neutral: var(--color-text-tertiary);
+
+  /* Skeleton loading */
+  --skeleton-base: rgba(255, 255, 255, 0.06);
+  --skeleton-shine: rgba(255, 255, 255, 0.12);
+
+  /* Punch clock */
+  --punch-timer-font: 'SF Mono', 'Menlo', 'Consolas', monospace;
+
+  /* Swipe-to-delete */
+  --swipe-delete-bg: var(--color-danger);
+  --swipe-transition: 200ms ease-out;
 }
 
 /* --- Base Reset & Typography --- */
@@ -3945,4 +3961,765 @@ details[open] .dashboard-details-toggle::after {
 /* Light theme overrides for entry view */
 .theme-light .entry-recent-item {
   background: #f5f5f5;
+}
+
+/* ============================================================
+   v2.0 Animation Keyframes
+   ============================================================ */
+
+/* Skeleton loading pulse — 1.5s cycle for placeholder shimmer */
+@keyframes skeleton-pulse {
+  0% {
+    background-color: var(--skeleton-base);
+  }
+  50% {
+    background-color: var(--skeleton-shine);
+  }
+  100% {
+    background-color: var(--skeleton-base);
+  }
+}
+
+/* Punch clock timer pulse — subtle scale while shift is active */
+@keyframes punch-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Swipe-to-delete collapse — entry removal animation */
+@keyframes swipe-collapse {
+  from {
+    max-height: 80px;
+    opacity: 1;
+    margin-bottom: var(--spacing-sm);
+  }
+  to {
+    max-height: 0;
+    opacity: 0;
+    margin-bottom: 0;
+  }
+}
+
+/* Content fade-in — skeleton to real content transition */
+@keyframes content-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Pull-to-refresh spinner rotation */
+@keyframes pull-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Forecast widget danger pulse — red status indicator */
+@keyframes forecast-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.8;
+  }
+}
+
+/* Rule warning toast enter — slide in from top */
+@keyframes rule-warning-enter {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Rule warning toast exit — slide out to top */
+@keyframes rule-warning-exit {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+
+/* ============================================================
+   Sparkline Renderer — Inline SVG trend charts
+   ============================================================ */
+.sparkline-container {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+  vertical-align: middle;
+}
+
+.sparkline-container:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sparkline-svg {
+  display: inline-block;
+  vertical-align: middle;
+  max-width: 80px;
+  max-height: 24px;
+  overflow: visible;
+}
+
+.sparkline-path {
+  fill: none;
+  stroke-width: 1.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sparkline-path--up {
+  stroke: var(--color-success);
+}
+
+.sparkline-path--down {
+  stroke: var(--color-danger);
+}
+
+.sparkline-path--neutral {
+  stroke: var(--color-text-tertiary);
+}
+
+/* ============================================================
+   Geo-Reminder Service — Location field and status badges
+   ============================================================ */
+.geo-location-field {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  color: var(--color-text-primary);
+  background: #0f0f1f;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  min-height: 44px;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.geo-location-field:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.15);
+}
+
+.geo-use-current-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  font-family: var(--font-family);
+  color: var(--color-accent);
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  min-height: 44px;
+  min-width: 44px;
+  transition: background 0.2s ease, opacity 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.geo-use-current-btn:active {
+  transform: scale(0.97);
+}
+
+.geo-use-current-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.geo-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px var(--spacing-sm);
+  border-radius: 12px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.geo-status-badge--active {
+  background: rgba(var(--accent-rgb), 0.15);
+  color: var(--color-success);
+}
+
+.geo-status-badge--active::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-success);
+}
+
+.geo-status-badge--inactive {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-tertiary);
+}
+
+.geo-status-badge--inactive::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-tertiary);
+}
+
+/* ============================================================
+   Punch Clock — Shift timer and controls
+   ============================================================ */
+.punch-clock {
+  width: 100%;
+  padding: var(--spacing-md);
+  background: var(--color-content-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.punch-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  font-family: var(--font-family);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  min-height: 52px;
+  transition: opacity 0.2s ease, transform 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.punch-btn:active {
+  transform: scale(0.97);
+}
+
+.punch-btn--start {
+  background: var(--color-success);
+  color: var(--color-accent-text);
+}
+
+.punch-btn--stop {
+  background: var(--color-danger);
+  color: #ffffff;
+}
+
+.punch-timer {
+  font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+  font-size: var(--font-size-xxl);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: 1px;
+  text-align: center;
+  padding: var(--spacing-sm) 0;
+}
+
+.punch-timer--active {
+  animation: punch-pulse 2s ease-in-out infinite;
+}
+
+.punch-warning {
+  width: 100%;
+  padding: var(--spacing-md);
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: var(--radius-sm);
+  color: var(--color-warning);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+/* ============================================================
+   RuleChecker — Warning Toast Notifications
+   ============================================================ */
+.rule-warning-container {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 60px);
+  left: var(--spacing-md);
+  right: var(--spacing-md);
+  z-index: calc(var(--z-glass-overlay) + 20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  pointer-events: none;
+}
+
+.rule-warning-toast {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-left: 4px solid var(--color-warning);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateY(-20px);
+}
+
+.rule-warning-toast--enter {
+  animation: rule-warning-enter 0.3s ease forwards;
+}
+
+.rule-warning-toast--exit {
+  animation: rule-warning-exit 0.3s ease forwards;
+}
+
+.rule-warning-dismiss-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-lg);
+  cursor: pointer;
+  padding: var(--spacing-xs);
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.rule-warning-dismiss-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ============================================================
+   MinijobForecastWidget — Dashboard Forecast Card
+   ============================================================ */
+.forecast-widget {
+  background: var(--color-content-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.forecast-widget--hidden {
+  display: none;
+}
+
+.forecast-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.forecast-status--safe {
+  background: var(--color-success);
+  box-shadow: 0 0 6px rgba(78, 204, 163, 0.4);
+}
+
+.forecast-status--warning {
+  background: var(--color-warning);
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+}
+
+.forecast-status--danger {
+  background: var(--color-danger);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+  animation: forecast-pulse 1.5s ease-in-out infinite;
+}
+
+.forecast-progress-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: var(--spacing-sm);
+}
+
+.forecast-progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--color-accent);
+  transition: width 0.4s ease, background-color 0.3s ease;
+}
+
+/* ============================================================
+   TaxSimulator — Expandable Slider Widget
+   ============================================================ */
+.tax-simulator {
+  background: var(--color-content-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-md);
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.tax-simulator--collapsed .tax-simulator__body {
+  display: none;
+}
+
+.tax-simulator__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 44px;
+}
+
+.tax-simulator__body {
+  padding: 0 var(--spacing-md) var(--spacing-md);
+}
+
+.tax-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+  margin: var(--spacing-md) 0;
+  cursor: pointer;
+}
+
+.tax-slider::-webkit-slider-track {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tax-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  cursor: pointer;
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  margin-top: -9px;
+}
+
+.tax-comparison-bar {
+  display: flex;
+  width: 100%;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  margin: var(--spacing-md) 0;
+}
+
+.tax-bar-segment--current {
+  background: var(--color-accent-blue);
+  height: 100%;
+  transition: width 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-xs);
+  color: #ffffff;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tax-bar-segment--simulated {
+  background: var(--color-success);
+  height: 100%;
+  transition: width 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-xs);
+  color: #0a0a1a;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tax-result-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.tax-missing-msg {
+  padding: var(--spacing-md);
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-warning);
+  text-align: center;
+}
+
+.tax-missing-msg a {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+/* ============================================================
+   v2.0 SwipeHandler — Swipe-to-Delete Styles
+   ============================================================ */
+
+/* Base swipeable entry — enables transform for swipe gesture */
+.swipeable-entry {
+  position: relative;
+  overflow: hidden;
+  transition: transform var(--swipe-transition);
+  touch-action: pan-y;
+}
+
+/* Swiped state — reveals delete button behind entry */
+.swipeable-entry--swiped {
+  transform: translateX(-80px);
+}
+
+/* Collapsing state — entry removal animation after confirmed delete */
+.swipeable-entry--collapsing {
+  animation: swipe-collapse 200ms ease-out forwards;
+  pointer-events: none;
+}
+
+/* Delete button revealed behind swiped entry */
+.swipe-delete-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  background: var(--swipe-delete-bg);
+  color: #ffffff;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Confirmation dialog overlay */
+.swipe-confirm-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-glass-overlay) + 20);
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-md);
+}
+
+/* Confirmation dialog box */
+.swipe-confirm-dialog__box {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  max-width: 320px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  text-align: center;
+}
+
+/* Confirm (delete) button in dialog */
+.swipe-confirm-dialog__confirm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  font-family: var(--font-family);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  min-height: 44px;
+  background: var(--color-danger);
+  color: #ffffff;
+  transition: opacity 0.2s ease;
+}
+
+/* Cancel button in dialog */
+.swipe-confirm-dialog__cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  font-family: var(--font-family);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  min-height: 44px;
+  background: transparent;
+  color: var(--color-text-primary);
+  transition: background 0.2s ease;
+}
+
+.swipe-confirm-dialog__cancel:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ============================================================
+   v2.0 SkeletonLoader — Skeleton Loading Placeholder Styles
+   ============================================================ */
+
+/* Base skeleton element — rounded rectangle with pulse animation */
+.skeleton-box {
+  background-color: var(--skeleton-base);
+  border-radius: var(--radius-sm);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+/* Dashboard stat placeholder (small inline block) */
+.skeleton-stat {
+  width: 60px;
+  height: 20px;
+  display: inline-block;
+  border-radius: 4px;
+}
+
+/* Full card placeholder */
+.skeleton-card {
+  width: 100%;
+  height: 120px;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-sm);
+}
+
+/* List item placeholder */
+.skeleton-list-item {
+  width: 100%;
+  height: 48px;
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+/* Row of skeleton elements (for dashboard stats) */
+.skeleton-row {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+/* Skeleton container wrapper — fades out when hiding */
+.skeleton-container {
+  transition: opacity 150ms ease-out;
+}
+
+/* Hiding state — fades out before removal */
+.skeleton-container--hiding {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Content fade-in after skeleton is removed */
+.skeleton-fade-in {
+  animation: content-fade-in 150ms ease-in;
+}
+
+/* ============================================================
+   v2.0 PullRefreshHandler — Pull-to-Refresh Styles
+   ============================================================ */
+
+/* Pull indicator — circular spinner at top of scrollable list */
+.pull-indicator {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+
+/* Pulling state — scales opacity with pull distance */
+.pull-indicator--pulling {
+  opacity: 1;
+}
+
+/* Refreshing state — spinning animation */
+.pull-indicator--refreshing {
+  opacity: 1;
+  animation: pull-spin 0.8s linear infinite;
+}
+
+/* Error state — red indicator */
+.pull-indicator--error {
+  border-color: var(--color-danger);
+  border-top-color: var(--color-danger);
+  opacity: 1;
+  animation: none;
+}
+
+/* Content shift during refresh */
+.pull-content--refreshing {
+  transform: translateY(40px);
+  transition: transform 0.3s ease;
 }

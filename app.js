@@ -25,7 +25,20 @@ const JobTracker = (function () {
       STORAGE_ERROR: 'storage:error',
       STORAGE_UNBLOCKED: 'storage:unblocked',
       EARNINGS_SAVED: 'earnings:saved',
-      EARNINGS_DELETED: 'earnings:deleted'
+      EARNINGS_DELETED: 'earnings:deleted',
+      // v2.0 module events
+      PUNCH_STARTED: 'punch:started',
+      PUNCH_ENDED: 'punch:ended',
+      PUNCH_WARNING: 'punch:warning',
+      GEO_REMINDER_TRIGGERED: 'geo:reminder_triggered',
+      GEO_PERMISSION_DENIED: 'geo:permission_denied',
+      RULE_WARNING_SHOWN: 'rule:warning_shown',
+      RULE_WARNING_DISMISSED: 'rule:warning_dismissed',
+      TAX_SLIDER_CHANGED: 'tax:slider_changed',
+      SWIPE_DELETE_CONFIRMED: 'swipe:delete_confirmed',
+      REFRESH_STARTED: 'refresh:started',
+      REFRESH_COMPLETED: 'refresh:completed',
+      REFRESH_FAILED: 'refresh:failed'
     };
 
     /**
@@ -11218,6 +11231,3098 @@ const JobTracker = (function () {
     };
   })();
 
+  // ─── HapticFeedbackService ──────────────────────────────────────────────────
+  // Centralized vibration controller that triggers navigator.vibrate() patterns
+  // for key user interactions, with a global enable/disable preference.
+  // Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6
+  const HapticFeedbackService = (function () {
+    var _enabled = true;
+    var _supported = false;
+    var _lastMicroTime = 0;
+
+    /**
+     * Initialize: load preference from localStorage, detect support, subscribe to events, bind UI.
+     */
+    function init() {
+      // Detect vibration API support
+      _supported = !!(navigator && navigator.vibrate);
+
+      // Load preference from localStorage (default: true)
+      var stored = localStorage.getItem('jt_haptic_enabled');
+      if (stored !== null) {
+        _enabled = stored === 'true';
+      } else {
+        _enabled = true;
+      }
+
+      // Subscribe to EventBus events
+      EventBus.on('workday:saved', function () { tap(50); });
+      EventBus.on('workday:deleted', function () { doublePulse(); });
+      EventBus.on('job:deleted', function () { doublePulse(); });
+      EventBus.on('punch:started', function () { tap(50); });
+      EventBus.on('punch:ended', function () { tap(50); });
+      EventBus.on('tax:slider_changed', function () { micro(10); });
+
+      // Bind haptic-toggle UI element
+      var toggle = document.getElementById('haptic-toggle');
+      if (toggle) {
+        toggle.checked = _enabled;
+        toggle.addEventListener('change', function () {
+          setEnabled(toggle.checked);
+        });
+      }
+    }
+
+    /**
+     * Trigger a short vibration (e.g., save action).
+     * @param {number} [duration=50] - Vibration duration in ms
+     */
+    function tap(duration) {
+      if (!_enabled || !_supported) return;
+      navigator.vibrate(duration || 50);
+    }
+
+    /**
+     * Trigger a double-pulse vibration (e.g., delete action).
+     */
+    function doublePulse() {
+      if (!_enabled || !_supported) return;
+      navigator.vibrate([30, 50, 30]);
+    }
+
+    /**
+     * Trigger a micro vibration for slider/continuous interactions.
+     * Throttled to max 1 per 100ms.
+     * @param {number} [duration=10]
+     */
+    function micro(duration) {
+      if (!_enabled || !_supported) return;
+      var now = Date.now();
+      if (now - _lastMicroTime < 100) return;
+      _lastMicroTime = now;
+      navigator.vibrate(duration || 10);
+    }
+
+    /**
+     * Check if haptic feedback is supported on this device.
+     * @returns {boolean}
+     */
+    function isSupported() {
+      return !!(navigator && navigator.vibrate);
+    }
+
+    /**
+     * Enable or disable haptic feedback globally.
+     * @param {boolean} enabled
+     */
+    function setEnabled(enabled) {
+      _enabled = !!enabled;
+      localStorage.setItem('jt_haptic_enabled', String(_enabled));
+      // Sync toggle UI if it exists
+      var toggle = document.getElementById('haptic-toggle');
+      if (toggle && toggle.checked !== _enabled) {
+        toggle.checked = _enabled;
+      }
+    }
+
+    /**
+     * Get current enabled state.
+     * @returns {boolean}
+     */
+    function isEnabled() {
+      return _enabled;
+    }
+
+    return {
+      init: init,
+      tap: tap,
+      doublePulse: doublePulse,
+      micro: micro,
+      isSupported: isSupported,
+      setEnabled: setEnabled,
+      isEnabled: isEnabled
+    };
+  })();
+
+  // ─── SkeletonLoader ─────────────────────────────────────────────────────────
+  // Displays pulsing placeholder elements during data loading, ensuring a
+  // minimum 300ms display time to avoid flicker.
+  // Requirements: 9.1, 9.2, 9.3, 9.9
+  const SkeletonLoader = (function () {
+    var _activeSkeletons = {};
+    var MIN_DISPLAY_MS = 300;
+
+    // Skeleton HTML templates for different content areas
+    var TEMPLATES = {
+      'dashboard-stats': '<div class="skeleton-container"><div class="skeleton-row">' +
+        '<div class="skeleton-box skeleton-stat"></div>' +
+        '<div class="skeleton-box skeleton-stat"></div>' +
+        '<div class="skeleton-box skeleton-stat"></div>' +
+        '</div></div>',
+      'job-cards': '<div class="skeleton-container">' +
+        '<div class="skeleton-box skeleton-card"></div>' +
+        '<div class="skeleton-box skeleton-card"></div>' +
+        '</div>',
+      'entry-list': '<div class="skeleton-container">' +
+        '<div class="skeleton-box skeleton-list-item"></div>' +
+        '<div class="skeleton-box skeleton-list-item"></div>' +
+        '<div class="skeleton-box skeleton-list-item"></div>' +
+        '<div class="skeleton-box skeleton-list-item"></div>' +
+        '<div class="skeleton-box skeleton-list-item"></div>' +
+        '</div>'
+    };
+
+    /**
+     * Initialize the SkeletonLoader module.
+     */
+    function init() {
+      // No initialization needed beyond template registration
+    }
+
+    /**
+     * Show skeleton placeholders in a container.
+     * @param {string} containerId - Target container DOM ID
+     * @param {string} template - Template name: 'dashboard-stats', 'job-cards', 'entry-list'
+     */
+    function show(containerId, template) {
+      var container = document.getElementById(containerId);
+      if (!container) return;
+
+      var html = TEMPLATES[template];
+      if (!html) return;
+
+      // Hide existing content
+      var children = container.children;
+      for (var i = 0; i < children.length; i++) {
+        if (!children[i].classList.contains('skeleton-container')) {
+          children[i].style.display = 'none';
+        }
+      }
+
+      // Inject skeleton HTML
+      var skeletonEl = document.createElement('div');
+      skeletonEl.innerHTML = html;
+      var skeletonContainer = skeletonEl.firstChild;
+      container.appendChild(skeletonContainer);
+
+      // Set aria-busy for accessibility
+      container.setAttribute('aria-busy', 'true');
+
+      // Track active skeleton
+      _activeSkeletons[containerId] = {
+        startTime: Date.now(),
+        template: template
+      };
+    }
+
+    /**
+     * Hide skeleton and reveal actual content with fade-in.
+     * Enforces minimum 300ms display time.
+     * @param {string} containerId
+     */
+    function hide(containerId) {
+      var container = document.getElementById(containerId);
+      if (!container) return;
+
+      var skeleton = _activeSkeletons[containerId];
+      if (!skeleton) return;
+
+      var elapsed = Date.now() - skeleton.startTime;
+      var remaining = MIN_DISPLAY_MS - elapsed;
+
+      if (remaining > 0) {
+        // Enforce minimum display time
+        setTimeout(function () {
+          _performHide(containerId, container);
+        }, remaining);
+      } else {
+        _performHide(containerId, container);
+      }
+    }
+
+    /**
+     * Internal: perform the actual hide transition.
+     * @param {string} containerId
+     * @param {HTMLElement} container
+     */
+    function _performHide(containerId, container) {
+      var skeletonContainer = container.querySelector('.skeleton-container');
+      if (skeletonContainer) {
+        // Add hiding class for fade-out
+        skeletonContainer.classList.add('skeleton-container--hiding');
+
+        // After 150ms, remove skeleton and fade in content
+        setTimeout(function () {
+          if (skeletonContainer.parentNode) {
+            skeletonContainer.parentNode.removeChild(skeletonContainer);
+          }
+
+          // Show and fade in content
+          var children = container.children;
+          for (var i = 0; i < children.length; i++) {
+            if (!children[i].classList.contains('skeleton-container')) {
+              children[i].style.display = '';
+              children[i].classList.add('skeleton-fade-in');
+            }
+          }
+
+          // Set aria-busy to false
+          container.setAttribute('aria-busy', 'false');
+
+          // Clean up tracking
+          delete _activeSkeletons[containerId];
+        }, 150);
+      } else {
+        // No skeleton element found, just clean up
+        container.setAttribute('aria-busy', 'false');
+        delete _activeSkeletons[containerId];
+      }
+    }
+
+    /**
+     * Check if a skeleton is currently showing in a container.
+     * @param {string} containerId
+     * @returns {boolean}
+     */
+    function isShowing(containerId) {
+      return !!_activeSkeletons[containerId];
+    }
+
+    return {
+      init: init,
+      show: show,
+      hide: hide,
+      isShowing: isShowing
+    };
+  })();
+
+  // ─── PullRefreshHandler ──────────────────────────────────────────────────────
+  // Detects pull-down gesture on scrollable lists and triggers data reload
+  // with visual feedback. Integrates with SkeletonLoader for loading states.
+  // Requirements: 9.4, 9.5, 9.6, 9.7, 9.8
+  const PullRefreshHandler = (function () {
+    var _pulling = false;
+    var _startY = 0;
+    var _pullDistance = 0;
+    var _threshold = 80;       // px to trigger refresh
+    var _maxPull = 160;        // px for full opacity
+    var _timeout = 10000;      // 10s timeout
+    var _containers = {};      // { containerId: { onRefresh, indicator, error, listeners } }
+    var _refreshing = false;   // Whether a refresh is currently in progress
+
+    /**
+     * Initialize the PullRefreshHandler module.
+     */
+    function init() {
+      // Module is ready; containers are attached via attach()
+    }
+
+    /**
+     * Attach pull-to-refresh to a specific scrollable container.
+     * @param {string} containerId - DOM ID of scrollable element
+     * @param {Function} onRefresh - Async callback that performs the reload
+     */
+    function attach(containerId, onRefresh) {
+      var container = document.getElementById(containerId);
+      if (!container) return;
+
+      // Get or create indicator and error elements
+      var indicator = document.getElementById('pull-refresh-indicator');
+      var errorEl = document.getElementById('pull-refresh-error');
+
+      var listeners = {
+        touchstart: function (e) { _onTouchStart(e, containerId); },
+        touchmove: function (e) { _onTouchMove(e, containerId); },
+        touchend: function (e) { _onTouchEnd(e, containerId); }
+      };
+
+      container.addEventListener('touchstart', listeners.touchstart, { passive: true });
+      container.addEventListener('touchmove', listeners.touchmove, { passive: false });
+      container.addEventListener('touchend', listeners.touchend, { passive: true });
+
+      _containers[containerId] = {
+        onRefresh: onRefresh,
+        indicator: indicator,
+        error: errorEl,
+        listeners: listeners,
+        container: container
+      };
+    }
+
+    /**
+     * Detach pull-to-refresh from a container.
+     * @param {string} containerId
+     */
+    function detach(containerId) {
+      var config = _containers[containerId];
+      if (!config) return;
+
+      var container = config.container;
+      container.removeEventListener('touchstart', config.listeners.touchstart);
+      container.removeEventListener('touchmove', config.listeners.touchmove);
+      container.removeEventListener('touchend', config.listeners.touchend);
+
+      delete _containers[containerId];
+    }
+
+    /**
+     * Handle touch start event.
+     * @param {TouchEvent} e
+     * @param {string} containerId
+     */
+    function _onTouchStart(e, containerId) {
+      if (_refreshing) return;
+
+      var config = _containers[containerId];
+      if (!config) return;
+
+      var container = config.container;
+
+      // Only activate when scrolled to top
+      if (container.scrollTop !== 0) return;
+
+      _startY = e.touches[0].clientY;
+      _pulling = true;
+      _pullDistance = 0;
+
+      // Hide any previous error message
+      if (config.error) {
+        config.error.textContent = '';
+        config.error.style.display = 'none';
+      }
+    }
+
+    /**
+     * Handle touch move event.
+     * @param {TouchEvent} e
+     * @param {string} containerId
+     */
+    function _onTouchMove(e, containerId) {
+      if (!_pulling || _refreshing) return;
+
+      var config = _containers[containerId];
+      if (!config) return;
+
+      var container = config.container;
+
+      // Only continue if still at top
+      if (container.scrollTop !== 0) {
+        _pulling = false;
+        _resetIndicator(config);
+        return;
+      }
+
+      var currentY = e.touches[0].clientY;
+      _pullDistance = Math.max(0, currentY - _startY);
+
+      if (_pullDistance > 0) {
+        e.preventDefault();
+
+        // Scale indicator opacity linearly from 0 to 1 over 0–160px
+        var opacity = Math.min(_pullDistance / _maxPull, 1);
+
+        if (config.indicator) {
+          config.indicator.style.opacity = opacity;
+          config.indicator.style.display = 'flex';
+          config.indicator.classList.add('pull-indicator--pulling');
+          config.indicator.classList.remove('pull-indicator--refreshing');
+          config.indicator.classList.remove('pull-indicator--error');
+        }
+      }
+    }
+
+    /**
+     * Handle touch end event.
+     * @param {TouchEvent} e
+     * @param {string} containerId
+     */
+    function _onTouchEnd(e, containerId) {
+      if (!_pulling || _refreshing) return;
+
+      var config = _containers[containerId];
+      if (!config) return;
+
+      _pulling = false;
+
+      if (_pullDistance >= _threshold) {
+        // Trigger refresh
+        _triggerRefresh(containerId, config);
+      } else {
+        // Snap back - not enough pull distance
+        _resetIndicator(config);
+      }
+
+      _pullDistance = 0;
+    }
+
+    /**
+     * Trigger the refresh process.
+     * @param {string} containerId
+     * @param {Object} config
+     */
+    function _triggerRefresh(containerId, config) {
+      _refreshing = true;
+
+      // Show spinning indicator
+      if (config.indicator) {
+        config.indicator.style.opacity = 1;
+        config.indicator.classList.remove('pull-indicator--pulling');
+        config.indicator.classList.add('pull-indicator--refreshing');
+        config.indicator.classList.remove('pull-indicator--error');
+      }
+
+      // Add refreshing class to content
+      if (config.container) {
+        config.container.classList.add('pull-content--refreshing');
+      }
+
+      // Emit refresh:started event
+      EventBus.emit('refresh:started');
+
+      // Show skeletons during reload
+      if (typeof SkeletonLoader !== 'undefined' && SkeletonLoader.show) {
+        SkeletonLoader.show(containerId, 'entry-list');
+      }
+
+      // Set up timeout
+      var timeoutId = setTimeout(function () {
+        _onRefreshFailed(containerId, config, 'Aktualisierung fehlgeschlagen: Zeitüberschreitung (10s)');
+      }, _timeout);
+
+      // Call the onRefresh callback
+      try {
+        var result = config.onRefresh();
+
+        // Handle both promise-based and callback-based refresh
+        if (result && typeof result.then === 'function') {
+          result.then(function () {
+            clearTimeout(timeoutId);
+            _onRefreshCompleted(containerId, config);
+          }).catch(function (err) {
+            clearTimeout(timeoutId);
+            var message = (err && err.message) ? err.message : 'Aktualisierung fehlgeschlagen';
+            _onRefreshFailed(containerId, config, message);
+          });
+        } else {
+          // If onRefresh doesn't return a promise, complete immediately
+          clearTimeout(timeoutId);
+          _onRefreshCompleted(containerId, config);
+        }
+      } catch (err) {
+        clearTimeout(timeoutId);
+        var message = (err && err.message) ? err.message : 'Aktualisierung fehlgeschlagen';
+        _onRefreshFailed(containerId, config, message);
+      }
+    }
+
+    /**
+     * Handle successful refresh completion.
+     * @param {string} containerId
+     * @param {Object} config
+     */
+    function _onRefreshCompleted(containerId, config) {
+      _refreshing = false;
+
+      // Hide skeletons
+      if (typeof SkeletonLoader !== 'undefined' && SkeletonLoader.hide) {
+        SkeletonLoader.hide(containerId);
+      }
+
+      // Hide indicator with brief delay for visual feedback
+      setTimeout(function () {
+        _resetIndicator(config);
+        if (config.container) {
+          config.container.classList.remove('pull-content--refreshing');
+        }
+      }, 300);
+
+      // Emit refresh:completed event
+      EventBus.emit('refresh:completed');
+    }
+
+    /**
+     * Handle refresh failure (timeout or error).
+     * @param {string} containerId
+     * @param {Object} config
+     * @param {string} errorMessage
+     */
+    function _onRefreshFailed(containerId, config, errorMessage) {
+      _refreshing = false;
+
+      // Hide skeletons - preserve existing content
+      if (typeof SkeletonLoader !== 'undefined' && SkeletonLoader.hide) {
+        SkeletonLoader.hide(containerId);
+      }
+
+      // Hide spinning indicator
+      if (config.indicator) {
+        config.indicator.classList.remove('pull-indicator--refreshing');
+        config.indicator.classList.remove('pull-indicator--pulling');
+        config.indicator.classList.add('pull-indicator--error');
+        // Hide indicator after showing error state briefly
+        setTimeout(function () {
+          config.indicator.style.display = 'none';
+          config.indicator.style.opacity = 0;
+          config.indicator.classList.remove('pull-indicator--error');
+        }, 1000);
+      }
+
+      // Remove refreshing class from content
+      if (config.container) {
+        config.container.classList.remove('pull-content--refreshing');
+      }
+
+      // Show error message
+      if (config.error) {
+        config.error.textContent = errorMessage;
+        config.error.style.display = 'block';
+
+        // Auto-hide error after 5 seconds
+        setTimeout(function () {
+          if (config.error) {
+            config.error.style.display = 'none';
+            config.error.textContent = '';
+          }
+        }, 5000);
+      }
+
+      // Emit refresh:failed event
+      EventBus.emit('refresh:failed', { message: errorMessage });
+    }
+
+    /**
+     * Reset the pull indicator to its default hidden state.
+     * @param {Object} config
+     */
+    function _resetIndicator(config) {
+      if (config.indicator) {
+        config.indicator.style.opacity = 0;
+        config.indicator.style.display = 'none';
+        config.indicator.classList.remove('pull-indicator--pulling');
+        config.indicator.classList.remove('pull-indicator--refreshing');
+        config.indicator.classList.remove('pull-indicator--error');
+      }
+    }
+
+    return {
+      init: init,
+      attach: attach,
+      detach: detach
+    };
+  })();
+
+  // ─── SwipeHandler ─────────────────────────────────────────────────────────
+  // Detects horizontal swipe gestures on list entries and reveals a delete
+  // action button with confirmation flow.
+  // Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9
+  const SwipeHandler = (function () {
+    var _activeEntry = null;   // Currently revealed entry element
+    var _startX = 0;           // Touch start X coordinate
+    var _startY = 0;           // Touch start Y coordinate
+    var _swiping = false;      // Whether a swipe is in progress
+    var _threshold = 60;       // Minimum px to trigger reveal
+    var _containers = {};      // { containerId: { onDelete, handlers } }
+
+    /**
+     * Initialize: subscribe to navigation:change to reset all revealed entries.
+     */
+    function init() {
+      EventBus.on('navigation:change', function () {
+        resetAll();
+      });
+    }
+
+    /**
+     * Attach swipe handling to a specific list container.
+     * @param {string} containerId - DOM ID of the list container
+     * @param {Function} onDelete - Callback receiving entry ID on confirmed delete
+     */
+    function attach(containerId, onDelete) {
+      var container = document.getElementById(containerId);
+      if (!container) return;
+
+      var handlers = {
+        touchstart: function (e) { _onTouchStart(e, containerId); },
+        touchmove: function (e) { _onTouchMove(e, containerId); },
+        touchend: function (e) { _onTouchEnd(e, containerId); }
+      };
+
+      container.addEventListener('touchstart', handlers.touchstart, { passive: true });
+      container.addEventListener('touchmove', handlers.touchmove, { passive: false });
+      container.addEventListener('touchend', handlers.touchend, { passive: true });
+
+      _containers[containerId] = { onDelete: onDelete, handlers: handlers };
+    }
+
+    /**
+     * Detach swipe handling from a container.
+     * @param {string} containerId
+     */
+    function detach(containerId) {
+      var container = document.getElementById(containerId);
+      var config = _containers[containerId];
+      if (!container || !config) return;
+
+      container.removeEventListener('touchstart', config.handlers.touchstart);
+      container.removeEventListener('touchmove', config.handlers.touchmove);
+      container.removeEventListener('touchend', config.handlers.touchend);
+
+      delete _containers[containerId];
+    }
+
+    /**
+     * Reset all revealed entries to their original position.
+     */
+    function resetAll() {
+      if (_activeEntry) {
+        _snapBack(_activeEntry);
+        _activeEntry = null;
+      }
+      _swiping = false;
+    }
+
+    /**
+     * Internal: handle touchstart event.
+     */
+    function _onTouchStart(e, containerId) {
+      if (!e.touches || e.touches.length === 0) return;
+
+      var touch = e.touches[0];
+      _startX = touch.clientX;
+      _startY = touch.clientY;
+      _swiping = false;
+
+      // Find the swipeable entry element
+      var target = e.target;
+      var entry = _findSwipeableEntry(target);
+
+      // If swiping a different entry, reset the previous one
+      if (entry && _activeEntry && _activeEntry !== entry) {
+        _snapBack(_activeEntry);
+        _activeEntry = null;
+      }
+    }
+
+    /**
+     * Internal: handle touchmove event.
+     */
+    function _onTouchMove(e, containerId) {
+      if (!e.touches || e.touches.length === 0) return;
+
+      var touch = e.touches[0];
+      var deltaX = _startX - touch.clientX;
+      var deltaY = Math.abs(touch.clientY - _startY);
+
+      // Only lock into horizontal swipe if deltaX > 10 and deltaX > deltaY
+      if (deltaX > 10 && deltaX > deltaY) {
+        _swiping = true;
+        // Prevent vertical scrolling while swiping horizontally
+        e.preventDefault();
+      }
+    }
+
+    /**
+     * Internal: handle touchend event.
+     */
+    function _onTouchEnd(e, containerId) {
+      if (!_swiping) return;
+
+      var touch = e.changedTouches[0];
+      var deltaX = _startX - touch.clientX;
+
+      // Find the swipeable entry element
+      var target = e.target;
+      var entry = _findSwipeableEntry(target);
+      if (!entry) {
+        _swiping = false;
+        return;
+      }
+
+      if (deltaX >= _threshold) {
+        // Reveal delete button
+        _revealDeleteButton(entry, containerId);
+      } else if (deltaX < 0 && _activeEntry === entry) {
+        // Swipe right on revealed entry → snap back
+        _snapBack(entry);
+        _activeEntry = null;
+      } else {
+        // Snap back (swipe not far enough)
+        _snapBack(entry);
+      }
+
+      _swiping = false;
+    }
+
+    /**
+     * Internal: find the closest .swipeable-entry ancestor.
+     */
+    function _findSwipeableEntry(el) {
+      while (el && el !== document.body) {
+        if (el.classList && el.classList.contains('swipeable-entry')) {
+          return el;
+        }
+        el = el.parentElement;
+      }
+      return null;
+    }
+
+    /**
+     * Internal: reveal the delete button on an entry.
+     */
+    function _revealDeleteButton(entry, containerId) {
+      // If there's already a delete button, don't add another
+      if (entry.querySelector('.swipe-delete-btn')) {
+        entry.classList.add('swipeable-entry--swiped');
+        _activeEntry = entry;
+        return;
+      }
+
+      var entryId = entry.getAttribute('data-entry-id') || entry.getAttribute('data-id') || '';
+
+      // Inject delete button HTML
+      var deleteBtn = document.createElement('div');
+      deleteBtn.className = 'swipe-delete-btn';
+      deleteBtn.setAttribute('data-entry-id', entryId);
+      deleteBtn.setAttribute('role', 'button');
+      deleteBtn.setAttribute('aria-label', 'Eintrag löschen');
+      deleteBtn.innerHTML = '<span>🗑️</span><span>Löschen</span>';
+
+      entry.style.position = 'relative';
+      entry.appendChild(deleteBtn);
+
+      // Add swiped class for transform
+      entry.classList.add('swipeable-entry--swiped');
+      _activeEntry = entry;
+
+      // Bind delete button tap
+      deleteBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        _showConfirmDialog(entryId, entry, containerId);
+      });
+
+      // Bind tap elsewhere to snap back
+      var _outsideHandler = function (e) {
+        if (!entry.contains(e.target)) {
+          _snapBack(entry);
+          _activeEntry = null;
+          document.removeEventListener('click', _outsideHandler);
+        }
+      };
+      setTimeout(function () {
+        document.addEventListener('click', _outsideHandler);
+      }, 50);
+    }
+
+    /**
+     * Internal: snap an entry back to its original position.
+     */
+    function _snapBack(entry) {
+      if (!entry) return;
+      entry.classList.remove('swipeable-entry--swiped');
+
+      // Remove delete button after transition
+      var deleteBtn = entry.querySelector('.swipe-delete-btn');
+      if (deleteBtn) {
+        setTimeout(function () {
+          if (deleteBtn.parentNode) {
+            deleteBtn.parentNode.removeChild(deleteBtn);
+          }
+        }, 200);
+      }
+    }
+
+    /**
+     * Internal: show confirmation dialog.
+     */
+    function _showConfirmDialog(entryId, entry, containerId) {
+      // Create confirmation dialog overlay
+      var dialog = document.createElement('div');
+      dialog.className = 'swipe-confirm-dialog';
+      dialog.setAttribute('role', 'alertdialog');
+      dialog.setAttribute('aria-label', 'Löschbestätigung');
+      dialog.innerHTML =
+        '<div class="swipe-confirm-dialog__box">' +
+          '<p>Eintrag wirklich löschen?</p>' +
+          '<button class="swipe-confirm-dialog__confirm" type="button">Löschen</button>' +
+          '<button class="swipe-confirm-dialog__cancel" type="button">Abbrechen</button>' +
+        '</div>';
+
+      document.body.appendChild(dialog);
+
+      var confirmBtn = dialog.querySelector('.swipe-confirm-dialog__confirm');
+      var cancelBtn = dialog.querySelector('.swipe-confirm-dialog__cancel');
+
+      confirmBtn.addEventListener('click', function () {
+        _handleConfirmDelete(entryId, entry, containerId, dialog);
+      });
+
+      cancelBtn.addEventListener('click', function () {
+        _dismissDialog(dialog);
+        _snapBack(entry);
+        _activeEntry = null;
+      });
+
+      // Tap on overlay background to cancel
+      dialog.addEventListener('click', function (e) {
+        if (e.target === dialog) {
+          _dismissDialog(dialog);
+          _snapBack(entry);
+          _activeEntry = null;
+        }
+      });
+    }
+
+    /**
+     * Internal: handle confirmed deletion.
+     */
+    function _handleConfirmDelete(entryId, entry, containerId, dialog) {
+      _dismissDialog(dialog);
+
+      var config = _containers[containerId];
+      if (!config || !config.onDelete) return;
+
+      // Call the onDelete callback
+      var result = config.onDelete(entryId);
+
+      // Handle promise-based or synchronous result
+      if (result && typeof result.then === 'function') {
+        result.then(function (res) {
+          if (res && res.success === false) {
+            _handleDeleteFailure(entry);
+          } else {
+            _handleDeleteSuccess(entry, entryId);
+          }
+        }).catch(function () {
+          _handleDeleteFailure(entry);
+        });
+      } else if (result && result.success === false) {
+        _handleDeleteFailure(entry);
+      } else {
+        _handleDeleteSuccess(entry, entryId);
+      }
+    }
+
+    /**
+     * Internal: handle successful deletion with collapse animation.
+     */
+    function _handleDeleteSuccess(entry, entryId) {
+      // Animate collapse (200ms)
+      entry.classList.add('swipeable-entry--collapsing');
+
+      // Trigger haptic feedback
+      HapticFeedbackService.doublePulse();
+
+      // Emit event
+      EventBus.emit('swipe:delete_confirmed', { entryId: entryId });
+
+      // Remove entry after animation
+      setTimeout(function () {
+        if (entry.parentNode) {
+          entry.parentNode.removeChild(entry);
+        }
+      }, 200);
+
+      _activeEntry = null;
+    }
+
+    /**
+     * Internal: handle deletion failure.
+     */
+    function _handleDeleteFailure(entry) {
+      // Restore entry position
+      _snapBack(entry);
+      _activeEntry = null;
+
+      // Show error toast
+      showToast('Löschen fehlgeschlagen. Bitte erneut versuchen.', 4000);
+    }
+
+    /**
+     * Internal: dismiss the confirmation dialog.
+     */
+    function _dismissDialog(dialog) {
+      if (dialog && dialog.parentNode) {
+        dialog.parentNode.removeChild(dialog);
+      }
+    }
+
+    return {
+      init: init,
+      attach: attach,
+      detach: detach,
+      resetAll: resetAll
+    };
+  })();
+
+  // ─── SparklineRenderer ────────────────────────────────────────────────────────
+  // Renders inline SVG sparkline charts next to tip and provision totals on the
+  // Dashboard, showing 14-day or 30-day trends.
+  // Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7
+  const SparklineRenderer = (function () {
+    var _windows = { tip: 14, provision: 14 };
+
+    // SVG dimensions
+    var SVG_WIDTH = 80;
+    var SVG_HEIGHT = 24;
+
+    // Minimum data points required to show sparkline
+    var MIN_DATA_POINTS = 3;
+
+    /**
+     * Initialize the module: subscribe to events, render initial sparklines.
+     */
+    function init() {
+      // Subscribe to events that require re-rendering
+      EventBus.on('earnings:saved', function () {
+        _renderAll();
+      });
+      EventBus.on('earnings:deleted', function () {
+        _renderAll();
+      });
+      EventBus.on('income:updated', function () {
+        _renderAll();
+      });
+
+      // Initial render
+      _renderAll();
+    }
+
+    /**
+     * Render both sparklines (tip and provision).
+     */
+    function _renderAll() {
+      render('tip', 'sparkline-tip-container', _windows.tip);
+      render('provision', 'sparkline-provision-container', _windows.provision);
+    }
+
+    /**
+     * Render a sparkline for a specific data type.
+     * @param {string} type - 'tip' or 'provision'
+     * @param {string} containerId - DOM element ID to render into
+     * @param {number} [windowDays=14] - Time window (14 or 30)
+     */
+    function render(type, containerId, windowDays) {
+      var container = document.getElementById(containerId);
+      if (!container) return;
+
+      windowDays = windowDays || 14;
+
+      // Get aggregated data points
+      var dataPoints = _getDataPoints(type, windowDays);
+
+      // If fewer than 3 data points, hide sparkline and show only numeric total
+      if (dataPoints.length < MIN_DATA_POINTS) {
+        container.innerHTML = '';
+        container.classList.remove('sparkline-container');
+        return;
+      }
+
+      // Generate SVG
+      var svg = _generateSVG(dataPoints);
+
+      // Apply container class and click handler
+      container.innerHTML = svg;
+      container.classList.add('sparkline-container');
+
+      // Attach tap-to-toggle handler
+      container.onclick = function () {
+        toggleWindow(type);
+      };
+    }
+
+    /**
+     * Get aggregated data points by calendar day within the time window.
+     * @param {string} type - 'tip' or 'provision'
+     * @param {number} windowDays - Number of days to look back
+     * @returns {Array<{date: string, amount: number}>} Sorted by date ascending
+     */
+    function _getDataPoints(type, windowDays) {
+      var jobs = AppState.getState().jobs;
+      if (!jobs || jobs.length === 0) return [];
+
+      // Calculate date range
+      var now = new Date();
+      var endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      var startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - windowDays + 1);
+
+      var startStr = _formatDate(startDate);
+      var endStr = _formatDate(endDate);
+
+      // Collect all earnings of the given type across all jobs within the window
+      var dailyTotals = {};
+
+      for (var j = 0; j < jobs.length; j++) {
+        var jobId = jobs[j].id;
+        // Get earnings for the current year (and previous year if window spans year boundary)
+        var years = [now.getFullYear()];
+        if (startDate.getFullYear() !== now.getFullYear()) {
+          years.push(startDate.getFullYear());
+        }
+
+        for (var yi = 0; yi < years.length; yi++) {
+          var entries = EarningsExtraModule.getForJob(jobId, years[yi]);
+          for (var i = 0; i < entries.length; i++) {
+            var entry = entries[i];
+            if (entry.type !== type) continue;
+            if (entry.date < startStr || entry.date > endStr) continue;
+
+            if (!dailyTotals[entry.date]) {
+              dailyTotals[entry.date] = 0;
+            }
+            dailyTotals[entry.date] += entry.amount;
+          }
+        }
+      }
+
+      // Convert to sorted array of data points (only days with amounts > 0)
+      var result = [];
+      var dates = Object.keys(dailyTotals).sort();
+      for (var d = 0; d < dates.length; d++) {
+        if (dailyTotals[dates[d]] > 0) {
+          result.push({ date: dates[d], amount: dailyTotals[dates[d]] });
+        }
+      }
+
+      return result;
+    }
+
+    /**
+     * Format a Date object as YYYY-MM-DD string.
+     * @param {Date} date
+     * @returns {string}
+     */
+    function _formatDate(date) {
+      var y = date.getFullYear();
+      var m = String(date.getMonth() + 1).padStart(2, '0');
+      var d = String(date.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + d;
+    }
+
+    /**
+     * Generate SVG markup from data points.
+     * @param {Array<{date: string, amount: number}>} dataPoints
+     * @returns {string} SVG HTML string
+     */
+    function _generateSVG(dataPoints) {
+      if (dataPoints.length === 0) return '';
+
+      var amounts = [];
+      for (var i = 0; i < dataPoints.length; i++) {
+        amounts.push(dataPoints[i].amount);
+      }
+
+      var min = amounts[0];
+      var max = amounts[0];
+      for (var i = 1; i < amounts.length; i++) {
+        if (amounts[i] < min) min = amounts[i];
+        if (amounts[i] > max) max = amounts[i];
+      }
+
+      // Build path coordinates scaled to SVG dimensions
+      var range = max - min;
+      var padding = 1; // 1px padding for stroke visibility
+      var drawWidth = SVG_WIDTH - (padding * 2);
+      var drawHeight = SVG_HEIGHT - (padding * 2);
+
+      var points = [];
+      for (var i = 0; i < amounts.length; i++) {
+        var x = padding + (amounts.length > 1 ? (i / (amounts.length - 1)) * drawWidth : drawWidth / 2);
+        var y;
+        if (range === 0) {
+          y = padding + drawHeight / 2;
+        } else {
+          y = padding + drawHeight - ((amounts[i] - min) / range) * drawHeight;
+        }
+        points.push(x.toFixed(1) + ',' + y.toFixed(1));
+      }
+
+      var pathD = 'M' + points.join(' L');
+
+      // Determine color class based on first vs last data point
+      var colorClass = _getColorClass(amounts[0], amounts[amounts.length - 1]);
+
+      var svg = '<svg class="sparkline-svg" width="' + SVG_WIDTH + '" height="' + SVG_HEIGHT + '" viewBox="0 0 ' + SVG_WIDTH + ' ' + SVG_HEIGHT + '" xmlns="http://www.w3.org/2000/svg">';
+      svg += '<path class="sparkline-path ' + colorClass + '" d="' + pathD + '" />';
+      svg += '</svg>';
+
+      return svg;
+    }
+
+    /**
+     * Determine the color class based on first and last values.
+     * @param {number} first - First data point value
+     * @param {number} last - Last data point value
+     * @returns {string} CSS class name
+     */
+    function _getColorClass(first, last) {
+      if (last > first) return 'sparkline-path--up';
+      if (last < first) return 'sparkline-path--down';
+      return 'sparkline-path--neutral';
+    }
+
+    /**
+     * Toggle the time window for a sparkline between 14 and 30 days.
+     * @param {string} type - 'tip' or 'provision'
+     */
+    function toggleWindow(type) {
+      if (_windows[type] === 14) {
+        _windows[type] = 30;
+      } else {
+        _windows[type] = 14;
+      }
+
+      // Re-render the toggled sparkline
+      if (type === 'tip') {
+        render('tip', 'sparkline-tip-container', _windows.tip);
+      } else if (type === 'provision') {
+        render('provision', 'sparkline-provision-container', _windows.provision);
+      }
+    }
+
+    /**
+     * Destroy all rendered sparklines (cleanup).
+     */
+    function destroy() {
+      var tipContainer = document.getElementById('sparkline-tip-container');
+      var provContainer = document.getElementById('sparkline-provision-container');
+
+      if (tipContainer) {
+        tipContainer.innerHTML = '';
+        tipContainer.classList.remove('sparkline-container');
+        tipContainer.onclick = null;
+      }
+      if (provContainer) {
+        provContainer.innerHTML = '';
+        provContainer.classList.remove('sparkline-container');
+        provContainer.onclick = null;
+      }
+
+      // Reset windows to default
+      _windows = { tip: 14, provision: 14 };
+    }
+
+    return { init: init, render: render, toggleWindow: toggleWindow, destroy: destroy };
+  })();
+
+  // ─── PunchClock ─────────────────────────────────────────────────────────────────
+  // Provides one-tap shift start/stop functionality with a running timer display
+  // and automatic quarter-hour rounding.
+  // Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8
+  const PunchClock = (function () {
+    var STORAGE_KEY = 'jt_punch_clock';
+    var WARNING_THRESHOLD_MS = 16 * 60 * 60 * 1000; // 16 hours in ms
+    var TIMER_INTERVAL_MS = 1000;
+
+    var _timerInterval = null;
+    var _shiftData = null; // { startTime, jobId, warningDismissed }
+
+    /**
+     * Initialize: restore active shift from localStorage, bind UI events.
+     */
+    function init() {
+      // Restore active shift from localStorage
+      _restoreShift();
+
+      // Bind UI buttons
+      var startBtn = document.getElementById('punch-start-btn');
+      var stopBtn = document.getElementById('punch-stop-btn');
+      var warningEndBtn = document.getElementById('punch-warning-end-btn');
+      var warningContinueBtn = document.getElementById('punch-warning-continue-btn');
+
+      if (startBtn) {
+        startBtn.addEventListener('click', function () {
+          startShift();
+        });
+      }
+
+      if (stopBtn) {
+        stopBtn.addEventListener('click', function () {
+          endShift();
+        });
+      }
+
+      if (warningEndBtn) {
+        warningEndBtn.addEventListener('click', function () {
+          endShift();
+        });
+      }
+
+      if (warningContinueBtn) {
+        warningContinueBtn.addEventListener('click', function () {
+          dismissWarning();
+        });
+      }
+
+      // If shift is active, start the timer display
+      if (_shiftData) {
+        _showActiveUI();
+        _startTimer();
+      }
+    }
+
+    /**
+     * Start a new shift. Stores timestamp in localStorage.
+     * @returns {{ success: boolean, startTime: number }}
+     */
+    function startShift() {
+      if (_shiftData) {
+        return { success: false };
+      }
+
+      // Get the most recently used job from AppState
+      var appState = AppState.getAppState();
+      var jobId = appState.lastActiveJobId || null;
+
+      // Validate job exists via JobManager
+      if (jobId && !JobManager.getJob(jobId)) {
+        jobId = null;
+      }
+
+      // If no lastActiveJobId, try to use the first available job
+      if (!jobId) {
+        var jobs = JobManager.getAllJobs();
+        if (jobs.length > 0) {
+          jobId = jobs[0].id;
+        }
+      }
+
+      var startTime = Date.now();
+
+      _shiftData = {
+        startTime: startTime,
+        jobId: jobId,
+        warningDismissed: false
+      };
+
+      // Persist to localStorage
+      _saveShift();
+
+      // Update UI
+      _showActiveUI();
+      _startTimer();
+
+      // Emit event
+      EventBus.emit('punch:started', { startTime: startTime, jobId: jobId });
+
+      // Trigger haptic tap
+      if (HapticFeedbackService && HapticFeedbackService.tap) {
+        HapticFeedbackService.tap(50);
+      }
+
+      return { success: true, startTime: startTime };
+    }
+
+    /**
+     * End the active shift. Calculates duration, rounds to 0.25h.
+     * @returns {{ success: boolean, duration: number, date: string }}
+     */
+    function endShift() {
+      if (!_shiftData) {
+        return { success: false };
+      }
+
+      var now = Date.now();
+      var elapsedMs = now - _shiftData.startTime;
+      var elapsedHours = elapsedMs / (1000 * 60 * 60);
+
+      // Round up to nearest 0.25h, minimum 0.25h
+      var duration = Math.ceil(elapsedHours / 0.25) * 0.25;
+      if (duration < 0.25) {
+        duration = 0.25;
+      }
+
+      // Get the date from the shift start
+      var shiftDate = new Date(_shiftData.startTime);
+      var dateStr = shiftDate.getFullYear() + '-' +
+        String(shiftDate.getMonth() + 1).padStart(2, '0') + '-' +
+        String(shiftDate.getDate()).padStart(2, '0');
+
+      var jobId = _shiftData.jobId;
+
+      // Stop timer and clear state
+      _stopTimer();
+      _shiftData = null;
+      _clearStorage();
+
+      // Update UI
+      _showIdleUI();
+
+      // Emit event
+      EventBus.emit('punch:ended', { duration: duration, date: dateStr, jobId: jobId });
+
+      // Trigger haptic tap
+      if (HapticFeedbackService && HapticFeedbackService.tap) {
+        HapticFeedbackService.tap(50);
+      }
+
+      // Navigate to entry form pre-filled
+      _navigateToEntryForm(dateStr, duration, jobId);
+
+      return { success: true, duration: duration, date: dateStr };
+    }
+
+    /**
+     * Get current shift status.
+     * @returns {{ active: boolean, startTime?: number, elapsed?: number }}
+     */
+    function getStatus() {
+      if (!_shiftData) {
+        return { active: false };
+      }
+
+      var elapsed = Date.now() - _shiftData.startTime;
+      return {
+        active: true,
+        startTime: _shiftData.startTime,
+        elapsed: elapsed
+      };
+    }
+
+    /**
+     * Dismiss the 16-hour warning without ending the shift.
+     */
+    function dismissWarning() {
+      if (!_shiftData) return;
+
+      _shiftData.warningDismissed = true;
+      _saveShift();
+
+      // Hide warning banner
+      var warningBanner = document.getElementById('punch-warning-banner');
+      if (warningBanner) {
+        warningBanner.style.display = 'none';
+      }
+    }
+
+    // ─── Private Methods ──────────────────────────────────────────────────────────
+
+    /**
+     * Restore shift data from localStorage.
+     */
+    function _restoreShift() {
+      try {
+        var stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          var parsed = JSON.parse(stored);
+          if (parsed && parsed.startTime && typeof parsed.startTime === 'number') {
+            _shiftData = {
+              startTime: parsed.startTime,
+              jobId: parsed.jobId || null,
+              warningDismissed: parsed.warningDismissed || false
+            };
+          }
+        }
+      } catch (e) {
+        // Silently fail on parse error
+        _shiftData = null;
+      }
+    }
+
+    /**
+     * Save shift data to localStorage.
+     */
+    function _saveShift() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(_shiftData));
+      } catch (e) {
+        // Silently fail on storage error
+      }
+    }
+
+    /**
+     * Clear shift data from localStorage.
+     */
+    function _clearStorage() {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (e) {
+        // Silently fail
+      }
+    }
+
+    /**
+     * Start the timer interval that updates the display every second.
+     */
+    function _startTimer() {
+      if (_timerInterval) return;
+
+      // Update immediately
+      _updateTimerDisplay();
+
+      _timerInterval = setInterval(function () {
+        _updateTimerDisplay();
+        _checkWarning();
+      }, TIMER_INTERVAL_MS);
+    }
+
+    /**
+     * Stop the timer interval.
+     */
+    function _stopTimer() {
+      if (_timerInterval) {
+        clearInterval(_timerInterval);
+        _timerInterval = null;
+      }
+    }
+
+    /**
+     * Update the timer display element with current elapsed time in HH:MM:SS format.
+     */
+    function _updateTimerDisplay() {
+      if (!_shiftData) return;
+
+      var timerEl = document.getElementById('punch-timer-display');
+      if (!timerEl) return;
+
+      var elapsed = Date.now() - _shiftData.startTime;
+      var totalSeconds = Math.floor(elapsed / 1000);
+      var hours = Math.floor(totalSeconds / 3600);
+      var minutes = Math.floor((totalSeconds % 3600) / 60);
+      var seconds = totalSeconds % 60;
+
+      var display = String(hours).padStart(2, '0') + ':' +
+        String(minutes).padStart(2, '0') + ':' +
+        String(seconds).padStart(2, '0');
+
+      timerEl.textContent = display;
+    }
+
+    /**
+     * Check if the 16-hour warning should be shown.
+     */
+    function _checkWarning() {
+      if (!_shiftData) return;
+      if (_shiftData.warningDismissed) return;
+
+      var elapsed = Date.now() - _shiftData.startTime;
+      if (elapsed > WARNING_THRESHOLD_MS) {
+        _showWarning();
+      }
+    }
+
+    /**
+     * Show the 16-hour warning banner.
+     */
+    function _showWarning() {
+      var warningBanner = document.getElementById('punch-warning-banner');
+      if (warningBanner) {
+        warningBanner.style.display = '';
+      }
+
+      EventBus.emit('punch:warning', { elapsed: Date.now() - _shiftData.startTime });
+    }
+
+    /**
+     * Show the active shift UI (timer + stop button, hide start button).
+     */
+    function _showActiveUI() {
+      var startBtn = document.getElementById('punch-start-btn');
+      var stopBtn = document.getElementById('punch-stop-btn');
+      var timerEl = document.getElementById('punch-timer-display');
+
+      if (startBtn) startBtn.style.display = 'none';
+      if (stopBtn) stopBtn.style.display = '';
+      if (timerEl) {
+        timerEl.style.display = '';
+        timerEl.classList.add('punch-timer--active');
+      }
+    }
+
+    /**
+     * Show the idle UI (start button, hide timer + stop button).
+     */
+    function _showIdleUI() {
+      var startBtn = document.getElementById('punch-start-btn');
+      var stopBtn = document.getElementById('punch-stop-btn');
+      var timerEl = document.getElementById('punch-timer-display');
+      var warningBanner = document.getElementById('punch-warning-banner');
+
+      if (startBtn) startBtn.style.display = '';
+      if (stopBtn) stopBtn.style.display = 'none';
+      if (timerEl) {
+        timerEl.style.display = 'none';
+        timerEl.classList.remove('punch-timer--active');
+        timerEl.textContent = '00:00:00';
+      }
+      if (warningBanner) warningBanner.style.display = 'none';
+    }
+
+    /**
+     * Navigate to the entry form pre-filled with shift data.
+     * @param {string} date - YYYY-MM-DD date string
+     * @param {number} hours - Rounded hours
+     * @param {string|null} jobId - Job ID to pre-select
+     */
+    function _navigateToEntryForm(date, hours, jobId) {
+      // Switch to entry view
+      NavigationController.switchTo('view-entry');
+
+      // Pre-fill the form after a short delay to ensure the view is rendered
+      setTimeout(function () {
+        var dateInput = document.getElementById('entry-date');
+        var hoursInput = document.getElementById('entry-hours');
+        var jobSelect = document.getElementById('entry-job');
+
+        if (dateInput) {
+          dateInput.value = date;
+        }
+
+        if (hoursInput) {
+          hoursInput.value = hours;
+        }
+
+        if (jobSelect && jobId) {
+          jobSelect.value = jobId;
+          // Trigger change event to update field visibility
+          var changeEvent = new Event('change', { bubbles: true });
+          jobSelect.dispatchEvent(changeEvent);
+        }
+      }, 100);
+    }
+
+    return {
+      init: init,
+      startShift: startShift,
+      endShift: endShift,
+      getStatus: getStatus,
+      dismissWarning: dismissWarning
+    };
+  })();
+
+  // ─── RuleChecker ──────────────────────────────────────────────────────────────
+  // Performs real-time validation of entry form inputs against labor law limits
+  // (Werkstudent 20h/week, Minijob 603€/month) and displays non-blocking warning toasts.
+  // Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8
+  const RuleChecker = (function () {
+    var _activeWarnings = {};   // { ruleId: { element, timeout, message } }
+    var _debounceTimer = null;  // 300ms debounce for input changes
+    var _lastCheck = {};        // { ruleId: boolean } to prevent duplicates
+    var _warningQueue = [];     // queue for sequential display with 500ms delay
+    var _queueTimer = null;     // timer for sequential warning display
+    var _active = false;        // whether RuleChecker is active (entry view visible)
+
+    var DEBOUNCE_MS = 300;
+    var AUTO_DISMISS_MS = 6000;
+    var SEQUENTIAL_DELAY_MS = 500;
+    var WERKSTUDENT_WEEKLY_LIMIT = 20;
+    var MINIJOB_MONTHLY_LIMIT = 603;
+
+    var RULES = {
+      werkstudent_weekly: {
+        id: 'werkstudent_weekly',
+        message: 'Werkstudentenprivileg: 20h/Woche in der Vorlesungszeit überschritten'
+      },
+      minijob_monthly: {
+        id: 'minijob_monthly',
+        message: 'Minijob-Grenze: 603 €/Monat überschritten'
+      }
+    };
+
+    /**
+     * Get the ISO week start (Monday) and end (Sunday) for a given date string.
+     * @param {string} dateStr - YYYY-MM-DD
+     * @returns {{ start: string, end: string }}
+     */
+    function _getISOWeekRange(dateStr) {
+      var d = new Date(dateStr + 'T12:00:00');
+      var day = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+      // Convert to ISO day: Mon=1, Tue=2, ..., Sun=7
+      var isoDay = day === 0 ? 7 : day;
+      // Monday of this week
+      var monday = new Date(d);
+      monday.setDate(d.getDate() - (isoDay - 1));
+      // Sunday of this week
+      var sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+
+      return {
+        start: monday.toISOString().slice(0, 10),
+        end: sunday.toISOString().slice(0, 10)
+      };
+    }
+
+    /**
+     * Sum hours for a specific job in a given ISO week range.
+     * @param {string} jobId
+     * @param {string} weekStart - YYYY-MM-DD (Monday)
+     * @param {string} weekEnd - YYYY-MM-DD (Sunday)
+     * @returns {number}
+     */
+    function _sumWeeklyHours(jobId, weekStart, weekEnd) {
+      var workdays = AppState.getState().workdays;
+      var total = 0;
+      for (var i = 0; i < workdays.length; i++) {
+        var w = workdays[i];
+        if (w.jobId === jobId && w.date >= weekStart && w.date <= weekEnd && w.status === 'worked' && w.hours) {
+          total += w.hours;
+        }
+      }
+      return total;
+    }
+
+    /**
+     * Calculate gross earnings for a Minijob in a given month.
+     * @param {string} jobId
+     * @param {number} year
+     * @param {number} month - 1-12
+     * @returns {number}
+     */
+    function _sumMonthlyGross(jobId, year, month) {
+      return IncomeEngine.calculateMonthlyBrutto(jobId, year, month);
+    }
+
+    /**
+     * Calculate the gross earnings that would result from adding hours to a job.
+     * @param {object} job
+     * @param {number} hours
+     * @returns {number}
+     */
+    function _calculateAdditionalGross(job, hours) {
+      var rate = job.defaultHourlyRate || 0;
+      return hours * rate;
+    }
+
+    /**
+     * Run all applicable rule checks for the current form state.
+     * @returns {Array<{ rule: string, message: string, severity: string }>}
+     */
+    function check() {
+      var violations = [];
+
+      var jobSelect = document.getElementById('entry-job');
+      var dateInput = document.getElementById('entry-date');
+      var hoursInput = document.getElementById('entry-hours');
+
+      if (!jobSelect || !dateInput || !hoursInput) return violations;
+
+      var jobId = jobSelect.value;
+      var dateStr = dateInput.value;
+      var hours = parseFloat(hoursInput.value);
+
+      if (!jobId || !dateStr) return violations;
+      if (isNaN(hours) || hours <= 0) hours = 0;
+
+      var job = JobManager.getJob(jobId);
+      if (!job) return violations;
+
+      // ── Werkstudent weekly rule ──
+      if (job.type === 'Werkstudent') {
+        var weekRange = _getISOWeekRange(dateStr);
+        var existingHours = _sumWeeklyHours(jobId, weekRange.start, weekRange.end);
+        var totalWeeklyHours = existingHours + hours;
+
+        if (totalWeeklyHours > WERKSTUDENT_WEEKLY_LIMIT) {
+          violations.push({
+            rule: 'werkstudent_weekly',
+            message: RULES.werkstudent_weekly.message,
+            severity: 'warning'
+          });
+        }
+      }
+
+      // ── Minijob monthly rule ──
+      if (job.type === 'Minijob') {
+        var year = parseInt(dateStr.substring(0, 4), 10);
+        var month = parseInt(dateStr.substring(5, 7), 10);
+        var existingGross = _sumMonthlyGross(jobId, year, month);
+        var additionalGross = _calculateAdditionalGross(job, hours);
+        var totalMonthlyGross = existingGross + additionalGross;
+
+        if (totalMonthlyGross > MINIJOB_MONTHLY_LIMIT) {
+          violations.push({
+            rule: 'minijob_monthly',
+            message: RULES.minijob_monthly.message,
+            severity: 'warning'
+          });
+        }
+      }
+
+      // Process violations: show new warnings, dismiss resolved ones
+      _processViolations(violations);
+
+      return violations;
+    }
+
+    /**
+     * Process violations: show new warnings, dismiss resolved ones.
+     * @param {Array} violations
+     */
+    function _processViolations(violations) {
+      var activeRuleIds = {};
+      for (var i = 0; i < violations.length; i++) {
+        activeRuleIds[violations[i].rule] = violations[i];
+      }
+
+      // Dismiss warnings for rules that no longer apply (Req 4.7)
+      for (var ruleId in _activeWarnings) {
+        if (Object.prototype.hasOwnProperty.call(_activeWarnings, ruleId)) {
+          if (!activeRuleIds[ruleId]) {
+            _dismissWarningImmediate(ruleId);
+          }
+        }
+      }
+
+      // Show new warnings (Req 4.8: prevent duplicates)
+      var newWarnings = [];
+      for (var j = 0; j < violations.length; j++) {
+        var v = violations[j];
+        if (!_activeWarnings[v.rule]) {
+          newWarnings.push(v);
+        }
+      }
+
+      // Show multiple warnings sequentially with 500ms delay (Req 4.5)
+      if (newWarnings.length > 0) {
+        _queueWarnings(newWarnings);
+      }
+    }
+
+    /**
+     * Queue warnings for sequential display with 500ms delay between them.
+     * @param {Array} warnings
+     */
+    function _queueWarnings(warnings) {
+      for (var i = 0; i < warnings.length; i++) {
+        _warningQueue.push(warnings[i]);
+      }
+      _processQueue();
+    }
+
+    /**
+     * Process the warning queue, showing one at a time with delay.
+     */
+    function _processQueue() {
+      if (_queueTimer) return; // already processing
+      if (_warningQueue.length === 0) return;
+
+      var warning = _warningQueue.shift();
+      // Double-check it's not already showing (Req 4.8)
+      if (_activeWarnings[warning.rule]) {
+        // Skip and process next
+        if (_warningQueue.length > 0) {
+          _queueTimer = setTimeout(function () {
+            _queueTimer = null;
+            _processQueue();
+          }, SEQUENTIAL_DELAY_MS);
+        }
+        return;
+      }
+
+      _showWarning(warning.rule, warning.message);
+
+      // Process next in queue after delay
+      if (_warningQueue.length > 0) {
+        _queueTimer = setTimeout(function () {
+          _queueTimer = null;
+          _processQueue();
+        }, SEQUENTIAL_DELAY_MS);
+      }
+    }
+
+    /**
+     * Show a warning toast for a specific rule.
+     * @param {string} ruleId
+     * @param {string} message
+     */
+    function _showWarning(ruleId, message) {
+      var container = document.getElementById('rule-warning-container');
+      if (!container) return;
+
+      // Create toast element
+      var toast = document.createElement('div');
+      toast.id = 'rule-warning-' + ruleId;
+      toast.className = 'rule-warning-toast rule-warning-toast--enter';
+      toast.setAttribute('role', 'alert');
+      toast.setAttribute('aria-live', 'assertive');
+
+      var msgSpan = document.createElement('span');
+      msgSpan.textContent = message;
+      toast.appendChild(msgSpan);
+
+      var dismissBtn = document.createElement('button');
+      dismissBtn.className = 'rule-warning-dismiss-btn';
+      dismissBtn.setAttribute('aria-label', 'Warnung schließen');
+      dismissBtn.textContent = '×';
+      dismissBtn.addEventListener('click', function () {
+        dismissWarning(ruleId);
+      });
+      toast.appendChild(dismissBtn);
+
+      // Allow dismiss by tapping the toast itself
+      toast.addEventListener('click', function (e) {
+        if (e.target !== dismissBtn) {
+          dismissWarning(ruleId);
+        }
+      });
+
+      container.appendChild(toast);
+
+      // Auto-dismiss after 6 seconds (Req 4.4)
+      var timeout = setTimeout(function () {
+        _dismissWithAnimation(ruleId);
+      }, AUTO_DISMISS_MS);
+
+      _activeWarnings[ruleId] = {
+        element: toast,
+        timeout: timeout,
+        message: message
+      };
+
+      // Emit event
+      EventBus.emit('rule:warning_shown', { ruleId: ruleId, message: message });
+    }
+
+    /**
+     * Dismiss a specific warning toast with exit animation.
+     * @param {string} ruleId
+     */
+    function dismissWarning(ruleId) {
+      _dismissWithAnimation(ruleId);
+    }
+
+    /**
+     * Dismiss a warning immediately (no animation) when violation no longer applies.
+     * @param {string} ruleId
+     */
+    function _dismissWarningImmediate(ruleId) {
+      var warning = _activeWarnings[ruleId];
+      if (!warning) return;
+
+      clearTimeout(warning.timeout);
+      if (warning.element && warning.element.parentNode) {
+        warning.element.parentNode.removeChild(warning.element);
+      }
+      delete _activeWarnings[ruleId];
+
+      EventBus.emit('rule:warning_dismissed', { ruleId: ruleId });
+    }
+
+    /**
+     * Dismiss a warning with exit animation.
+     * @param {string} ruleId
+     */
+    function _dismissWithAnimation(ruleId) {
+      var warning = _activeWarnings[ruleId];
+      if (!warning) return;
+
+      clearTimeout(warning.timeout);
+
+      if (warning.element) {
+        warning.element.classList.remove('rule-warning-toast--enter');
+        warning.element.classList.add('rule-warning-toast--exit');
+
+        // Remove after animation completes
+        setTimeout(function () {
+          if (warning.element && warning.element.parentNode) {
+            warning.element.parentNode.removeChild(warning.element);
+          }
+        }, 300);
+      }
+
+      delete _activeWarnings[ruleId];
+      EventBus.emit('rule:warning_dismissed', { ruleId: ruleId });
+    }
+
+    /**
+     * Clear all active warnings (e.g., when form is reset or view changes).
+     */
+    function clearAll() {
+      for (var ruleId in _activeWarnings) {
+        if (Object.prototype.hasOwnProperty.call(_activeWarnings, ruleId)) {
+          _dismissWarningImmediate(ruleId);
+        }
+      }
+      _warningQueue = [];
+      if (_queueTimer) {
+        clearTimeout(_queueTimer);
+        _queueTimer = null;
+      }
+      _lastCheck = {};
+    }
+
+    /**
+     * Debounced input handler for entry form fields.
+     */
+    function _onInputChange() {
+      if (!_active) return;
+      if (_debounceTimer) clearTimeout(_debounceTimer);
+      _debounceTimer = setTimeout(function () {
+        check();
+      }, DEBOUNCE_MS);
+    }
+
+    /**
+     * Bind input event listeners to entry form fields.
+     */
+    function _bindFormEvents() {
+      var hoursInput = document.getElementById('entry-hours');
+      var dateInput = document.getElementById('entry-date');
+      var jobSelect = document.getElementById('entry-job');
+
+      if (hoursInput) {
+        hoursInput.addEventListener('input', _onInputChange);
+      }
+      if (dateInput) {
+        dateInput.addEventListener('change', _onInputChange);
+      }
+      if (jobSelect) {
+        jobSelect.addEventListener('change', _onInputChange);
+      }
+    }
+
+    /**
+     * Initialize: bind to entry form input events, subscribe to navigation events.
+     */
+    function init() {
+      _bindFormEvents();
+
+      // Activate/deactivate when entry view shown/hidden
+      EventBus.on('navigation:change', function (data) {
+        if (data && data.view === 'view-entry') {
+          _active = true;
+        } else {
+          _active = false;
+          clearAll();
+        }
+      });
+
+      // Check if we're already on the entry view
+      if (NavigationController.getActiveView() === 'view-entry') {
+        _active = true;
+      }
+    }
+
+    return { init: init, check: check, dismissWarning: dismissWarning, clearAll: clearAll };
+  })();
+
+  // ─── MinijobForecastWidget ──────────────────────────────────────────────────
+  // Displays projected annual earnings for active Minijobs with traffic-light
+  // status indicators and warnings when approaching the 7,236€ limit.
+  // Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8
+  const MinijobForecastWidget = (function () {
+    var ANNUAL_LIMIT = 7236;       // 12 × 603€
+    var WARNING_THRESHOLD = 5789;  // ~80% of limit
+
+    /**
+     * Initializes the widget: checks for active Minijobs, renders if applicable,
+     * and subscribes to relevant EventBus events.
+     */
+    function init() {
+      // Subscribe to events that require recalculation
+      EventBus.on('workday:saved', function () { update(); });
+      EventBus.on('workday:deleted', function () { update(); });
+      EventBus.on('income:updated', function () { update(); });
+      EventBus.on('job:created', function () { update(); });
+      EventBus.on('job:deleted', function () { update(); });
+
+      // Initial render
+      update();
+    }
+
+    /**
+     * Recalculates and re-renders the forecast widget.
+     */
+    function update() {
+      var widget = document.getElementById('minijob-forecast-widget');
+      if (!widget) return;
+
+      // Get active Minijobs
+      var activeMinijobs = _getActiveMinijobs();
+
+      // Show/hide widget based on whether active Minijobs exist
+      if (activeMinijobs.length === 0) {
+        widget.classList.add('forecast-widget--hidden');
+        return;
+      }
+
+      widget.classList.remove('forecast-widget--hidden');
+
+      // Calculate forecast
+      var forecast = getForecast();
+
+      // Update DOM elements
+      _renderForecast(forecast);
+    }
+
+    /**
+     * Gets current forecast data.
+     * @returns {{ ytd: number, projected: number, remaining: number, status: string }}
+     */
+    function getForecast() {
+      var activeMinijobs = _getActiveMinijobs();
+
+      if (activeMinijobs.length === 0) {
+        return { ytd: 0, projected: 0, remaining: ANNUAL_LIMIT, status: 'safe' };
+      }
+
+      var now = new Date();
+      var currentYear = now.getFullYear();
+      var currentMonth = now.getMonth() + 1; // 1-12
+
+      // Calculate year-to-date earnings from all active Minijobs
+      var ytdEarnings = _calculateYTDEarnings(activeMinijobs, currentYear);
+
+      // Calculate elapsed months (fully elapsed calendar months, min 1)
+      var elapsedMonths = _getElapsedMonths(currentMonth);
+
+      // Handle January edge case: no entries exist
+      var hasEntries = _hasEntriesInYear(activeMinijobs, currentYear);
+      if (currentMonth === 1 && !hasEntries) {
+        return { ytd: 0, projected: 0, remaining: ANNUAL_LIMIT, status: 'safe' };
+      }
+
+      // Calculate projected annual
+      var projected = (ytdEarnings / elapsedMonths) * 12;
+
+      // Calculate remaining budget
+      var remaining = ANNUAL_LIMIT - ytdEarnings;
+
+      // Determine status
+      var status;
+      if (projected > ANNUAL_LIMIT) {
+        status = 'danger';
+      } else if (projected >= WARNING_THRESHOLD) {
+        status = 'warning';
+      } else {
+        status = 'safe';
+      }
+
+      return {
+        ytd: Math.round(ytdEarnings * 100) / 100,
+        projected: Math.round(projected * 100) / 100,
+        remaining: Math.round(remaining * 100) / 100,
+        status: status
+      };
+    }
+
+    /**
+     * Returns active Minijob jobs (start_date <= today AND (end_date is null OR end_date >= today)).
+     * @returns {object[]}
+     */
+    function _getActiveMinijobs() {
+      var activeJobs = JobManager.getActiveJobs();
+      return activeJobs.filter(function (job) {
+        return job.type === 'Minijob';
+      });
+    }
+
+    /**
+     * Calculates year-to-date gross earnings from all active Minijobs.
+     * Uses IncomeEngine.calculateMonthlyBrutto for each month up to the current month.
+     * @param {object[]} minijobs - Array of active Minijob objects
+     * @param {number} year - Current year
+     * @returns {number}
+     */
+    function _calculateYTDEarnings(minijobs, year) {
+      var now = new Date();
+      var currentMonth = now.getMonth() + 1;
+      var total = 0;
+
+      for (var i = 0; i < minijobs.length; i++) {
+        for (var m = 1; m <= currentMonth; m++) {
+          total += IncomeEngine.calculateMonthlyBrutto(minijobs[i].id, year, m);
+        }
+      }
+
+      return total;
+    }
+
+    /**
+     * Returns the number of fully elapsed calendar months (min 1).
+     * In January, this returns 1 (since no months have fully elapsed, we use min 1).
+     * In February, 1 month has elapsed (January). In March, 2 months, etc.
+     * @param {number} currentMonth - Current month (1-12)
+     * @returns {number}
+     */
+    function _getElapsedMonths(currentMonth) {
+      // Fully elapsed months = currentMonth - 1 (e.g., in March, Jan and Feb are elapsed)
+      // But we use min 1 to avoid division by zero
+      var elapsed = currentMonth - 1;
+      return elapsed < 1 ? 1 : elapsed;
+    }
+
+    /**
+     * Checks if any workday entries exist for the given Minijobs in the given year.
+     * @param {object[]} minijobs
+     * @param {number} year
+     * @returns {boolean}
+     */
+    function _hasEntriesInYear(minijobs, year) {
+      var workdays = AppState.getState().workdays;
+      var prefix = String(year) + '-';
+
+      for (var i = 0; i < minijobs.length; i++) {
+        for (var j = 0; j < workdays.length; j++) {
+          if (workdays[j].jobId === minijobs[i].id && workdays[j].date && workdays[j].date.startsWith(prefix)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    /**
+     * Renders the forecast data into the DOM.
+     * @param {{ ytd: number, projected: number, remaining: number, status: string }} forecast
+     */
+    function _renderForecast(forecast) {
+      var ytdEl = document.getElementById('minijob-forecast-ytd');
+      var projectedEl = document.getElementById('minijob-forecast-projected');
+      var remainingEl = document.getElementById('minijob-forecast-remaining');
+      var statusEl = document.getElementById('minijob-forecast-status');
+      var warningEl = document.getElementById('minijob-forecast-warning');
+      var progressFill = document.querySelector('.forecast-progress-fill');
+
+      if (ytdEl) ytdEl.textContent = _formatCurrency(forecast.ytd);
+      if (projectedEl) projectedEl.textContent = _formatCurrency(forecast.projected);
+      if (remainingEl) remainingEl.textContent = _formatCurrency(forecast.remaining);
+
+      // Update status indicator
+      if (statusEl) {
+        statusEl.className = 'forecast-status forecast-status--' + forecast.status;
+      }
+
+      // Update warning text
+      if (warningEl) {
+        if (forecast.status === 'danger') {
+          warningEl.textContent = 'Jahresgrenze wird voraussichtlich überschritten';
+          warningEl.style.display = '';
+        } else {
+          warningEl.textContent = '';
+          warningEl.style.display = 'none';
+        }
+      }
+
+      // Update progress bar fill width proportional to ytd/limit
+      if (progressFill) {
+        var percentage = Math.min((forecast.ytd / ANNUAL_LIMIT) * 100, 100);
+        progressFill.style.width = percentage + '%';
+      }
+    }
+
+    /**
+     * Formats a number as German currency (e.g., 1.234,56 €).
+     * @param {number} value
+     * @returns {string}
+     */
+    function _formatCurrency(value) {
+      var parts = value.toFixed(2).split('.');
+      var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      return intPart + ',' + parts[1] + ' €';
+    }
+
+    return { init: init, update: update, getForecast: getForecast };
+  })();
+
+  // ─── TaxSimulator ──────────────────────────────────────────────────────────────
+  // Interactive slider widget that simulates the net income impact of additional
+  // work hours using the user's tax profile and IncomeEngine calculations.
+  // Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7
+  const TaxSimulator = (function () {
+    var _expanded = false;
+    var _selectedJobId = null;
+    var _currentHours = 0;
+
+    /**
+     * Initialize: render collapsed widget, bind slider and toggle events,
+     * subscribe to EventBus for recalculation triggers.
+     */
+    function init() {
+      var toggleBtn = document.getElementById('tax-simulator-toggle');
+      var slider = document.getElementById('tax-simulator-slider');
+      var jobSelect = document.getElementById('tax-simulator-job-select');
+
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', function () {
+          toggle();
+        });
+      }
+
+      if (slider) {
+        slider.addEventListener('input', function () {
+          _currentHours = parseInt(slider.value, 10) || 0;
+          slider.setAttribute('aria-valuenow', _currentHours);
+          _updateSliderValueDisplay();
+          _runSimulation();
+          EventBus.emit('tax:slider_changed', { hours: _currentHours });
+        });
+      }
+
+      if (jobSelect) {
+        jobSelect.addEventListener('change', function () {
+          _selectedJobId = jobSelect.value || null;
+          _runSimulation();
+        });
+      }
+
+      // Handle missing-profile link navigation
+      var missingProfileEl = document.getElementById('tax-simulator-missing-profile');
+      if (missingProfileEl) {
+        var link = missingProfileEl.querySelector('a[data-navigate]');
+        if (link) {
+          link.addEventListener('click', function (e) {
+            e.preventDefault();
+            var target = link.getAttribute('data-navigate');
+            if (target && NavigationController) {
+              NavigationController.switchTo(target);
+            }
+          });
+        }
+      }
+
+      // Populate job dropdown
+      _populateJobSelect();
+
+      // Subscribe to EventBus events for recalculation
+      EventBus.on('income:updated', function () {
+        if (_expanded) {
+          _runSimulation();
+        }
+      });
+
+      EventBus.on('profile:updated', function () {
+        if (_expanded) {
+          _checkProfile();
+          _runSimulation();
+        }
+      });
+
+      EventBus.on('job:created', function () {
+        _populateJobSelect();
+      });
+
+      EventBus.on('job:deleted', function () {
+        _populateJobSelect();
+        if (_expanded) {
+          _runSimulation();
+        }
+      });
+
+      EventBus.on('job:updated', function () {
+        _populateJobSelect();
+        if (_expanded) {
+          _runSimulation();
+        }
+      });
+    }
+
+    /**
+     * Calculate net income for additional hours.
+     * @param {number} additionalHours - 0 to 80
+     * @param {string} jobId - Job to use for hourly rate
+     * @returns {{ grossAdd: number, netAdd: number, effectiveRate: number }}
+     */
+    function simulate(additionalHours, jobId) {
+      if (!additionalHours || additionalHours <= 0) {
+        return { grossAdd: 0, netAdd: 0, effectiveRate: 0 };
+      }
+
+      var job = JobManager.getJob(jobId);
+      if (!job || !job.hourlyRate) {
+        return { grossAdd: 0, netAdd: 0, effectiveRate: 0 };
+      }
+
+      var additionalGross = additionalHours * job.hourlyRate;
+
+      // Get current month's gross for this job
+      var now = new Date();
+      var year = now.getFullYear();
+      var month = now.getMonth() + 1;
+
+      var currentMonthGross = IncomeEngine.calculateMonthlyBrutto(jobId, year, month);
+
+      // Calculate current net
+      var currentNetResult = IncomeEngine.calculateMonthlyNetto(jobId, year, month);
+      if (!currentNetResult.available) {
+        return { grossAdd: additionalGross, netAdd: 0, effectiveRate: 0 };
+      }
+      var currentMonthNet = currentNetResult.netto;
+
+      // Calculate simulated net by computing netto for (currentGross + additionalGross)
+      // We need to use the same calculation logic but with a higher brutto
+      // Since calculateMonthlyNetto works from workday data, we simulate by
+      // computing the netto for the combined gross directly using the job type logic
+      var simulatedNet = _calculateNetForGross(currentMonthGross + additionalGross, job);
+      if (simulatedNet === null) {
+        return { grossAdd: additionalGross, netAdd: 0, effectiveRate: 0 };
+      }
+
+      var netDelta = simulatedNet - currentMonthNet;
+      var effectiveRate = additionalGross > 0
+        ? ((additionalGross - netDelta) / additionalGross) * 100
+        : 0;
+
+      return {
+        grossAdd: Math.round(additionalGross * 100) / 100,
+        netAdd: Math.round(netDelta * 100) / 100,
+        effectiveRate: Math.round(effectiveRate * 10) / 10
+      };
+    }
+
+    /**
+     * Toggle widget expanded/collapsed state.
+     */
+    function toggle() {
+      _expanded = !_expanded;
+
+      var widget = document.getElementById('tax-simulator-widget');
+      var toggleBtn = document.getElementById('tax-simulator-toggle');
+      var body = document.getElementById('tax-simulator-body');
+
+      if (widget) {
+        if (_expanded) {
+          widget.classList.remove('tax-simulator--collapsed');
+          widget.classList.add('tax-simulator--expanded');
+        } else {
+          widget.classList.add('tax-simulator--collapsed');
+          widget.classList.remove('tax-simulator--expanded');
+        }
+      }
+
+      if (toggleBtn) {
+        toggleBtn.setAttribute('aria-expanded', String(_expanded));
+      }
+
+      if (body) {
+        if (_expanded) {
+          body.removeAttribute('hidden');
+        } else {
+          body.setAttribute('hidden', '');
+        }
+      }
+
+      if (_expanded) {
+        _populateJobSelect();
+        _checkProfile();
+        _runSimulation();
+      }
+    }
+
+    // ─── Private Methods ──────────────────────────────────────────────────────────
+
+    /**
+     * Calculate net income for a given gross amount using the job's type and user profile.
+     * Replicates IncomeEngine logic for a hypothetical gross value.
+     * @param {number} brutto - Total gross amount
+     * @param {object} job - Job object with type
+     * @returns {number|null} Net amount, or null if calculation unavailable
+     */
+    function _calculateNetForGross(brutto, job) {
+      if (!job) return null;
+
+      var year = new Date().getFullYear();
+      var config = RuleConfigEngine.getConfig(year);
+      var userProfile = AppState.getState().userProfile;
+
+      // Minijob: AN-Eigenanteil Rentenversicherung 3,6%
+      if (job.type === 'Minijob') {
+        var minijobRVRate = 0.036;
+        return Math.round((brutto - (brutto * minijobRVRate)) * 100) / 100;
+      }
+
+      // KFB: Pauschale Lohnsteuer 25% + Soli + ggf. Kirchensteuer
+      if (job.type === 'KFB') {
+        var kfbIncomeTax = brutto * 0.25;
+        var kfbSoli = kfbIncomeTax * config.solidaritaetszuschlag;
+        var kfbKirchensteuer = 0;
+        if (userProfile && userProfile.kirchensteuer && userProfile.bundesland) {
+          var ksRate = (userProfile.bundesland === 'Bayern' || userProfile.bundesland === 'Baden-Württemberg') ? 0.08 : 0.09;
+          kfbKirchensteuer = kfbIncomeTax * ksRate;
+        }
+        var kfbNetto = brutto - kfbIncomeTax - kfbSoli - kfbKirchensteuer;
+        return Math.round(Math.max(kfbNetto, 0) * 100) / 100;
+      }
+
+      // Werkstudent: only pension insurance (9.3%)
+      if (job.type === 'Werkstudent') {
+        var pensionRate = config.socialInsuranceRates.pension;
+        return Math.round((brutto - (brutto * pensionRate)) * 100) / 100;
+      }
+
+      // Teilzeit / Vollzeit: full tax + social insurance
+      if (!userProfile || !userProfile.steuerklasse || !userProfile.bundesland) {
+        return null;
+      }
+
+      var socialRates = config.socialInsuranceRates;
+      var pensionContrib = brutto * socialRates.pension;
+      var healthContrib = 0;
+      var careContrib = 0;
+      var unemploymentContrib = brutto * socialRates.unemployment;
+
+      var kvTyp = userProfile.krankenversicherung || 'gesetzlich';
+      if (kvTyp === 'gesetzlich') {
+        healthContrib = brutto * socialRates.health;
+        var careRate = socialRates.care;
+        if (!userProfile.hasChildren) {
+          careRate = socialRates.careChildless;
+        }
+        if (userProfile.bundesland === 'Sachsen') {
+          careRate += 0.005;
+        }
+        careContrib = brutto * careRate;
+      }
+
+      var totalSocial = pensionContrib + healthContrib + careContrib + unemploymentContrib;
+
+      // Income tax approximation using progressive rates
+      var monthlyIncomeTax = _approximateIncomeTax(brutto, userProfile.steuerklasse);
+
+      // Solidaritätszuschlag
+      var monthlySoli = _approximateSoli(monthlyIncomeTax, userProfile.steuerklasse, config.solidaritaetszuschlag);
+
+      // Kirchensteuer
+      var monthlyKirchensteuer = 0;
+      if (userProfile.kirchensteuer) {
+        var ksRate2 = (userProfile.bundesland === 'Bayern' || userProfile.bundesland === 'Baden-Württemberg') ? 0.08 : 0.09;
+        monthlyKirchensteuer = monthlyIncomeTax * ksRate2;
+      }
+
+      var totalDeductions = totalSocial + monthlyIncomeTax + monthlySoli + monthlyKirchensteuer;
+      var netto = brutto - totalDeductions;
+      return Math.round(Math.max(netto, 0) * 100) / 100;
+    }
+
+    /**
+     * Approximate monthly income tax using simplified progressive brackets.
+     * Uses the same logic as IncomeEngine's _calculateIncomeTax if available.
+     * @param {number} monthlyBrutto
+     * @param {string} steuerklasse
+     * @returns {number}
+     */
+    function _approximateIncomeTax(monthlyBrutto, steuerklasse) {
+      // Use IncomeEngine's internal calculation by computing the difference
+      // between two netto calculations. Since we can't call the private function
+      // directly, we use a simplified progressive tax approximation.
+      var annualBrutto = monthlyBrutto * 12;
+      var taxableIncome = annualBrutto;
+
+      // Basic allowance per Steuerklasse
+      var basicAllowance = 11784; // 2026 Grundfreibetrag
+      if (steuerklasse === '3') {
+        basicAllowance = basicAllowance * 2;
+      } else if (steuerklasse === '5' || steuerklasse === '6') {
+        basicAllowance = 0;
+      }
+
+      taxableIncome = Math.max(taxableIncome - basicAllowance, 0);
+
+      // Simplified progressive tax calculation (German 2026 approximation)
+      var annualTax = 0;
+      if (taxableIncome <= 0) {
+        annualTax = 0;
+      } else if (taxableIncome <= 17005) {
+        // Zone 2: 14% to ~24%
+        var y = (taxableIncome - 1) / 10000;
+        annualTax = (922.98 * y + 1400) * y;
+      } else if (taxableIncome <= 66760) {
+        // Zone 3: ~24% to 42%
+        var z = (taxableIncome - 17005) / 10000;
+        annualTax = (181.19 * z + 2397) * z + 991.21;
+      } else if (taxableIncome <= 277825) {
+        // Zone 4: 42%
+        annualTax = 0.42 * taxableIncome - 10636.31;
+      } else {
+        // Zone 5: 45%
+        annualTax = 0.45 * taxableIncome - 18971.06;
+      }
+
+      annualTax = Math.max(annualTax, 0);
+      return Math.round((annualTax / 12) * 100) / 100;
+    }
+
+    /**
+     * Approximate Solidaritätszuschlag.
+     * @param {number} incomeTax - Monthly income tax
+     * @param {string} steuerklasse
+     * @param {number} soliRate - 0.055
+     * @returns {number}
+     */
+    function _approximateSoli(incomeTax, steuerklasse, soliRate) {
+      // Soli exemption threshold (monthly): ~1,413€/month for Steuerklasse 1
+      // Simplified: no Soli if annual tax < ~18,130€ (Steuerklasse 1)
+      var annualTax = incomeTax * 12;
+      var threshold = 18130;
+      if (steuerklasse === '3') {
+        threshold = 36260;
+      }
+      if (annualTax <= threshold) {
+        return 0;
+      }
+      return Math.round((incomeTax * soliRate) * 100) / 100;
+    }
+
+    /**
+     * Populate the job selection dropdown with available jobs.
+     */
+    function _populateJobSelect() {
+      var jobSelect = document.getElementById('tax-simulator-job-select');
+      if (!jobSelect) return;
+
+      var jobs = JobManager.getAllJobs();
+      var previousValue = jobSelect.value;
+
+      jobSelect.innerHTML = '';
+
+      for (var i = 0; i < jobs.length; i++) {
+        var option = document.createElement('option');
+        option.value = jobs[i].id;
+        option.textContent = jobs[i].name || jobs[i].employer || ('Job ' + (i + 1));
+        jobSelect.appendChild(option);
+      }
+
+      // Restore previous selection or default to first job
+      if (previousValue && jobSelect.querySelector('option[value="' + previousValue + '"]')) {
+        jobSelect.value = previousValue;
+      } else if (jobs.length > 0) {
+        jobSelect.value = jobs[0].id;
+      }
+
+      _selectedJobId = jobSelect.value || null;
+
+      // Show/hide job select based on number of jobs
+      var jobSelectGroup = jobSelect.closest('.form-group');
+      if (jobSelectGroup) {
+        jobSelectGroup.style.display = jobs.length > 1 ? '' : 'none';
+      }
+
+      // If only one job, still set the selected job
+      if (jobs.length === 1) {
+        _selectedJobId = jobs[0].id;
+      }
+    }
+
+    /**
+     * Check if the user profile has required tax settings.
+     * Shows/hides the missing profile message accordingly.
+     * @returns {boolean} True if profile is complete
+     */
+    function _checkProfile() {
+      var userProfile = AppState.getState().userProfile;
+      var missingEl = document.getElementById('tax-simulator-missing-profile');
+      var slider = document.getElementById('tax-simulator-slider');
+      var jobSelect = document.getElementById('tax-simulator-job-select');
+
+      // For Teilzeit/Vollzeit jobs, we need steuerklasse, bundesland, and krankenversicherung
+      // For Minijob/Werkstudent/KFB, profile is not strictly required
+      var job = _selectedJobId ? JobManager.getJob(_selectedJobId) : null;
+      var needsProfile = job && (job.type === 'Teilzeit' || job.type === 'Vollzeit');
+
+      var profileMissing = needsProfile && (!userProfile || !userProfile.steuerklasse || !userProfile.bundesland || !userProfile.krankenversicherung);
+
+      if (missingEl) {
+        missingEl.style.display = profileMissing ? '' : 'none';
+      }
+
+      // Disable slider when profile is missing
+      if (slider) {
+        slider.disabled = profileMissing;
+      }
+
+      return !profileMissing;
+    }
+
+    /**
+     * Update the slider value display element.
+     */
+    function _updateSliderValueDisplay() {
+      var valueEl = document.getElementById('tax-simulator-slider-value');
+      if (valueEl) {
+        valueEl.textContent = _currentHours;
+      }
+    }
+
+    /**
+     * Run the simulation with current slider value and selected job, update UI.
+     */
+    function _runSimulation() {
+      if (!_selectedJobId) return;
+
+      if (!_checkProfile()) return;
+
+      var result = simulate(_currentHours, _selectedJobId);
+
+      // Update result displays
+      var grossEl = document.getElementById('tax-simulator-gross-add');
+      var netEl = document.getElementById('tax-simulator-net-add');
+      var rateEl = document.getElementById('tax-simulator-rate');
+
+      if (grossEl) {
+        grossEl.textContent = _formatCurrency(result.grossAdd);
+      }
+      if (netEl) {
+        netEl.textContent = _formatCurrency(result.netAdd);
+      }
+      if (rateEl) {
+        rateEl.textContent = result.effectiveRate.toFixed(1).replace('.', ',') + ' %';
+      }
+
+      // Update comparison bar
+      _updateComparisonBar(result);
+    }
+
+    /**
+     * Update the comparison bar showing current vs simulated income.
+     * @param {{ grossAdd: number, netAdd: number }} result
+     */
+    function _updateComparisonBar(result) {
+      var barCurrent = document.getElementById('tax-simulator-bar-current');
+      var barSimulated = document.getElementById('tax-simulator-bar-simulated');
+
+      if (!barCurrent || !barSimulated) return;
+
+      // Get current month's net income for the selected job
+      var now = new Date();
+      var year = now.getFullYear();
+      var month = now.getMonth() + 1;
+
+      var currentNetResult = IncomeEngine.calculateMonthlyNetto(_selectedJobId, year, month);
+      var currentNet = currentNetResult.available ? currentNetResult.netto : 0;
+      var simulatedAdd = result.netAdd || 0;
+
+      var total = currentNet + Math.max(simulatedAdd, 0);
+
+      if (total <= 0) {
+        barCurrent.style.width = '100%';
+        barSimulated.style.width = '0%';
+        barCurrent.textContent = '';
+        barSimulated.textContent = '';
+        return;
+      }
+
+      var currentPercent = (currentNet / total) * 100;
+      var simulatedPercent = (Math.max(simulatedAdd, 0) / total) * 100;
+
+      barCurrent.style.width = currentPercent.toFixed(1) + '%';
+      barSimulated.style.width = simulatedPercent.toFixed(1) + '%';
+
+      // Add labels if segments are wide enough
+      barCurrent.textContent = currentNet > 0 ? _formatCurrency(currentNet) : '';
+      barSimulated.textContent = simulatedAdd > 0 ? '+' + _formatCurrency(simulatedAdd) : '';
+    }
+
+    /**
+     * Format a number as German currency string.
+     * @param {number} value
+     * @returns {string}
+     */
+    function _formatCurrency(value) {
+      return value.toFixed(2).replace('.', ',') + ' €';
+    }
+
+    return {
+      init: init,
+      simulate: simulate,
+      toggle: toggle
+    };
+  })();
+
+  // ─── GeoReminderService ────────────────────────────────────────────────────────
+  // Monitors device location relative to configured workplace coordinates and
+  // triggers push notifications when the user leaves the geofence (200m radius).
+  // Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9
+  const GeoReminderService = (function () {
+    var STORAGE_KEY = 'jt_geo_reminders';
+    var GEOFENCE_RADIUS_M = 200;
+    var EARTH_RADIUS_M = 6371000;
+
+    // Geolocation watchPosition options
+    var WATCH_OPTIONS = {
+      enableHighAccuracy: false,
+      maximumAge: 60000,
+      timeout: 300000
+    };
+
+    var _reminders = {};       // { jobId: { lat, lng, enabled, lastNotifiedDate } }
+    var _watchId = null;       // geolocation watchPosition ID
+    var _insideState = {};     // { jobId: boolean } — true if inside geofence
+    var _initialized = false;
+
+    /**
+     * Initialize: load saved locations, subscribe to events, start monitoring.
+     */
+    function init() {
+      if (_initialized) return;
+      _initialized = true;
+
+      _loadReminders();
+
+      // Subscribe to EventBus events
+      EventBus.on('job:deleted', function (data) {
+        if (data && data.id) {
+          removeLocation(data.id);
+        }
+      });
+
+      EventBus.on('job:updated', function (data) {
+        if (data && data.id && _reminders[data.id]) {
+          // Check if job is still active; if not, stop monitoring for it
+          var jobs = AppState.get('jobs') || [];
+          var job = null;
+          for (var i = 0; i < jobs.length; i++) {
+            if (jobs[i].id === data.id) { job = jobs[i]; break; }
+          }
+          if (!job) {
+            removeLocation(data.id);
+          }
+        }
+      });
+
+      // Start monitoring if there are active reminders
+      _startMonitoring();
+    }
+
+    /**
+     * Set workplace coordinates for a job.
+     * @param {string} jobId
+     * @param {number} lat - Latitude (6 decimal places)
+     * @param {number} lng - Longitude (6 decimal places)
+     * @returns {{ success: boolean, error?: string }}
+     */
+    function setLocation(jobId, lat, lng) {
+      // Validate coordinates
+      if (typeof lat !== 'number' || typeof lng !== 'number') {
+        return { success: false, error: 'Koordinaten müssen Zahlen sein.' };
+      }
+      if (lat < -90 || lat > 90) {
+        return { success: false, error: 'Breitengrad muss zwischen -90 und 90 liegen.' };
+      }
+      if (lng < -180 || lng > 180) {
+        return { success: false, error: 'Längengrad muss zwischen -180 und 180 liegen.' };
+      }
+
+      // Round to 6 decimal places precision
+      var roundedLat = Math.round(lat * 1000000) / 1000000;
+      var roundedLng = Math.round(lng * 1000000) / 1000000;
+
+      _reminders[jobId] = {
+        lat: roundedLat,
+        lng: roundedLng,
+        enabled: true,
+        lastNotifiedDate: null
+      };
+
+      _persistReminders();
+
+      // Establish baseline: user is currently inside the geofence
+      _insideState[jobId] = true;
+
+      // Start monitoring if not already active
+      _startMonitoring();
+
+      return { success: true };
+    }
+
+    /**
+     * Remove workplace coordinates for a job.
+     * @param {string} jobId
+     */
+    function removeLocation(jobId) {
+      if (_reminders[jobId]) {
+        delete _reminders[jobId];
+        delete _insideState[jobId];
+        _persistReminders();
+
+        // Stop monitoring if no active reminders remain
+        if (Object.keys(_reminders).length === 0) {
+          _stopMonitoring();
+        }
+      }
+    }
+
+    /**
+     * Get current location via Geolocation API (for "use current position").
+     * @param {Function} callback - Receives { lat, lng } or { error }
+     */
+    function getCurrentPosition(callback) {
+      if (!navigator.geolocation) {
+        callback({ error: 'Geolocation API nicht verfügbar.' });
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        function (position) {
+          var lat = Math.round(position.coords.latitude * 1000000) / 1000000;
+          var lng = Math.round(position.coords.longitude * 1000000) / 1000000;
+          callback({ lat: lat, lng: lng });
+        },
+        function (error) {
+          if (error.code === error.PERMISSION_DENIED) {
+            showToast('Standort-Erinnerungen benötigen die Standortberechtigung.', 5000);
+            EventBus.emit('geo:permission_denied', {});
+            callback({ error: 'permission_denied' });
+          } else {
+            callback({ error: error.message || 'Position nicht verfügbar.' });
+          }
+        },
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+      );
+    }
+
+    /**
+     * Check if geo-reminders are active for a job.
+     * @param {string} jobId
+     * @returns {boolean}
+     */
+    function isActive(jobId) {
+      return !!(_reminders[jobId] && _reminders[jobId].enabled);
+    }
+
+    /**
+     * Stop all monitoring (e.g., on app teardown).
+     */
+    function stopAll() {
+      _stopMonitoring();
+      _insideState = {};
+    }
+
+    // ── Private Methods ──
+
+    /**
+     * Load reminders from localStorage.
+     */
+    function _loadReminders() {
+      var result = LocalStorageManager.load(STORAGE_KEY);
+      if (result.success && result.data !== null && typeof result.data === 'object') {
+        _reminders = result.data;
+        // Initialize inside state for all enabled reminders
+        for (var jobId in _reminders) {
+          if (_reminders.hasOwnProperty(jobId) && _reminders[jobId].enabled) {
+            // Assume inside on load (Req 2.9: only trigger on transition from inside to outside)
+            _insideState[jobId] = true;
+          }
+        }
+      }
+    }
+
+    /**
+     * Persist reminders to localStorage.
+     */
+    function _persistReminders() {
+      LocalStorageManager.save(STORAGE_KEY, _reminders);
+    }
+
+    /**
+     * Start geofence monitoring via watchPosition.
+     */
+    function _startMonitoring() {
+      // Don't start if no enabled reminders
+      var hasActive = false;
+      for (var jobId in _reminders) {
+        if (_reminders.hasOwnProperty(jobId) && _reminders[jobId].enabled) {
+          hasActive = true;
+          break;
+        }
+      }
+      if (!hasActive) return;
+
+      // Don't start if already watching
+      if (_watchId !== null) return;
+
+      // Check geolocation support
+      if (!navigator.geolocation) return;
+
+      _watchId = navigator.geolocation.watchPosition(
+        _onPositionUpdate,
+        _onPositionError,
+        WATCH_OPTIONS
+      );
+    }
+
+    /**
+     * Stop geofence monitoring.
+     */
+    function _stopMonitoring() {
+      if (_watchId !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(_watchId);
+        _watchId = null;
+      }
+    }
+
+    /**
+     * Handle position update from watchPosition.
+     * @param {GeolocationPosition} position
+     */
+    function _onPositionUpdate(position) {
+      var currentLat = position.coords.latitude;
+      var currentLng = position.coords.longitude;
+
+      for (var jobId in _reminders) {
+        if (!_reminders.hasOwnProperty(jobId)) continue;
+        var reminder = _reminders[jobId];
+        if (!reminder.enabled) continue;
+
+        var distance = _haversineDistance(
+          currentLat, currentLng,
+          reminder.lat, reminder.lng
+        );
+
+        var isInside = distance <= GEOFENCE_RADIUS_M;
+        var wasInside = _insideState[jobId] !== false; // default to true if unknown
+
+        // Update state
+        _insideState[jobId] = isInside;
+
+        // Only trigger on transition from inside to outside
+        if (wasInside && !isInside) {
+          _triggerNotification(jobId);
+        }
+      }
+    }
+
+    /**
+     * Handle position error from watchPosition.
+     * Retry at next interval, do not trigger notification.
+     * @param {GeolocationPositionError} error
+     */
+    function _onPositionError(error) {
+      if (error.code === error.PERMISSION_DENIED) {
+        // Permission denied: show toast, disable all reminders, emit event
+        showToast('Standort-Erinnerungen benötigen die Standortberechtigung.', 5000);
+
+        // Disable all reminders
+        for (var jobId in _reminders) {
+          if (_reminders.hasOwnProperty(jobId)) {
+            _reminders[jobId].enabled = false;
+          }
+        }
+        _persistReminders();
+        _stopMonitoring();
+
+        EventBus.emit('geo:permission_denied', {});
+      }
+      // For other errors (POSITION_UNAVAILABLE, TIMEOUT): do nothing,
+      // watchPosition will retry at next interval automatically
+    }
+
+    /**
+     * Trigger a notification for a job leaving the geofence.
+     * Enforces one notification per job per calendar day.
+     * @param {string} jobId
+     */
+    function _triggerNotification(jobId) {
+      var today = _getTodayDateString();
+
+      // Enforce one notification per job per calendar day
+      if (_reminders[jobId].lastNotifiedDate === today) {
+        return;
+      }
+
+      // Check Notification API permission
+      if (!('Notification' in window)) return;
+
+      if (Notification.permission === 'denied') {
+        showToast('Benachrichtigungen benötigen die Berechtigung.', 5000);
+        _reminders[jobId].enabled = false;
+        _persistReminders();
+        return;
+      }
+
+      if (Notification.permission === 'granted') {
+        _sendNotification(jobId, today);
+      } else {
+        // Request permission
+        Notification.requestPermission().then(function (permission) {
+          if (permission === 'granted') {
+            _sendNotification(jobId, today);
+          } else {
+            showToast('Benachrichtigungen benötigen die Berechtigung.', 5000);
+            _reminders[jobId].enabled = false;
+            _persistReminders();
+          }
+        });
+      }
+    }
+
+    /**
+     * Send the actual notification and update lastNotifiedDate.
+     * @param {string} jobId
+     * @param {string} today - Date string YYYY-MM-DD
+     */
+    function _sendNotification(jobId, today) {
+      // Get job name for notification body
+      var jobName = '';
+      var jobs = AppState.get('jobs') || [];
+      for (var i = 0; i < jobs.length; i++) {
+        if (jobs[i].id === jobId) {
+          jobName = jobs[i].name || jobs[i].employer || '';
+          break;
+        }
+      }
+
+      var body = jobName
+        ? 'Du hast den Arbeitsplatz (' + jobName + ') verlassen. Stunden eintragen?'
+        : 'Du hast den Arbeitsplatz verlassen. Stunden eintragen?';
+
+      try {
+        new Notification('Schicht beendet?', {
+          body: body,
+          icon: 'icons/icon-192.png',
+          tag: 'geo-reminder-' + jobId
+        });
+      } catch (e) {
+        // Notification constructor may fail in some contexts; ignore
+        return;
+      }
+
+      // Update lastNotifiedDate
+      _reminders[jobId].lastNotifiedDate = today;
+      _persistReminders();
+
+      // Emit event
+      EventBus.emit('geo:reminder_triggered', { jobId: jobId, date: today });
+    }
+
+    /**
+     * Calculate Haversine distance between two points in meters.
+     * @param {number} lat1 - Latitude of point 1 (degrees)
+     * @param {number} lng1 - Longitude of point 1 (degrees)
+     * @param {number} lat2 - Latitude of point 2 (degrees)
+     * @param {number} lng2 - Longitude of point 2 (degrees)
+     * @returns {number} Distance in meters
+     */
+    function _haversineDistance(lat1, lng1, lat2, lng2) {
+      var dLat = _toRadians(lat2 - lat1);
+      var dLng = _toRadians(lng2 - lng1);
+      var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(_toRadians(lat1)) * Math.cos(_toRadians(lat2)) *
+              Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return EARTH_RADIUS_M * c;
+    }
+
+    /**
+     * Convert degrees to radians.
+     * @param {number} degrees
+     * @returns {number}
+     */
+    function _toRadians(degrees) {
+      return degrees * (Math.PI / 180);
+    }
+
+    /**
+     * Get today's date as YYYY-MM-DD string in local timezone.
+     * @returns {string}
+     */
+    function _getTodayDateString() {
+      var now = new Date();
+      var year = now.getFullYear();
+      var month = String(now.getMonth() + 1).padStart(2, '0');
+      var day = String(now.getDate()).padStart(2, '0');
+      return year + '-' + month + '-' + day;
+    }
+
+    return {
+      init: init,
+      setLocation: setLocation,
+      removeLocation: removeLocation,
+      getCurrentPosition: getCurrentPosition,
+      isActive: isActive,
+      stopAll: stopAll
+    };
+  })();
+
   // ─── Global EventBus Wiring (Req 17.1, 17.2, 17.3, 17.4, 17.5, 19.2) ──────
   // Central cross-module subscriptions that coordinate reactive updates.
   // Individual modules subscribe to events they need internally in their init().
@@ -11518,6 +14623,18 @@ const JobTracker = (function () {
     NavigationController.init();
     ThemeManager.init();
 
+    // ── Phase 2.5: v2.0 Utility Modules ──
+    HapticFeedbackService.init();
+    SkeletonLoader.init();
+    SwipeHandler.init();
+    PullRefreshHandler.init();
+    SparklineRenderer.init();
+    PunchClock.init();
+    RuleChecker.init();
+    MinijobForecastWidget.init();
+    TaxSimulator.init();
+    GeoReminderService.init();
+
     // ── Header Theme Toggle ──
     var headerThemeToggle = document.getElementById('header-theme-toggle');
     if (headerThemeToggle) {
@@ -11756,6 +14873,16 @@ const JobTracker = (function () {
     ExportImportModule: ExportImportModule,
     PersonalDataModule: PersonalDataModule,
     YearChangePrompt: YearChangePrompt,
+    HapticFeedbackService: HapticFeedbackService,
+    SkeletonLoader: SkeletonLoader,
+    SwipeHandler: SwipeHandler,
+    PullRefreshHandler: PullRefreshHandler,
+    SparklineRenderer: SparklineRenderer,
+    PunchClock: PunchClock,
+    RuleChecker: RuleChecker,
+    MinijobForecastWidget: MinijobForecastWidget,
+    TaxSimulator: TaxSimulator,
+    GeoReminderService: GeoReminderService,
     showToast: showToast
   };
 })();
