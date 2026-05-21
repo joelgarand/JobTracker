@@ -264,7 +264,10 @@ a {
 .nav-tab::before {
   content: '';
   position: absolute;
-  inset: 4px 2px;
+  top: 4px;
+  left: 2px;
+  right: 2px;
+  bottom: calc(4px + env(safe-area-inset-bottom, 0px));
   border-radius: 16px;
   background: transparent;
   backdrop-filter: blur(0px);
@@ -303,7 +306,7 @@ a {
 }
 
 .nav-tab.active .nav-tab-icon {
-  transform: translateY(-1px) scale(1.05);
+  transform: scale(1.05);
 }
 
 .nav-tab.active .nav-tab-label {

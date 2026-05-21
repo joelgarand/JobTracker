@@ -9764,6 +9764,15 @@ const JobTracker = (function () {
           var provisionInput = document.getElementById('entry-provision');
           var tipInput = document.getElementById('entry-tip');
           var dailyRateInput = document.getElementById('entry-daily-rate');
+          var nameInput = document.getElementById('entry-template-name');
+
+          // Validate name
+          var name = nameInput ? nameInput.value.trim() : '';
+          if (!name) {
+            showToast('Bitte einen Namen für die Vorlage eingeben');
+            if (nameInput) nameInput.focus();
+            return;
+          }
 
           // Validate: at least job must be selected
           if (!jobSelect || !jobSelect.value) {
@@ -9771,11 +9780,8 @@ const JobTracker = (function () {
             return;
           }
 
-          var name = prompt('Name der Vorlage (z.B. "Frühschicht 8h"):');
-          if (!name || !name.trim()) return;
-
           var template = {
-            name: name.trim(),
+            name: name,
             jobId: jobSelect.value,
             hours: hoursInput && hoursInput.value ? parseFloat(hoursInput.value) : null,
             provision: provisionInput && provisionInput.value ? parseFloat(provisionInput.value) : null,
@@ -9788,7 +9794,7 @@ const JobTracker = (function () {
           _saveTemplates(templates);
           _renderTemplates();
           _exitTemplateMode();
-          showToast('Vorlage "' + name.trim() + '" gespeichert ✓');
+          showToast('Vorlage "' + name + '" gespeichert ✓');
         });
       }
 
@@ -9805,6 +9811,7 @@ const JobTracker = (function () {
       var saveBtn = document.getElementById('entry-save-template-btn');
       var cancelBtn = document.getElementById('entry-cancel-template-btn');
       var formTitle = document.getElementById('entry-form-title');
+      var nameGroup = document.getElementById('entry-template-name-group');
       var dateGroup = document.getElementById('entry-date') ? document.getElementById('entry-date').closest('.form-group') : null;
       var statusGroup = document.getElementById('entry-status') ? document.getElementById('entry-status').closest('.form-group') : null;
 
@@ -9812,6 +9819,7 @@ const JobTracker = (function () {
       if (submitBtn) submitBtn.style.display = 'none';
       if (saveBtn) saveBtn.style.display = '';
       if (cancelBtn) cancelBtn.style.display = '';
+      if (nameGroup) nameGroup.style.display = '';
       // Hide date and status fields in template mode (not relevant for templates)
       if (dateGroup) dateGroup.style.display = 'none';
       if (statusGroup) statusGroup.style.display = 'none';
@@ -9819,6 +9827,8 @@ const JobTracker = (function () {
       // Reset form fields
       var form = document.getElementById('entry-form');
       if (form) form.reset();
+      var nameInput = document.getElementById('entry-template-name');
+      if (nameInput) { nameInput.value = ''; nameInput.focus(); }
       _updateExtraFields();
     }
 
@@ -9827,6 +9837,7 @@ const JobTracker = (function () {
       var saveBtn = document.getElementById('entry-save-template-btn');
       var cancelBtn = document.getElementById('entry-cancel-template-btn');
       var formTitle = document.getElementById('entry-form-title');
+      var nameGroup = document.getElementById('entry-template-name-group');
       var dateGroup = document.getElementById('entry-date') ? document.getElementById('entry-date').closest('.form-group') : null;
       var statusGroup = document.getElementById('entry-status') ? document.getElementById('entry-status').closest('.form-group') : null;
 
@@ -9834,6 +9845,7 @@ const JobTracker = (function () {
       if (submitBtn) submitBtn.style.display = '';
       if (saveBtn) saveBtn.style.display = 'none';
       if (cancelBtn) cancelBtn.style.display = 'none';
+      if (nameGroup) nameGroup.style.display = 'none';
       // Show date and status fields again
       if (dateGroup) dateGroup.style.display = '';
       if (statusGroup) statusGroup.style.display = '';
@@ -9841,6 +9853,8 @@ const JobTracker = (function () {
       // Reset form
       var form = document.getElementById('entry-form');
       if (form) form.reset();
+      var nameInput = document.getElementById('entry-template-name');
+      if (nameInput) nameInput.value = '';
       // Set today's date
       var dateInput = document.getElementById('entry-date');
       if (dateInput) {

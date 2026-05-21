@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=38">
+  <link rel="stylesheet" href="style.css?v=39">
   <title>JobTracker</title>
 </head>
 <body>
@@ -577,6 +577,10 @@
       <!-- Quick Entry Form -->
       <div class="glass-surface layer-content entry-form-card">
         <h2 class="entry-section-title" id="entry-form-title">Neuer Eintrag</h2>
+        <div class="form-group" id="entry-template-name-group" style="display:none;">
+          <label class="form-label" for="entry-template-name">Vorlagen-Name *</label>
+          <input type="text" id="entry-template-name" class="form-input" maxlength="50" placeholder="z.B. Frühschicht 8h">
+        </div>
         <form id="entry-form" novalidate>
           <div class="form-group">
             <label class="form-label" for="entry-job">Job *</label>
