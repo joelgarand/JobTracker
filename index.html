@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=37">
+  <link rel="stylesheet" href="style.css?v=38">
   <title>JobTracker</title>
 </head>
 <body>
@@ -569,14 +569,14 @@
       <div class="glass-surface layer-content entry-templates-card" id="entry-templates-card">
         <div class="entry-templates-header">
           <h2 class="entry-section-title">⚡ Schnelleintrag</h2>
-          <button type="button" id="entry-add-template-btn" class="btn btn-secondary" style="font-size:12px;padding:4px 10px;min-height:32px;">+ Vorlage</button>
         </div>
         <div class="entry-templates-list" id="entry-templates-list"></div>
+        <button type="button" id="entry-create-template-btn" class="btn btn-secondary" style="width:100%;margin-top:var(--spacing-sm);">+ Neue Vorlage erstellen</button>
       </div>
 
       <!-- Quick Entry Form -->
       <div class="glass-surface layer-content entry-form-card">
-        <h2 class="entry-section-title">Neuer Eintrag</h2>
+        <h2 class="entry-section-title" id="entry-form-title">Neuer Eintrag</h2>
         <form id="entry-form" novalidate>
           <div class="form-group">
             <label class="form-label" for="entry-job">Job *</label>
@@ -616,7 +616,9 @@
             <input type="number" id="entry-tip" class="form-input" min="0" step="0.01" placeholder="0,00">
           </div>
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary" style="width:100%;">Eintrag speichern</button>
+            <button type="submit" id="entry-submit-btn" class="btn btn-primary" style="width:100%;">Eintrag speichern</button>
+            <button type="button" id="entry-save-template-btn" class="btn btn-primary" style="width:100%;display:none;background:var(--color-accent-blue);">💾 Vorlage speichern</button>
+            <button type="button" id="entry-cancel-template-btn" class="btn btn-secondary" style="width:100%;display:none;">Abbrechen</button>
           </div>
           <span class="field-error" id="entry-error" aria-live="polite"></span>
         </form>

@@ -264,7 +264,7 @@ a {
 .nav-tab::before {
   content: '';
   position: absolute;
-  inset: 6px 2px;
+  inset: 4px 2px;
   border-radius: 16px;
   background: transparent;
   backdrop-filter: blur(0px);

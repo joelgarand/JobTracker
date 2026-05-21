@@ -9672,7 +9672,7 @@ const JobTracker = (function () {
       card.style.display = '';
 
       if (templates.length === 0) {
-        list.innerHTML = '<span style="font-size:13px;color:var(--color-text-tertiary);">Noch keine Vorlagen. Fülle das Formular aus und tippe "+ Vorlage".</span>';
+        list.innerHTML = '<span style="font-size:13px;color:var(--color-text-tertiary);">Noch keine Vorlagen. Erstelle eine mit dem Button unten.</span>';
         return;
       }
       var html = '';
@@ -9685,7 +9685,7 @@ const JobTracker = (function () {
       }
       list.innerHTML = html;
 
-      // Bind template clicks
+      // Bind template clicks — auto-submit for today
       var chips = list.querySelectorAll('.entry-template-chip');
       for (var c = 0; c < chips.length; c++) {
         chips[c].addEventListener('click', function (e) {
@@ -9718,12 +9718,13 @@ const JobTracker = (function () {
       var hoursInput = document.getElementById('entry-hours');
       var statusSelect = document.getElementById('entry-status');
       var provisionInput = document.getElementById('entry-provision');
+      var tipInput = document.getElementById('entry-tip');
       var dailyRateInput = document.getElementById('entry-daily-rate');
       var dateInput = document.getElementById('entry-date');
 
-      // Set today's date if empty
-      if (dateInput && !dateInput.value) {
-        var today = new Date();
+      // Always set today's date for auto-submit
+      var today = new Date();
+      if (dateInput) {
         dateInput.value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
       }
 
@@ -9732,6 +9733,7 @@ const JobTracker = (function () {
       _updateExtraFields();
       if (hoursInput && t.hours) hoursInput.value = t.hours;
       if (provisionInput && t.provision) provisionInput.value = t.provision;
+      if (tipInput && t.tip) tipInput.value = t.tip;
       if (dailyRateInput && t.dailyRate) dailyRateInput.value = t.dailyRate;
 
       // Auto-submit the form
@@ -9742,37 +9744,110 @@ const JobTracker = (function () {
     }
 
     function _bindAddTemplate() {
-      var btn = document.getElementById('entry-add-template-btn');
-      if (!btn) return;
-      btn.addEventListener('click', function () {
-        var name = prompt('Name der Vorlage (z.B. "Frühschicht 8h"):');
-        if (!name || !name.trim()) return;
+      var createBtn = document.getElementById('entry-create-template-btn');
+      var saveBtn = document.getElementById('entry-save-template-btn');
+      var cancelBtn = document.getElementById('entry-cancel-template-btn');
+      var submitBtn = document.getElementById('entry-submit-btn');
+      var formTitle = document.getElementById('entry-form-title');
+      if (!createBtn) return;
 
-        var jobSelect = document.getElementById('entry-job');
-        var hoursInput = document.getElementById('entry-hours');
-        var provisionInput = document.getElementById('entry-provision');
-        var dailyRateInput = document.getElementById('entry-daily-rate');
-
-        // Validate: at least job must be selected
-        if (!jobSelect || !jobSelect.value) {
-          showToast('Bitte zuerst einen Job auswählen');
-          return;
-        }
-
-        var template = {
-          name: name.trim(),
-          jobId: jobSelect.value,
-          hours: hoursInput && hoursInput.value ? parseFloat(hoursInput.value) : null,
-          provision: provisionInput && provisionInput.value ? parseFloat(provisionInput.value) : null,
-          dailyRate: dailyRateInput && dailyRateInput.value ? parseFloat(dailyRateInput.value) : null
-        };
-
-        var templates = _loadTemplates();
-        templates.push(template);
-        _saveTemplates(templates);
-        _renderTemplates();
-        showToast('Vorlage "' + name.trim() + '" gespeichert ✓');
+      // Enter template mode
+      createBtn.addEventListener('click', function () {
+        _enterTemplateMode();
       });
+
+      // Save template
+      if (saveBtn) {
+        saveBtn.addEventListener('click', function () {
+          var jobSelect = document.getElementById('entry-job');
+          var hoursInput = document.getElementById('entry-hours');
+          var provisionInput = document.getElementById('entry-provision');
+          var tipInput = document.getElementById('entry-tip');
+          var dailyRateInput = document.getElementById('entry-daily-rate');
+
+          // Validate: at least job must be selected
+          if (!jobSelect || !jobSelect.value) {
+            showToast('Bitte zuerst einen Job auswählen');
+            return;
+          }
+
+          var name = prompt('Name der Vorlage (z.B. "Frühschicht 8h"):');
+          if (!name || !name.trim()) return;
+
+          var template = {
+            name: name.trim(),
+            jobId: jobSelect.value,
+            hours: hoursInput && hoursInput.value ? parseFloat(hoursInput.value) : null,
+            provision: provisionInput && provisionInput.value ? parseFloat(provisionInput.value) : null,
+            tip: tipInput && tipInput.value ? parseFloat(tipInput.value) : null,
+            dailyRate: dailyRateInput && dailyRateInput.value ? parseFloat(dailyRateInput.value) : null
+          };
+
+          var templates = _loadTemplates();
+          templates.push(template);
+          _saveTemplates(templates);
+          _renderTemplates();
+          _exitTemplateMode();
+          showToast('Vorlage "' + name.trim() + '" gespeichert ✓');
+        });
+      }
+
+      // Cancel template mode
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', function () {
+          _exitTemplateMode();
+        });
+      }
+    }
+
+    function _enterTemplateMode() {
+      var submitBtn = document.getElementById('entry-submit-btn');
+      var saveBtn = document.getElementById('entry-save-template-btn');
+      var cancelBtn = document.getElementById('entry-cancel-template-btn');
+      var formTitle = document.getElementById('entry-form-title');
+      var dateGroup = document.getElementById('entry-date') ? document.getElementById('entry-date').closest('.form-group') : null;
+      var statusGroup = document.getElementById('entry-status') ? document.getElementById('entry-status').closest('.form-group') : null;
+
+      if (formTitle) formTitle.textContent = 'Neue Vorlage erstellen';
+      if (submitBtn) submitBtn.style.display = 'none';
+      if (saveBtn) saveBtn.style.display = '';
+      if (cancelBtn) cancelBtn.style.display = '';
+      // Hide date and status fields in template mode (not relevant for templates)
+      if (dateGroup) dateGroup.style.display = 'none';
+      if (statusGroup) statusGroup.style.display = 'none';
+
+      // Reset form fields
+      var form = document.getElementById('entry-form');
+      if (form) form.reset();
+      _updateExtraFields();
+    }
+
+    function _exitTemplateMode() {
+      var submitBtn = document.getElementById('entry-submit-btn');
+      var saveBtn = document.getElementById('entry-save-template-btn');
+      var cancelBtn = document.getElementById('entry-cancel-template-btn');
+      var formTitle = document.getElementById('entry-form-title');
+      var dateGroup = document.getElementById('entry-date') ? document.getElementById('entry-date').closest('.form-group') : null;
+      var statusGroup = document.getElementById('entry-status') ? document.getElementById('entry-status').closest('.form-group') : null;
+
+      if (formTitle) formTitle.textContent = 'Neuer Eintrag';
+      if (submitBtn) submitBtn.style.display = '';
+      if (saveBtn) saveBtn.style.display = 'none';
+      if (cancelBtn) cancelBtn.style.display = 'none';
+      // Show date and status fields again
+      if (dateGroup) dateGroup.style.display = '';
+      if (statusGroup) statusGroup.style.display = '';
+
+      // Reset form
+      var form = document.getElementById('entry-form');
+      if (form) form.reset();
+      // Set today's date
+      var dateInput = document.getElementById('entry-date');
+      if (dateInput) {
+        var today = new Date();
+        dateInput.value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+      }
+      _updateExtraFields();
     }
 
     return {
@@ -11163,8 +11238,17 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '1.8.0';
+  const APP_VERSION = '1.9.0';
   const APP_CHANGELOG = [
+    {
+      version: '1.9.0',
+      date: '2026-05-21',
+      changes: [
+        '⚡ Vorlagen-System: "Neue Vorlage erstellen" → Formular wechselt in Vorlage-Modus',
+        '⚡ Vorlage antippen = Eintrag wird sofort für heute eingetragen (Auto-Submit)',
+        '🎨 Tab-Bubbles (Liquid Glass) gleichmäßig zentriert'
+      ]
+    },
     {
       version: '1.8.0',
       date: '2026-05-21',
