@@ -229,15 +229,15 @@ a {
   bottom: 0;
   left: 0;
   right: 0;
-  height: var(--nav-height);
   z-index: var(--z-glass-overlay);
   background: var(--nav-bg);
   border-top: 1px solid var(--nav-border);
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 4px;
   padding: 0 6px;
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
 }
 
 .nav-tab {
@@ -246,7 +246,7 @@ a {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  padding: 10px var(--spacing-xs);
+  padding: 0 var(--spacing-xs);
   border: none;
   background: none;
   cursor: pointer;
@@ -256,7 +256,8 @@ a {
   transition: color 0.25s ease, transform 0.2s ease;
   -webkit-tap-highlight-color: transparent;
   flex: 1;
-  min-height: 52px;
+  height: var(--nav-height);
+  align-self: flex-start;
   position: relative;
   z-index: 1;
 }
@@ -264,10 +265,7 @@ a {
 .nav-tab::before {
   content: '';
   position: absolute;
-  top: 0px;
-  left: 2px;
-  right: 2px;
-  bottom: 0px;
+  inset: 6px 4px;
   border-radius: 16px;
   background: transparent;
   backdrop-filter: blur(0px);

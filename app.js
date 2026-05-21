@@ -4077,11 +4077,13 @@ const JobTracker = (function () {
           }
         }
       } else if (job.salaryType === 'fixed') {
-        // Fixed monthly salary
-        brutto = job.fixedMonthlySalary || 0;
+        // Fixed monthly salary — only count if there are entries in this period
+        if (workdays.length > 0) {
+          brutto = job.fixedMonthlySalary || 0;
+        }
 
         // Overtime calculation: hours beyond standardHoursPerDay × standardDaysPerWeek × 4.33 weeks
-        if (job.standardHoursPerDay && job.standardDaysPerWeek && job.defaultHourlyRate) {
+        if (workdays.length > 0 && job.standardHoursPerDay && job.standardDaysPerWeek && job.defaultHourlyRate) {
           var standardMonthlyHours = job.standardHoursPerDay * job.standardDaysPerWeek * 4.33;
           var totalWorkedHours = 0;
           for (var j = 0; j < workdays.length; j++) {
@@ -4114,8 +4116,10 @@ const JobTracker = (function () {
         brutto += paidSickDays * job.standardHoursPerDay * job.defaultHourlyRate;
       }
 
-      // Add provisions to brutto (tips are excluded)
-      brutto += provisions;
+      // Add provisions to brutto (tips are excluded) — only if there are actual workdays
+      if (workdays.length > 0) {
+        brutto += provisions;
+      }
 
       // Round to 2 decimal places
       return Math.round(brutto * 100) / 100;
