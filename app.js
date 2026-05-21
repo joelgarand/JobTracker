@@ -7963,7 +7963,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '1.0.0';
+    const APP_VERSION = '2.0.0';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -14402,8 +14402,24 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '1.9.0';
+  const APP_VERSION = '2.0.0';
   const APP_CHANGELOG = [
+    {
+      version: '2.0.0',
+      date: '2026-05-22',
+      changes: [
+        '⏱️ Punch Clock: One-Tap Schicht starten/beenden mit Timer',
+        '📍 Geo-Erinnerungen: Automatische Benachrichtigung beim Verlassen des Arbeitsplatzes',
+        '📈 Sparklines: Trend-Diagramme für Trinkgeld & Provision',
+        '⚠️ Live-Warnungen: Werkstudent 20h/Woche & Minijob 603€/Monat Limits',
+        '🔮 Minijob-Prognose: Jahresgrenze (7.236€) im Blick behalten',
+        '💰 Steuer-Simulator: Brutto-Netto-Slider für Zusatzstunden',
+        '📳 Haptisches Feedback: Vibration bei wichtigen Aktionen',
+        '👆 Swipe-to-Delete: Einträge durch Wischen löschen',
+        '💀 Skeleton Loading: Moderne Lade-Animationen',
+        '🔄 Pull-to-Refresh: Runterziehen zum Aktualisieren'
+      ]
+    },
     {
       version: '1.9.0',
       date: '2026-05-21',
