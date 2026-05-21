@@ -55,7 +55,7 @@
   --radius-xl: 20px;
 
   /* Nav bar height */
-  --nav-height: 80px;
+  --nav-height: 56px;
 
   /* Z-index layers */
   --z-background: 0;
@@ -85,7 +85,7 @@ body {
   background-color: var(--color-bg);
   min-height: 100vh;
   min-height: 100dvh;
-  padding-bottom: var(--nav-height);
+  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -233,7 +233,7 @@ a {
   background: var(--nav-bg);
   border-top: 1px solid var(--nav-border);
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 4px;
   padding: 0 6px;
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -245,8 +245,8 @@ a {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 0 var(--spacing-xs);
+  gap: 2px;
+  padding: 6px var(--spacing-xs);
   border: none;
   background: none;
   cursor: pointer;
@@ -265,8 +265,8 @@ a {
 .nav-tab::before {
   content: '';
   position: absolute;
-  inset: 6px 4px;
-  border-radius: 16px;
+  inset: 5px 6px;
+  border-radius: 14px;
   background: transparent;
   backdrop-filter: blur(0px);
   -webkit-backdrop-filter: blur(0px);

@@ -3631,6 +3631,7 @@ const JobTracker = (function () {
 
     /**
      * Initializes the module by loading earnings from LocalStorageManager.
+     * Also cleans up orphaned earnings (no matching workday entry).
      */
     function init() {
       var result = LocalStorageManager.load(STORAGE_KEY);
@@ -3638,6 +3639,31 @@ const JobTracker = (function () {
         _earnings = result.data;
       } else {
         _earnings = [];
+      }
+
+      // Cleanup: remove orphaned earnings that have no matching workday
+      _cleanupOrphanedEarnings();
+    }
+
+    /**
+     * Removes earnings entries that have no corresponding workday entry
+     * (same jobId + same date with status 'worked').
+     */
+    function _cleanupOrphanedEarnings() {
+      if (_earnings.length === 0) return;
+      var workdays = AppState.getState().workdays;
+      var workdayMap = {};
+      for (var i = 0; i < workdays.length; i++) {
+        var key = workdays[i].jobId + '|' + workdays[i].date;
+        workdayMap[key] = true;
+      }
+      var before = _earnings.length;
+      _earnings = _earnings.filter(function (e) {
+        var key = e.jobId + '|' + e.date;
+        return workdayMap[key];
+      });
+      if (_earnings.length < before) {
+        _persist();
       }
     }
 
@@ -5872,8 +5898,8 @@ const JobTracker = (function () {
       if (deletedEntry.jobId && deletedEntry.date) {
         var dateParts = deletedEntry.date.split('-');
         var entryYear = parseInt(dateParts[0], 10);
-        var entryMonth = parseInt(dateParts[1], 10);
-        var allEarnings = EarningsExtraModule.getForJob(deletedEntry.jobId, entryYear, entryMonth);
+        // Get all earnings for this job in the year (without month filter to avoid billing period issues)
+        var allEarnings = EarningsExtraModule.getForJob(deletedEntry.jobId, entryYear);
         if (allEarnings && allEarnings.length > 0) {
           for (var ei = 0; ei < allEarnings.length; ei++) {
             if (allEarnings[ei].date === deletedEntry.date) {
