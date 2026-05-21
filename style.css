@@ -55,7 +55,7 @@
   --radius-xl: 20px;
 
   /* Nav bar height */
-  --nav-height: 56px;
+  --nav-height: 60px;
 
   /* Z-index layers */
   --z-background: 0;
@@ -234,8 +234,8 @@ a {
   border-top: 1px solid var(--nav-border);
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 6px;
+  gap: 0;
+  padding: 0;
   padding-bottom: env(safe-area-inset-bottom, 0px);
   height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
 }
@@ -246,7 +246,7 @@ a {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  padding: 6px var(--spacing-xs);
+  padding: 0;
   border: none;
   background: none;
   cursor: pointer;
@@ -265,8 +265,8 @@ a {
 .nav-tab::before {
   content: '';
   position: absolute;
-  inset: 5px 6px;
-  border-radius: 14px;
+  inset: 4px 2px;
+  border-radius: 12px;
   background: transparent;
   backdrop-filter: blur(0px);
   -webkit-backdrop-filter: blur(0px);
@@ -274,7 +274,6 @@ a {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: -1;
   opacity: 0;
-  transform: scale(0.92);
 }
 
 .nav-tab-icon {
@@ -300,7 +299,6 @@ a {
   border-color: rgba(var(--accent-rgb), 0.25);
   box-shadow: 0 2px 12px rgba(var(--accent-rgb), 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   opacity: 1;
-  transform: scale(1);
 }
 
 .nav-tab.active .nav-tab-icon {
