@@ -221,7 +221,7 @@ a {
 }
 
 /* ============================================================
-   Bottom Navigation — Fixed bottom, 2 tabs, 64px height
+   Bottom Navigation — Fixed bottom, 3 tabs
    ============================================================ */
 .bottom-nav,
 .nav-bar {
@@ -233,11 +233,10 @@ a {
   background: var(--nav-bg);
   border-top: 1px solid var(--nav-border);
   display: flex;
-  align-items: center;
-  gap: 0;
-  padding: 0;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px 8px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
 }
 
 .nav-tab {
@@ -246,34 +245,23 @@ a {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  padding: 0;
+  padding: 6px 0;
   border: none;
-  background: none;
+  background: transparent;
   cursor: pointer;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
   font-family: var(--font-family);
-  transition: color 0.25s ease, transform 0.2s ease;
+  transition: color 0.25s ease, background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
   -webkit-tap-highlight-color: transparent;
   flex: 1;
-  height: var(--nav-height);
-  align-self: flex-start;
+  border-radius: 12px;
+  border: 1.5px solid transparent;
   position: relative;
-  z-index: 1;
 }
 
 .nav-tab::before {
-  content: '';
-  position: absolute;
-  inset: 4px 2px;
-  border-radius: 12px;
-  background: transparent;
-  backdrop-filter: blur(0px);
-  -webkit-backdrop-filter: blur(0px);
-  border: 1.5px solid transparent;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: -1;
-  opacity: 0;
+  display: none;
 }
 
 .nav-tab-icon {
@@ -290,15 +278,15 @@ a {
 
 .nav-tab.active {
   color: var(--color-accent);
+  background: rgba(var(--accent-rgb), 0.12);
+  border-color: rgba(var(--accent-rgb), 0.25);
+  box-shadow: 0 2px 12px rgba(var(--accent-rgb), 0.1);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
 }
 
 .nav-tab.active::before {
-  background: rgba(var(--accent-rgb), 0.12);
-  backdrop-filter: blur(12px) saturate(1.4);
-  -webkit-backdrop-filter: blur(12px) saturate(1.4);
-  border-color: rgba(var(--accent-rgb), 0.25);
-  box-shadow: 0 2px 12px rgba(var(--accent-rgb), 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  opacity: 1;
+  display: none;
 }
 
 .nav-tab.active .nav-tab-icon {
