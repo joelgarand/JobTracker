@@ -5864,6 +5864,21 @@ const JobTracker = (function () {
         return { success: false, error: 'Failed to delete entry.' };
       }
 
+      // Also delete associated earnings (provision/tips) for this job+date
+      if (deletedEntry.jobId && deletedEntry.date) {
+        var dateParts = deletedEntry.date.split('-');
+        var entryYear = parseInt(dateParts[0], 10);
+        var entryMonth = parseInt(dateParts[1], 10);
+        var allEarnings = EarningsExtraModule.getForJob(deletedEntry.jobId, entryYear, entryMonth);
+        if (allEarnings && allEarnings.length > 0) {
+          for (var ei = 0; ei < allEarnings.length; ei++) {
+            if (allEarnings[ei].date === deletedEntry.date) {
+              EarningsExtraModule.deleteEarning(allEarnings[ei].id);
+            }
+          }
+        }
+      }
+
       EventBus.emit('workday:deleted', { id: deletedEntry.id, jobId: deletedEntry.jobId });
       return { success: true };
     }
