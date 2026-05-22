@@ -3739,18 +3739,21 @@ details[open] .dashboard-details-toggle::after {
    ============================================================ */
 .dashboard-absence-row {
   display: flex;
+  align-items: center;
+  justify-content: center;
   gap: var(--spacing-md);
   margin-top: var(--spacing-md);
-  padding-top: var(--spacing-sm);
+  padding: var(--spacing-sm) 0;
   border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .dashboard-absence-item {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: 6px;
   flex: 1;
-  padding: var(--spacing-sm);
+  padding: 8px;
   background: rgba(255, 255, 255, 0.03);
   border-radius: var(--radius-sm);
 }
@@ -4264,18 +4267,17 @@ details[open] .dashboard-details-toggle::after {
   /* Square aspect tile — stable layout that never changes size */
   aspect-ratio: 1;
   width: 100%;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  align-items: center;
-  justify-items: center;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   background: color-mix(in srgb, var(--color-surface) 55%, transparent);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   backdrop-filter: blur(24px) saturate(180%);
   border: 0.5px solid rgba(255, 255, 255, 0.12);
   border-radius: 24px;
   padding: var(--spacing-sm);
-  gap: 4px;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.06) inset,
     0 8px 24px rgba(0, 0, 0, 0.18);
@@ -4298,16 +4300,20 @@ details[open] .dashboard-details-toggle::after {
   border-radius: inherit;
 }
 
-/* Ring container — holds the SVG ring + center button in relative flow */
+/* Ring container — centered via flex on parent */
 .punch-ring-container {
   position: relative;
-  width: 65%;
+  width: 60%;
   aspect-ratio: 1;
-  flex-shrink: 0;
 }
 
-/* Punch tile title — small header at top */
+/* Punch tile title — absolute at top so it doesn't affect ring centering */
 .punch-tile-title {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  right: 0;
+  text-align: center;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -4316,14 +4322,18 @@ details[open] .dashboard-details-toggle::after {
   opacity: 0.7;
 }
 
-/* Bottom area — always reserves space below ring */
+/* Bottom area — absolute at bottom so it doesn't push ring up */
 .punch-bottom-area {
-  min-height: 32px;
+  position: absolute;
+  bottom: 12px;
+  left: 0;
+  right: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 2px;
+  min-height: 32px;
+  justify-content: center;
 }
 
 .punch-bottom-area .punch-prelabel {
@@ -5180,6 +5190,9 @@ body.theme-light .tax-tile {
 
 [data-reorderable="true"] {
   position: relative;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 /* iOS-style wiggle while in edit mode */
@@ -5340,6 +5353,23 @@ body.widget-dragging .view-section {
 
 .geo-use-current-btn {
   width: 100%;
+}
+
+/* Geo address input row (Issue 2 — address geocoding) */
+.geo-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.geo-input-row .form-input {
+  flex: 1;
+}
+.geo-input-row .btn-sm {
+  padding: 8px 12px;
+  font-size: 16px;
+  min-width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
 }
 
 /* ============================================================

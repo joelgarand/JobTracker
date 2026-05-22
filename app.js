@@ -1969,7 +1969,7 @@ const JobTracker = (function () {
     function _syncGeoReminder(job) {
       if (typeof GeoReminderService === 'undefined') return;
       if (job.hasGeoReminder && typeof job.geoLat === 'number' && typeof job.geoLng === 'number') {
-        GeoReminderService.setLocation(job.id, job.geoLat, job.geoLng);
+        GeoReminderService.setLocation(job.id, job.geoLat, job.geoLng, job.geoAddress || '');
       } else {
         GeoReminderService.removeLocation(job.id);
       }
@@ -2009,6 +2009,7 @@ const JobTracker = (function () {
         hasGeoReminder: !!jobData.hasGeoReminder,
         geoLat: (jobData.hasGeoReminder && typeof jobData.geoLat === 'number') ? jobData.geoLat : null,
         geoLng: (jobData.hasGeoReminder && typeof jobData.geoLng === 'number') ? jobData.geoLng : null,
+        geoAddress: jobData.geoAddress || '',
         createdAt: now,
         updatedAt: now
       };
@@ -2086,6 +2087,7 @@ const JobTracker = (function () {
       if (updates.hasGeoReminder !== undefined) updatedJob.hasGeoReminder = !!updates.hasGeoReminder;
       if (updates.geoLat !== undefined) updatedJob.geoLat = (typeof updates.geoLat === 'number') ? updates.geoLat : null;
       if (updates.geoLng !== undefined) updatedJob.geoLng = (typeof updates.geoLng === 'number') ? updates.geoLng : null;
+      if (updates.geoAddress !== undefined) updatedJob.geoAddress = updates.geoAddress || '';
       updatedJob.updatedAt = now;
 
       _jobs[index] = updatedJob;
@@ -2362,14 +2364,13 @@ const JobTracker = (function () {
       var geoLatField = document.getElementById('settings-job-geo-lat');
       var geoLngField = document.getElementById('settings-job-geo-lng');
       var geoStatusEl = document.getElementById('settings-job-geo-status');
+      var geoAddressField = document.getElementById('settings-job-geo-address');
       if (geoToggle) geoToggle.checked = false;
       if (geoFields) geoFields.style.display = 'none';
       if (geoLatField) geoLatField.value = '';
       if (geoLngField) geoLngField.value = '';
-      if (geoStatusEl) {
-        geoStatusEl.className = 'geo-status-badge geo-status-badge--inactive';
-        geoStatusEl.textContent = 'Inaktiv';
-      }
+      if (geoAddressField) geoAddressField.value = '';
+      if (geoStatusEl) geoStatusEl.textContent = '';
 
       // Reset salary type to hourly
       var hourlyRadio = document.querySelector('input[name="settings-salary-type"][value="hourly"]');
@@ -2448,20 +2449,19 @@ const JobTracker = (function () {
       var geoLatField = document.getElementById('settings-job-geo-lat');
       var geoLngField = document.getElementById('settings-job-geo-lng');
       var geoStatusEl = document.getElementById('settings-job-geo-status');
+      var geoAddressInput = document.getElementById('settings-job-geo-address');
       if (geoToggle) geoToggle.checked = !!job.hasGeoReminder;
       if (geoFields) geoFields.style.display = job.hasGeoReminder ? '' : 'none';
       if (geoLatField) geoLatField.value = (job.geoLat != null) ? String(job.geoLat) : '';
       if (geoLngField) geoLngField.value = (job.geoLng != null) ? String(job.geoLng) : '';
+      if (geoAddressInput) geoAddressInput.value = job.geoAddress || '';
       if (geoStatusEl) {
         if (job.hasGeoReminder && job.geoLat != null && job.geoLng != null) {
-          geoStatusEl.className = 'geo-status-badge geo-status-badge--active';
-          geoStatusEl.textContent = 'Aktiv • ' + job.geoLat.toFixed(4) + ', ' + job.geoLng.toFixed(4);
+          geoStatusEl.textContent = '✓ Standort gesetzt';
         } else if (job.hasGeoReminder) {
-          geoStatusEl.className = 'geo-status-badge geo-status-badge--inactive';
-          geoStatusEl.textContent = 'Position wählen';
+          geoStatusEl.textContent = '';
         } else {
-          geoStatusEl.className = 'geo-status-badge geo-status-badge--inactive';
-          geoStatusEl.textContent = 'Inaktiv';
+          geoStatusEl.textContent = '';
         }
       }
 
@@ -2699,7 +2699,8 @@ const JobTracker = (function () {
         sickDayTracking: document.getElementById('settings-job-sick').checked,
         hasGeoReminder: (function() { var g = document.getElementById('settings-job-geo-reminder'); return g ? !!g.checked : false; })(),
         geoLat: (function() { var g = document.getElementById('settings-job-geo-lat'); return (g && g.value) ? parseFloat(g.value) : null; })(),
-        geoLng: (function() { var g = document.getElementById('settings-job-geo-lng'); return (g && g.value) ? parseFloat(g.value) : null; })()
+        geoLng: (function() { var g = document.getElementById('settings-job-geo-lng'); return (g && g.value) ? parseFloat(g.value) : null; })(),
+        geoAddress: (function() { var g = document.getElementById('settings-job-geo-address'); return (g && g.value) ? g.value.trim() : ''; })()
       };
     }
 
@@ -2783,12 +2784,13 @@ const JobTracker = (function () {
     }
 
     /**
-     * Binds the geo-reminder toggle and "use current location" button.
+     * Binds the geo-reminder toggle, address input, and locate button.
      */
     function _bindGeoReminderControls() {
       var geoToggle = document.getElementById('settings-job-geo-reminder');
       var geoFields = document.getElementById('settings-job-geo-fields');
-      var geoBtn = document.getElementById('settings-job-geo-use-current');
+      var geoAddressInput = document.getElementById('settings-job-geo-address');
+      var geoLocateBtn = document.getElementById('settings-job-geo-locate');
       var geoStatusEl = document.getElementById('settings-job-geo-status');
 
       if (geoToggle && !geoToggle._bound) {
@@ -2797,8 +2799,8 @@ const JobTracker = (function () {
           if (geoFields) geoFields.style.display = geoToggle.checked ? '' : 'none';
 
           if (geoToggle.checked) {
-            // Default badge state when enabled but no coords yet
-            _setGeoStatusBadge(geoStatusEl, 'inactive', 'Position wählen');
+            // Default hint when enabled but no coords yet
+            if (geoStatusEl) geoStatusEl.textContent = '';
 
             // Request notification permission proactively
             if ('Notification' in window) {
@@ -2808,7 +2810,7 @@ const JobTracker = (function () {
                   if (p && typeof p.then === 'function') {
                     p.then(function (permission) {
                       if (permission !== 'granted') {
-                        _setGeoStatusBadge(geoStatusEl, 'error', 'Benachrichtigungen blockiert');
+                        if (geoStatusEl) geoStatusEl.textContent = '⚠️ Benachrichtigungen blockiert';
                       }
                     });
                   }
@@ -2816,21 +2818,47 @@ const JobTracker = (function () {
                   Notification.requestPermission(function () {});
                 }
               } else if (Notification.permission === 'denied') {
-                _setGeoStatusBadge(geoStatusEl, 'error', 'Benachrichtigungen blockiert');
+                if (geoStatusEl) geoStatusEl.textContent = '⚠️ Benachrichtigungen blockiert';
               }
             }
           } else {
-            _setGeoStatusBadge(geoStatusEl, 'inactive', 'Inaktiv');
+            if (geoStatusEl) geoStatusEl.textContent = '';
           }
         });
       }
 
-      if (geoBtn && !geoBtn._bound) {
-        geoBtn._bound = true;
-        geoBtn.addEventListener('click', function () {
-          _setGeoStatusBadge(geoStatusEl, 'inactive', 'Standort wird ermittelt…');
+      // Address input: geocode on blur or Enter
+      if (geoAddressInput && !geoAddressInput._bound) {
+        geoAddressInput._bound = true;
+        geoAddressInput.addEventListener('blur', function () {
+          var address = geoAddressInput.value.trim();
+          if (address.length > 2) {
+            _geocodeAddress(address, function (result) {
+              if (result) {
+                document.getElementById('settings-job-geo-lat').value = String(result.lat);
+                document.getElementById('settings-job-geo-lng').value = String(result.lng);
+                if (geoStatusEl) geoStatusEl.textContent = '✓ Standort gefunden: ' + _shortenAddress(result.display);
+              } else {
+                if (geoStatusEl) geoStatusEl.textContent = '✗ Adresse nicht gefunden';
+              }
+            });
+          }
+        });
+        geoAddressInput.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            geoAddressInput.blur();
+          }
+        });
+      }
+
+      // Locate button: get current position, reverse geocode to address
+      if (geoLocateBtn && !geoLocateBtn._bound) {
+        geoLocateBtn._bound = true;
+        geoLocateBtn.addEventListener('click', function () {
+          if (geoStatusEl) geoStatusEl.textContent = 'Standort wird ermittelt…';
           if (typeof GeoReminderService === 'undefined' || !GeoReminderService.getCurrentPosition) {
-            _setGeoStatusBadge(geoStatusEl, 'error', 'Geolocation nicht verfügbar');
+            if (geoStatusEl) geoStatusEl.textContent = '✗ Geolocation nicht verfügbar';
             return;
           }
           GeoReminderService.getCurrentPosition(function (result) {
@@ -2839,13 +2867,60 @@ const JobTracker = (function () {
               var lngField = document.getElementById('settings-job-geo-lng');
               if (latField) latField.value = String(result.lat);
               if (lngField) lngField.value = String(result.lng);
-              _setGeoStatusBadge(geoStatusEl, 'active', 'Aktiv • ' + result.lat.toFixed(4) + ', ' + result.lng.toFixed(4));
+              // Reverse geocode to show address
+              _reverseGeocode(result.lat, result.lng, function (displayName) {
+                if (geoAddressInput) geoAddressInput.value = displayName;
+                if (geoStatusEl) geoStatusEl.textContent = '✓ Standort gefunden';
+              });
             } else {
-              _setGeoStatusBadge(geoStatusEl, 'error', (result && result.error) ? 'Fehler' : 'Position nicht verfügbar');
+              if (geoStatusEl) geoStatusEl.textContent = '✗ Position nicht verfügbar';
             }
           });
         });
       }
+    }
+
+    /**
+     * Geocode an address string to lat/lng using Nominatim (OpenStreetMap).
+     */
+    function _geocodeAddress(address, callback) {
+      var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(address);
+      fetch(url, { headers: { 'Accept-Language': 'de' } })
+        .then(function (r) { return r.json(); })
+        .then(function (results) {
+          if (results && results.length > 0) {
+            callback({ lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon), display: results[0].display_name });
+          } else {
+            callback(null);
+          }
+        })
+        .catch(function () { callback(null); });
+    }
+
+    /**
+     * Reverse geocode lat/lng to a display address using Nominatim.
+     */
+    function _reverseGeocode(lat, lng, callback) {
+      var url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng;
+      fetch(url, { headers: { 'Accept-Language': 'de' } })
+        .then(function (r) { return r.json(); })
+        .then(function (result) {
+          if (result && result.display_name) {
+            callback(result.display_name);
+          } else {
+            callback(lat.toFixed(4) + ', ' + lng.toFixed(4));
+          }
+        })
+        .catch(function () { callback(lat.toFixed(4) + ', ' + lng.toFixed(4)); });
+    }
+
+    /**
+     * Shorten a display address to first 2-3 parts for the status hint.
+     */
+    function _shortenAddress(display) {
+      if (!display) return '';
+      var parts = display.split(',');
+      return parts.slice(0, 3).join(',').trim();
     }
 
     /**
@@ -8317,7 +8392,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.1.2';
+    const APP_VERSION = '2.1.3';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -11072,6 +11147,14 @@ const JobTracker = (function () {
       html += '<span class="job-card-hours">' + _formatHours(hoursWorked) + ' Std.</span>';
       html += '<span class="job-card-multiply">×</span>';
       html += '<span class="job-card-rate">' + _formatCurrency(rate) + '/Std.</span>';
+      // Add provision to breakdown if > 0
+      if (job.hasProvision) {
+        var provBreakdown = IncomeEngine.getProvisionTotal(job.id, year, month);
+        if (provBreakdown > 0) {
+          html += '<span class="job-card-multiply">+</span>';
+          html += '<span class="job-card-rate">' + _formatCurrency(provBreakdown) + ' Prov.</span>';
+        }
+      }
       html += '<span class="job-card-equals">=</span>';
       html += '<span class="job-card-brutto">' + _formatCurrency(brutto) + '</span>';
       html += '</div>';
@@ -14584,6 +14667,8 @@ const JobTracker = (function () {
         _longPressStartY = t.clientY;
         _longPressTimer = setTimeout(function () {
           _longPressTimer = null;
+          // Prevent any lingering selection
+          window.getSelection().removeAllRanges();
           // Enter edit mode and immediately start dragging this widget
           if (typeof HapticFeedbackService !== 'undefined' && HapticFeedbackService.tap) {
             HapticFeedbackService.tap(30);
@@ -15140,9 +15225,10 @@ const JobTracker = (function () {
      * @param {string} jobId
      * @param {number} lat - Latitude (6 decimal places)
      * @param {number} lng - Longitude (6 decimal places)
+     * @param {string} [address] - Display address string
      * @returns {{ success: boolean, error?: string }}
      */
-    function setLocation(jobId, lat, lng) {
+    function setLocation(jobId, lat, lng, address) {
       // Validate coordinates
       if (typeof lat !== 'number' || typeof lng !== 'number') {
         return { success: false, error: 'Koordinaten müssen Zahlen sein.' };
@@ -15162,7 +15248,8 @@ const JobTracker = (function () {
         lat: roundedLat,
         lng: roundedLng,
         enabled: true,
-        lastNotifiedDate: null
+        lastNotifiedDate: null,
+        address: address || ''
       };
 
       _persistReminders();
@@ -15936,8 +16023,20 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.1.2';
+  const APP_VERSION = '2.1.3';
   const APP_CHANGELOG = [
+    {
+      version: '2.1.3',
+      date: '2026-06-01',
+      changes: [
+        'v2.1.3 — Text-Selektion, Adress-Geocoding, Ring-Zentrierung, Krankheitstage, Provision',
+        '🚫 Long-Press: iOS Text-Selektion auf Widgets verhindert',
+        '📍 Geo-Erinnerung: Adresseingabe statt Koordinaten, automatisches Geocoding via OpenStreetMap',
+        '⏱️ Punch-Clock: Ring exakt zentriert (absolute Positionierung für Titel & Bottom)',
+        '🤒 Gesamtübersicht: Krankheitstage-Zeile vertikal zentriert zwischen Linien',
+        '💰 Job-Karten: Provision wird im Berechnungs-Breakdown angezeigt (z.B. 8h × 12€/Std + 80€ Prov.)'
+      ]
+    },
     {
       version: '2.1.2',
       date: '2026-05-31',

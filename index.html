@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=56">
+  <link rel="stylesheet" href="style.css?v=57">
   <title>JobTracker</title>
 </head>
 <body>
@@ -1014,16 +1014,16 @@
                 </label>
               </div>
               <div id="settings-job-geo-fields" class="geo-fields" style="display:none;">
-                <div class="form-group">
-                  <label class="form-label" for="settings-job-geo-lat">Breitengrad</label>
-                  <input type="number" id="settings-job-geo-lat" class="form-input" step="0.000001" placeholder="52.520008" readonly>
+                <div class="form-group" id="settings-job-geo-group">
+                  <label class="form-label">📍 Arbeitsort (für Erinnerungen)</label>
+                  <div class="geo-input-row">
+                    <input type="text" id="settings-job-geo-address" class="form-input" placeholder="Adresse eingeben..." autocomplete="off">
+                    <button type="button" id="settings-job-geo-locate" class="btn btn-secondary btn-sm" aria-label="Aktuellen Standort verwenden">📍</button>
+                  </div>
+                  <span class="form-hint" id="settings-job-geo-status"></span>
+                  <input type="hidden" id="settings-job-geo-lat" value="">
+                  <input type="hidden" id="settings-job-geo-lng" value="">
                 </div>
-                <div class="form-group">
-                  <label class="form-label" for="settings-job-geo-lng">Längengrad</label>
-                  <input type="number" id="settings-job-geo-lng" class="form-input" step="0.000001" placeholder="13.404954" readonly>
-                </div>
-                <button type="button" id="settings-job-geo-use-current" class="btn btn-secondary geo-use-current-btn">📍 Aktuelle Position verwenden</button>
-                <span id="settings-job-geo-status" class="geo-status-badge geo-status-badge--inactive">Inaktiv</span>
               </div>
             </div>
           </div>
