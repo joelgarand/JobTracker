@@ -4215,31 +4215,42 @@ details[open] .dashboard-details-toggle::after {
 }
 
 /* ============================================================
-   Punch Clock — iOS 26 glass-morphism card with vibrant buttons
+   Punch Clock — iOS 26 circular glass tile (1×1 small dashboard widget)
    ============================================================ */
 .punch-clock {
+  /* Outer container is the dashboard slot — the inner .punch-clock-tile is
+     the actual visual surface. The tile is square via aspect-ratio:1, so the
+     outer wrapper just needs to allow the inner element to sit naturally. */
   width: 100%;
-  padding: var(--spacing-lg);
-  /* Glass-morphism: translucent surface tint + heavy blur */
-  background: color-mix(in srgb, var(--color-surface) 55%, transparent);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
-  /* iOS-thin hairline border via low-alpha rgba */
-  border: 0.5px solid rgba(255, 255, 255, 0.12);
-  border-radius: 24px;
+  display: block;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  position: relative;
+}
+
+.punch-clock-tile {
+  aspect-ratio: 1;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--spacing-md);
+  justify-content: center;
+  position: relative;
+  background: color-mix(in srgb, var(--color-surface) 55%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  padding: var(--spacing-md);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.06) inset,
     0 8px 24px rgba(0, 0, 0, 0.18);
-  position: relative;
   overflow: hidden;
 }
 
-.punch-clock::before {
-  /* Subtle top highlight to read as a vibrant material */
+.punch-clock-tile::before {
+  /* Subtle top highlight for vibrant material look */
   content: '';
   position: absolute;
   inset: 0 0 auto 0;
@@ -4249,135 +4260,126 @@ details[open] .dashboard-details-toggle::after {
   border-radius: inherit;
 }
 
-.punch-btn {
-  display: inline-flex;
+/* Progress ring — the SVG itself is rotated -90deg so 0% starts at 12 o'clock */
+.punch-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 80%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  pointer-events: none;
+  /* iOS Safari: ensure stroke renders crisply */
+  -webkit-transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.punch-ring__bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 4;
+}
+
+.punch-ring__progress {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 5;
+  stroke-linecap: round;
+  /* circumference = 2π·44 ≈ 276.46 — JS sets stroke-dashoffset to track elapsed time */
+  stroke-dasharray: 276.46;
+  stroke-dashoffset: 276.46;
+  transition: stroke-dashoffset 1s linear, stroke 0.4s ease;
+}
+
+/* Overtime state (>8h): warm orange tint */
+.punch-ring__progress--overtime {
+  stroke: #ff8a4c;
+  filter: drop-shadow(0 0 6px rgba(255, 138, 76, 0.45));
+}
+
+/* Center button — large tap target, sits in the middle of the ring */
+.punch-center-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 56%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  width: 100%;
-  padding: 18px var(--spacing-lg);
-  font-size: 19px;
-  font-weight: 700;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, 'Segoe UI', Roboto, sans-serif;
-  border: 0.5px solid rgba(255, 255, 255, 0.18);
-  /* iOS 26 continuous corner radius for a button of this size */
-  border-radius: 22px;
+  gap: 2px;
+  border-radius: 50%;
+  border: 0.5px solid rgba(255, 255, 255, 0.16);
+  background: color-mix(in srgb, var(--color-accent) 78%, transparent);
+  color: #ffffff;
   cursor: pointer;
-  min-height: 64px;
-  letter-spacing: -0.2px;
-  /* Springy press animation */
-  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, filter 0.2s ease;
   -webkit-tap-highlight-color: transparent;
-  position: relative;
-  overflow: hidden;
-  /* Glass material: blurred translucent backdrop */
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.12);
-}
-
-.punch-btn::before {
-  /* Soft inner highlight on the top 30% — gives the iOS 26 vibrant fill */
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 30%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0) 100%);
-  pointer-events: none;
-  border-radius: inherit;
-}
-
-.punch-btn::after {
-  /* Subtle hairline highlight on the very top edge */
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.25);
-}
-
-.punch-btn:active {
-  transform: scale(0.96);
-}
-
-.punch-btn:focus-visible {
-  outline: 3px solid rgba(var(--accent-rgb), 0.45);
-  outline-offset: 3px;
-}
-
-.punch-btn__icon {
-  font-size: 26px;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.15));
-  position: relative;
-  z-index: 1;
-}
-
-.punch-btn__label {
-  font-size: 19px;
-  font-weight: 700;
-  position: relative;
-  z-index: 1;
-}
-
-.punch-btn--start {
-  /* Vibrant green fill at ~75% opacity over the blurred glass */
-  background-color: color-mix(in srgb, var(--color-success) 78%, transparent);
-  color: #ffffff;
+  font-family: var(--font-family);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
   box-shadow:
-    0 6px 18px rgba(78, 204, 163, 0.32),
-    0 1px 2px rgba(0, 0, 0, 0.12);
+    0 6px 18px rgba(var(--accent-rgb), 0.32),
+    0 1px 2px rgba(0, 0, 0, 0.12),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.25);
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.2s ease, background-color 0.3s ease;
+  padding: 0;
+  min-width: 44px;
+  min-height: 44px;
 }
 
-.punch-btn--start:hover {
-  filter: brightness(1.04);
-  background-color: color-mix(in srgb, var(--color-success) 85%, transparent);
+.punch-center-btn:active {
+  transform: translate(-50%, -50%) scale(0.94);
 }
 
-.punch-btn--stop {
-  background-color: color-mix(in srgb, var(--color-danger) 78%, transparent);
-  color: #ffffff;
+.punch-center-btn:focus-visible {
+  outline: 3px solid rgba(var(--accent-rgb), 0.5);
+  outline-offset: 4px;
+}
+
+/* Active shift: stop button uses the danger color */
+.punch-clock--active .punch-center-btn {
+  background: color-mix(in srgb, var(--color-danger) 78%, transparent);
   box-shadow:
     0 6px 18px rgba(239, 68, 68, 0.32),
-    0 1px 2px rgba(0, 0, 0, 0.12);
+    0 1px 2px rgba(0, 0, 0, 0.12),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.25);
 }
 
-.punch-btn--stop:hover {
-  filter: brightness(1.04);
-  background-color: color-mix(in srgb, var(--color-danger) 85%, transparent);
+.punch-center-icon {
+  font-size: 24px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.15));
 }
 
-.punch-timer {
-  font-family: var(--punch-timer-font);
-  font-size: 48px;
+.punch-center-timer {
+  font-size: 12px;
   font-weight: 700;
-  color: var(--color-text-primary);
-  letter-spacing: 1px;
-  text-align: center;
-  padding: var(--spacing-md) var(--spacing-lg);
-  width: 100%;
-  /* Soft accent glow background */
-  background:
-    radial-gradient(120% 80% at 50% 0%, rgba(var(--accent-rgb), 0.16) 0%, rgba(var(--accent-rgb), 0.04) 60%, rgba(var(--accent-rgb), 0) 100%),
-    rgba(var(--accent-rgb), 0.04);
-  border: 0.5px solid rgba(var(--accent-rgb), 0.22);
-  border-radius: 18px;
   font-variant-numeric: tabular-nums;
-  position: relative;
-  z-index: 1;
+  letter-spacing: 0.3px;
+  font-family: var(--punch-timer-font, var(--font-family));
 }
 
-.punch-timer--active {
-  animation: punch-pulse 2.2s ease-in-out infinite;
+/* Label below the ring */
+.punch-label {
+  position: absolute;
+  bottom: 10%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--color-text-secondary);
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: none;
+}
+
+.punch-clock--active .punch-label {
   color: var(--color-success);
 }
 
-/* Light theme: stronger card surface for the punch clock */
-body.theme-light .punch-clock {
+/* Light theme: stronger card surface */
+body.theme-light .punch-clock-tile {
   background: rgba(255, 255, 255, 0.55);
   border-color: rgba(0, 0, 0, 0.06);
   box-shadow:
@@ -4385,24 +4387,45 @@ body.theme-light .punch-clock {
     0 4px 16px rgba(0, 0, 0, 0.06);
 }
 
-body.theme-light .punch-btn {
-  border-color: rgba(255, 255, 255, 0.45);
-}
-
+/* 16-hour warning: overlays on top of the tile so the user can act */
 .punch-warning {
-  width: 100%;
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
   padding: var(--spacing-md);
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: var(--radius-sm);
+  border-radius: inherit;
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.36);
   color: var(--color-warning);
   font-size: var(--font-size-sm);
   font-weight: 500;
   text-align: center;
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+}
+
+.punch-warning p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.punch-warning-actions {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-sm);
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.punch-warning-actions .btn {
+  font-size: 11px;
+  padding: 6px 10px;
+  min-height: 32px;
 }
 
 /* ============================================================
@@ -4524,222 +4547,229 @@ body.theme-light .punch-btn {
 }
 
 /* ============================================================
-   TaxSimulator — Expandable Slider Widget
+   TaxSimulator — 1×1 glass tile (always visible compact form)
    ============================================================ */
 .tax-simulator {
-  background: var(--color-content-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--spacing-md);
-  overflow: hidden;
-  transition: max-height 0.3s ease;
-}
-
-.tax-simulator--collapsed .tax-simulator__body {
-  display: none;
-}
-
-.tax-simulator__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-md) var(--spacing-lg);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  min-height: 56px;
-  background: var(--color-content-bg);
-  border: none;
-  border-radius: var(--radius-md);
   width: 100%;
-  color: var(--color-text-primary);
-  -webkit-text-fill-color: var(--color-text-primary);
-  font-family: var(--font-family);
-  font-size: inherit;
-  text-align: left;
-  appearance: none;
-  -webkit-appearance: none;
-  transition: background 0.2s ease;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  position: relative;
 }
 
-.tax-simulator__header * {
-  color: inherit;
-  -webkit-text-fill-color: inherit;
-}
-
-.tax-simulator__header:hover {
-  background: rgba(var(--accent-rgb), 0.06);
-}
-
-.tax-simulator--expanded .tax-simulator__header {
-  border-bottom: 1px solid var(--color-border);
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
-}
-
-.tax-simulator__title {
-  font-size: var(--font-size-lg);
-  font-weight: 600;
-  color: var(--color-text-primary);
-  -webkit-text-fill-color: var(--color-text-primary);
-}
-
-.tax-simulator__chevron {
-  font-size: var(--font-size-base);
-  color: var(--color-text-secondary);
-  -webkit-text-fill-color: var(--color-text-secondary);
-  transition: transform 0.2s ease;
-}
-
-.tax-simulator--expanded .tax-simulator__chevron {
-  transform: rotate(180deg);
-}
-
-.tax-simulator__body {
-  padding: var(--spacing-md) var(--spacing-lg) var(--spacing-lg);
-  background: var(--color-content-bg);
-  color: var(--color-text-primary);
-}
-
-.tax-simulator__body .form-label,
-.tax-simulator__body label {
-  color: var(--color-text-secondary);
-}
-
-.tax-slider {
-  -webkit-appearance: none;
-  appearance: none;
+.tax-tile {
+  aspect-ratio: 1;
   width: 100%;
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(var(--accent-rgb), 0.18);
-  outline: none;
-  margin: var(--spacing-md) 0;
-  cursor: pointer;
-}
-
-.tax-slider::-webkit-slider-track {
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(var(--accent-rgb), 0.18);
-}
-
-.tax-slider::-moz-range-track {
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(var(--accent-rgb), 0.18);
-}
-
-.tax-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--color-accent);
-  cursor: pointer;
-  border: 2px solid var(--color-surface);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-  margin-top: -9px;
-}
-
-.tax-slider::-moz-range-thumb {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--color-accent);
-  cursor: pointer;
-  border: 2px solid var(--color-surface);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-}
-
-.tax-comparison-bar {
-  display: flex;
-  width: 100%;
-  height: 24px;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  background: rgba(var(--accent-rgb), 0.06);
-  margin: var(--spacing-md) 0 0;
-}
-
-.tax-bar-segment--current {
-  background: var(--color-accent-blue);
-  height: 100%;
-  transition: width 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--font-size-xs);
-  color: #ffffff;
-  font-weight: 500;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.tax-bar-segment--simulated {
-  background: var(--color-accent);
-  height: 100%;
-  transition: width 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--font-size-xs);
-  color: var(--color-accent-text);
-  font-weight: 600;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.tax-result-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: auto 1fr auto;
+  background: color-mix(in srgb, var(--color-surface) 55%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  padding: var(--spacing-md);
   gap: var(--spacing-sm);
-  margin-top: var(--spacing-md);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 8px 24px rgba(0, 0, 0, 0.18);
+  position: relative;
+  overflow: hidden;
 }
 
-.tax-result-item {
+.tax-tile::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 30%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+body.theme-light .tax-tile {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.5) inset,
+    0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.tax-tile__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  letter-spacing: 0.2px;
+  position: relative;
+  z-index: 1;
+}
+
+.tax-tile__icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.tax-tile__title {
+  font-size: 13px;
+}
+
+.tax-tile__body {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: var(--spacing-sm);
-  background: rgba(var(--accent-rgb), 0.06);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  text-align: center;
+  justify-content: center;
+  align-items: stretch;
+  gap: var(--spacing-sm);
+  position: relative;
+  z-index: 1;
+  min-height: 0;
 }
 
-.tax-result-label {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
+.tax-tile__main-value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
 }
 
-.tax-result-value {
-  font-size: var(--font-size-base);
+.tax-tile__main-amount {
+  font-size: 24px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent);
+  line-height: 1.1;
+  letter-spacing: -0.3px;
+}
+
+.tax-tile__main-label {
+  font-size: 11px;
+  opacity: 0.6;
+  color: var(--color-text-secondary);
+  letter-spacing: 0.2px;
+}
+
+.tax-tile__slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.tax-tile-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  margin: 0;
+}
+
+.tax-tile-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tax-tile-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tax-tile-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  margin-top: -7px;
+}
+
+.tax-tile-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+.tax-tile__hours {
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+  min-width: 28px;
+  text-align: right;
+}
+
+.tax-tile__detail {
+  font-size: 11px;
+  opacity: 0.7;
+  text-align: center;
+  color: var(--color-text-secondary);
+  position: relative;
+  z-index: 1;
+}
+
+.tax-tile__detail #tax-simulator-rate {
+  color: var(--color-accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tax-tile__job-select {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
   color: var(--color-text-primary);
-  line-height: 1.2;
+  -webkit-appearance: none;
+  appearance: none;
+  font-family: var(--font-family);
+  margin-top: 4px;
+  position: relative;
+  z-index: 1;
 }
 
 .tax-missing-msg {
-  padding: var(--spacing-md);
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.2);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
+  position: absolute;
+  inset: auto var(--spacing-sm) var(--spacing-sm) var(--spacing-sm);
+  padding: 6px 8px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+  font-size: 10px;
   color: var(--color-warning);
   text-align: center;
+  z-index: 2;
+  margin: 0;
 }
 
-.tax-missing-msg a {
-  color: var(--color-accent);
-  text-decoration: underline;
-}
-
-#tax-simulator-slider-value {
-  color: var(--color-accent);
-  font-weight: 700;
+/* Visually-hidden helper (used for legacy compatibility nodes) */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ============================================================
@@ -4958,7 +4988,7 @@ body.theme-light .punch-btn {
 
 
 /* ============================================================
-   v2.0.1 Dashboard Reorder — Drag handle + edit mode
+   v2.0.4 Dashboard Grid + Reorder — CSS Grid + slot-based DnD
    ============================================================ */
 .dashboard-edit-row {
   display: flex;
@@ -4999,80 +5029,80 @@ body.theme-light .punch-btn {
   line-height: 1;
 }
 
+/* The dashboard grid: 2 equal columns, gap matches surrounding spacing.
+   Small widgets (data-widget-size="small") span 1 column → fit two per row.
+   Full widgets (data-widget-size="full") span both columns. */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+  align-items: start;
+}
+
+.dashboard-grid > [data-reorderable="true"][data-widget-size="full"],
+.dashboard-grid > [data-reorderable="true"]:not([data-widget-size]) {
+  grid-column: 1 / -1;
+}
+
+.dashboard-grid > [data-reorderable="true"][data-widget-size="small"] {
+  grid-column: span 1;
+  align-self: stretch;
+}
+
 [data-reorderable="true"] {
   position: relative;
 }
 
-.widget-drag-handle {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 30px;
-  height: 30px;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--color-accent);
-  background: rgba(var(--accent-rgb), 0.14);
-  border: 1px solid rgba(var(--accent-rgb), 0.28);
-  border-radius: 50%;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
-  cursor: grab;
-  z-index: 5;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: none;
-}
-
-.widget-drag-handle:active {
-  cursor: grabbing;
-}
-
-/* Show drag handles only while dashboard is in edit mode (toggled via "Anordnen") */
-body.dashboard-edit-mode [data-reorderable="true"] .widget-drag-handle {
-  display: flex;
-}
-
-/* iOS-style wiggle animation while in edit mode */
+/* iOS-style wiggle while in edit mode */
 @keyframes widget-wiggle {
   0%   { transform: rotate(-0.5deg); }
   50%  { transform: rotate(0.5deg); }
   100% { transform: rotate(-0.5deg); }
 }
 
-body.dashboard-edit-mode [data-reorderable="true"] {
+body.dashboard-edit-mode .dashboard-grid > [data-reorderable="true"] {
   animation: widget-wiggle 0.32s ease-in-out infinite;
   transform-origin: 50% 50%;
   cursor: grab;
 }
 
-/* Pause the wiggle on the widget that's actively being dragged */
-body.dashboard-edit-mode [data-reorderable="true"].widget--dragging {
+/* Pause the wiggle on the widget actively being dragged */
+body.dashboard-edit-mode .dashboard-grid > [data-reorderable="true"].widget--dragging,
+body.dashboard-edit-mode .dashboard-grid > [data-reorderable="true"].widget--displaced {
   animation: none;
 }
 
+/* Dragged widget: elevated state. The JS owns the inline transform with
+   translate(dx, dy) composed with scale & rotation, so we don't apply a
+   transform here — only the visual elevation styling. */
 [data-reorderable="true"].widget--dragging {
-  /* Elevated state while finger-tracked: slight scale, drop shadow, subtle rotation.
-     position:relative + z-index are applied inline by the JS so the widget
-     never detaches from the layout. */
-  transform: scale(1.04) rotate(0.5deg);
+  z-index: 100;
   cursor: grabbing;
   box-shadow:
     0 18px 40px rgba(0, 0, 0, 0.32),
     0 0 0 0.5px rgba(255, 255, 255, 0.18);
-  /* No transition — the JS owns translateY for finger tracking. */
   transition: none;
   opacity: 0.96;
+  will-change: transform;
 }
 
-/* During an active drag, the dragged widget overrides its scale/rotation
-   inline via translateY, so we apply scale via a wrapping transform. */
-[data-reorderable="true"].widget--dragging {
-  /* Set via CSS variable so the JS can compose translate without losing scale */
+/* Displaced widgets: subtle highlight while another widget is preview-moved
+   into their slot. The JS applies translate transforms via inline style; we
+   add a smooth transition so the FLIP preview animates. */
+[data-reorderable="true"].widget--displaced {
+  transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1);
   will-change: transform;
+}
+
+/* In edit mode, suppress clicks/inputs on widget content so users don't
+   accidentally trigger actions while reorganizing. The container itself
+   keeps pointer-events so it receives touchstart for the drag gesture. */
+body.dashboard-edit-mode .dashboard-grid > [data-reorderable="true"] button,
+body.dashboard-edit-mode .dashboard-grid > [data-reorderable="true"] input,
+body.dashboard-edit-mode .dashboard-grid > [data-reorderable="true"] select,
+body.dashboard-edit-mode .dashboard-grid > [data-reorderable="true"] details,
+body.dashboard-edit-mode .dashboard-grid > [data-reorderable="true"] a {
+  pointer-events: none;
 }
 
 /* ============================================================

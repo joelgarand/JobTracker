@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=49">
+  <link rel="stylesheet" href="style.css?v=50">
   <title>JobTracker</title>
 </head>
 <body>
@@ -383,31 +383,34 @@
         </button>
       </div>
 
-      <!-- Punch Clock -->
-      <div id="punch-clock-container" class="glass-surface layer-content punch-clock" data-reorderable="true" data-widget-id="punch-clock">
-        <span class="widget-drag-handle" aria-hidden="true">≡</span>
-        <button type="button" id="punch-start-btn" class="punch-btn punch-btn--start">
-          <span class="punch-btn__icon" aria-hidden="true">▶</span>
-          <span class="punch-btn__label">Schicht starten</span>
-        </button>
-        <div id="punch-timer-display" class="punch-timer" aria-live="polite" style="display:none;">00:00:00</div>
-        <button type="button" id="punch-stop-btn" class="punch-btn punch-btn--stop" style="display:none;">
-          <span class="punch-btn__icon" aria-hidden="true">⏹</span>
-          <span class="punch-btn__label">Schicht beenden</span>
-        </button>
-        <!-- 16-hour warning banner -->
-        <div id="punch-warning-banner" class="punch-warning" style="display:none;" role="alert">
-          <p>⚠️ Schicht läuft seit über 16 Stunden. Vergessen zu beenden?</p>
-          <div class="punch-warning-actions">
-            <button type="button" id="punch-warning-end-btn" class="btn btn-danger">Schicht beenden</button>
-            <button type="button" id="punch-warning-continue-btn" class="btn btn-secondary">Weiter arbeiten</button>
+      <!-- Dashboard Grid: 2-column CSS grid; small widgets span 1 col, full widgets span both -->
+      <div class="dashboard-grid" id="dashboard-grid">
+
+      <!-- Punch Clock (small 1×1 tile) -->
+      <div id="punch-clock-container" class="punch-clock" data-reorderable="true" data-widget-id="punch-clock" data-widget-size="small">
+        <div class="punch-clock-tile">
+          <svg class="punch-ring" viewBox="0 0 100 100" aria-hidden="true">
+            <circle class="punch-ring__bg" cx="50" cy="50" r="44"></circle>
+            <circle class="punch-ring__progress" id="punch-ring-progress" cx="50" cy="50" r="44"></circle>
+          </svg>
+          <button type="button" id="punch-center-btn" class="punch-center-btn" aria-label="Schicht starten">
+            <span class="punch-center-icon" id="punch-center-icon" aria-hidden="true">▶</span>
+            <span class="punch-center-timer" id="punch-center-timer" style="display:none;">00:00:00</span>
+          </button>
+          <div class="punch-label" id="punch-label">Schicht starten</div>
+          <!-- 16-hour warning banner overlay -->
+          <div id="punch-warning-banner" class="punch-warning" style="display:none;" role="alert">
+            <p>⚠️ Schicht läuft seit über 16 Stunden. Vergessen zu beenden?</p>
+            <div class="punch-warning-actions">
+              <button type="button" id="punch-warning-end-btn" class="btn btn-danger">Schicht beenden</button>
+              <button type="button" id="punch-warning-continue-btn" class="btn btn-secondary">Weiter arbeiten</button>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- Gesamtübersicht Card -->
-      <div id="daily-dashboard" class="glass-surface layer-content daily-dashboard-card" data-reorderable="true" data-widget-id="gesamtuebersicht">
-        <span class="widget-drag-handle" aria-hidden="true">≡</span>
+      <div id="daily-dashboard" class="glass-surface layer-content daily-dashboard-card" data-reorderable="true" data-widget-id="gesamtuebersicht" data-widget-size="full">
         <div class="dashboard-header-row">
           <h2 class="daily-section-title">Gesamtübersicht</h2>
           <button type="button" id="dashboard-period-toggle" class="dashboard-period-btn" aria-label="Zeitraum wechseln">
@@ -465,54 +468,35 @@
         </div>
       </div>
 
-      <!-- Tax Simulator Widget (collapsed by default) -->
-      <div id="tax-simulator-widget" class="glass-surface layer-content tax-simulator tax-simulator--collapsed" data-reorderable="true" data-widget-id="tax-simulator">
-        <span class="widget-drag-handle" aria-hidden="true">≡</span>
-        <button type="button" id="tax-simulator-toggle" class="tax-simulator__header" aria-expanded="false" aria-controls="tax-simulator-body">
-          <span class="tax-simulator__title">💶 Steuer-Simulator</span>
-          <span class="tax-simulator__chevron" aria-hidden="true">▼</span>
-        </button>
-        <div id="tax-simulator-body" class="tax-simulator__body" hidden>
-          <!-- Missing profile message -->
-          <p id="tax-simulator-missing-profile" class="tax-missing-msg" style="display:none;">
-            ⚠️ Steuerprofil unvollständig. <a href="#" data-navigate="view-settings">Einstellungen öffnen</a>
-          </p>
-          <!-- Job selection -->
-          <div class="form-group">
-            <label class="form-label" for="tax-simulator-job-select">Job auswählen</label>
-            <select id="tax-simulator-job-select" class="form-select"></select>
-          </div>
-          <!-- Slider -->
-          <div class="form-group">
-            <label class="form-label" for="tax-simulator-slider">Zusätzliche Stunden: <span id="tax-simulator-slider-value">0</span></label>
-            <input type="range" id="tax-simulator-slider" class="tax-slider" min="0" max="80" value="0" step="1" aria-label="Zusätzliche Stunden" aria-valuemin="0" aria-valuemax="80" aria-valuenow="0">
-          </div>
-          <!-- Result displays -->
-          <div class="tax-result-grid">
-            <div class="tax-result-item">
-              <span class="tax-result-label">Brutto zusätzlich</span>
-              <span class="tax-result-value" id="tax-simulator-gross-add">0,00 €</span>
+      <!-- Tax Simulator Widget (small 1×1 tile, always-visible compact form) -->
+      <div id="tax-simulator-widget" class="tax-simulator" data-reorderable="true" data-widget-id="tax-simulator" data-widget-size="small">
+        <div class="tax-tile">
+          <header class="tax-tile__header">
+            <span class="tax-tile__icon" aria-hidden="true">💶</span>
+            <span class="tax-tile__title">Steuer</span>
+          </header>
+          <div class="tax-tile__body">
+            <div class="tax-tile__main-value">
+              <span class="tax-tile__main-amount" id="tax-simulator-net-add">+0,00 €</span>
+              <span class="tax-tile__main-label">netto extra</span>
             </div>
-            <div class="tax-result-item">
-              <span class="tax-result-label">Netto zusätzlich</span>
-              <span class="tax-result-value" id="tax-simulator-net-add">0,00 €</span>
+            <div class="tax-tile__slider-row">
+              <input type="range" id="tax-simulator-slider" class="tax-tile-slider" min="0" max="80" value="0" step="1" aria-label="Zusätzliche Stunden" aria-valuemin="0" aria-valuemax="80" aria-valuenow="0">
+              <span class="tax-tile__hours" id="tax-simulator-slider-value">0h</span>
             </div>
-            <div class="tax-result-item">
-              <span class="tax-result-label">Effektiver Steuersatz</span>
-              <span class="tax-result-value" id="tax-simulator-rate">0,0 %</span>
+            <div class="tax-tile__detail">
+              <span id="tax-simulator-rate">0,0 %</span> Steuersatz
             </div>
           </div>
-          <!-- Comparison bar -->
-          <div class="tax-comparison-bar" id="tax-simulator-bar" aria-label="Einkommensvergleich">
-            <div class="tax-bar-segment--current" id="tax-simulator-bar-current"></div>
-            <div class="tax-bar-segment--simulated" id="tax-simulator-bar-simulated"></div>
-          </div>
+          <select id="tax-simulator-job-select" class="tax-tile__job-select" style="display:none;" aria-label="Job auswählen"></select>
         </div>
+        <p id="tax-simulator-missing-profile" class="tax-missing-msg" style="display:none;" role="alert"></p>
+        <!-- Hidden gross-add element kept for legacy compatibility (e.g. tests / external callers) -->
+        <span id="tax-simulator-gross-add" class="visually-hidden" aria-hidden="true">0,00 €</span>
       </div>
 
       <!-- Minijob Forecast Widget -->
-      <div id="minijob-forecast-widget" class="glass-surface layer-content forecast-widget forecast-widget--hidden" data-reorderable="true" data-widget-id="minijob-forecast">
-        <span class="widget-drag-handle" aria-hidden="true">≡</span>
+      <div id="minijob-forecast-widget" class="glass-surface layer-content forecast-widget forecast-widget--hidden" data-reorderable="true" data-widget-id="minijob-forecast" data-widget-size="full">
         <h3 class="forecast-widget__title">📊 Minijob-Jahresprognose</h3>
         <div class="forecast-widget__stats">
           <div class="forecast-widget__stat">
@@ -538,8 +522,7 @@
       </div>
 
       <!-- Job Cards Container -->
-      <div id="job-cards-container" data-reorderable="true" data-widget-id="job-cards">
-        <span class="widget-drag-handle" aria-hidden="true">≡</span>
+      <div id="job-cards-container" data-reorderable="true" data-widget-id="job-cards" data-widget-size="full">
         <!-- Dynamically populated by job card rendering modules -->
         <div class="glass-surface layer-content daily-no-jobs-card" id="daily-no-jobs">
           <div class="daily-no-jobs-content">
@@ -549,6 +532,8 @@
           </div>
         </div>
       </div>
+
+      </div><!-- /.dashboard-grid -->
 
     </div>
   </section>

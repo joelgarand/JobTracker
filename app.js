@@ -4343,67 +4343,158 @@ const JobTracker = (function () {
      * @param {number} steuerklasse - Tax class (1-6)
      * @returns {number} Monthly income tax amount
      */
+    /**
+     * Calculates the German income tax for a given annual taxable income
+     * using a smoothed approximation of the official 2026 progressive tax
+     * formula (§32a EStG). Steuerklasse adjusts the effective taxable income
+     * via the Grundfreibetrag (and other class-specific allowances).
+     *
+     * The four zones (in EUR) for 2026 (single / Steuerklasse I):
+     *   Zone 1 (0 .. 12,348):              tax = 0
+     *   Zone 2 (12,348 .. 17,005):         linearly rising marginal rate 14% → 24%
+     *   Zone 3 (17,005 .. 66,760):         linearly rising marginal rate 24% → 42%
+     *   Zone 4 (66,760 .. 277,825):        flat 42%
+     *   Zone 5 (>277,825):                 flat 45% ("Reichensteuer")
+     *
+     * Steuerklasse V and VI use no Grundfreibetrag and a higher minimum rate;
+     * we approximate with proportional zone shifts. Steuerklasse III gets the
+     * doubled Grundfreibetrag, etc.
+     *
+     * Crucially, the formula is continuous — no cliffs. The public callers
+     * pass MONTHLY brutto so we annualize internally.
+     *
+     * @param {number} monthlyBrutto - Monthly gross income
+     * @param {number} steuerklasse  - Tax class (1-6)
+     * @returns {number} Monthly income tax (rounded to cents)
+     */
     function _calculateIncomeTax(monthlyBrutto, steuerklasse) {
-      // Simplified progressive tax calculation per Steuerklasse.
-      // Thresholds represent the monthly Grundfreibetrag (tax-free allowance) per class.
-      // Steuerklasse V and VI have no/very low threshold.
-      var thresholds = {
-        1: 1029,   // Grundfreibetrag €12,348/Jahr
-        2: 1384,   // (€12,348 + €4,260 Entlastungsbetrag Alleinerziehende) / 12
-        3: 2058,   // Doppelter Grundfreibetrag (Ehepartner)
-        4: 1029,   // Wie Klasse I
-        5: 0,      // Kein Freibetrag
-        6: 0       // Kein Freibetrag
-      };
-      var effectiveRates = {
-        1: 0.20,
-        2: 0.18,
-        3: 0.12,
-        4: 0.20,
-        5: 0.30,
-        6: 0.35
-      };
+      if (!monthlyBrutto || monthlyBrutto <= 0) return 0;
 
-      var threshold = thresholds[steuerklasse] !== undefined ? thresholds[steuerklasse] : 950;
-      var rate = effectiveRates[steuerklasse] || 0.18;
+      // Annualize, then compute tax-free allowance per Steuerklasse.
+      var annualBrutto = monthlyBrutto * 12;
 
-      // Tax only applies on income above the threshold
-      var taxableIncome = monthlyBrutto - threshold;
-      if (taxableIncome <= 0) return 0;
+      // Effective Grundfreibetrag per Steuerklasse for 2026 (Werbungskostenpauschale
+      // 1,230€ + Sonderausgaben-Pauschale 36€ are bundled in for a fairer single
+      // approximation since this is a take-home estimate).
+      // Steuerklasse III gets the doubled Grundfreibetrag; V and VI get none.
+      var freibetrag;
+      switch (steuerklasse) {
+        case 2: freibetrag = 12348 + 4260 + 1230 + 36; break; // + Entlastungsbetrag
+        case 3: freibetrag = (12348 * 2) + 1230 + 36; break;  // doubled Grundfreibetrag
+        case 4: freibetrag = 12348 + 1230 + 36; break;
+        case 5: freibetrag = 0; break;
+        case 6: freibetrag = 0; break;
+        default: freibetrag = 12348 + 1230 + 36; // class 1
+      }
 
-      var monthlyTax = taxableIncome * rate;
+      var taxableAnnual = annualBrutto - freibetrag;
+      if (taxableAnnual <= 0) return 0;
+
+      // Re-base into "zone math" that operates on (annualBrutto - 12,348)
+      // in the standard formula. Since we already subtracted the relevant
+      // freibetrag, we can apply zone progression directly on taxableAnnual.
+      // For Steuerklasse V and VI, layer in a higher minimum tax via a
+      // multiplier — these classes are rare for a part-time tracker, but we
+      // provide a fair upper bound.
+      var annualTax = _zoneTax2026(taxableAnnual);
+
+      if (steuerklasse === 5 || steuerklasse === 6) {
+        // V/VI bracket scaled up moderately to reflect "no allowances + min ~25%".
+        // Real Klasse V depends heavily on combined income; this is a fair
+        // single-job approximation.
+        annualTax = Math.max(annualTax, taxableAnnual * 0.25);
+      }
+
+      var monthlyTax = annualTax / 12;
+      if (monthlyTax < 0) monthlyTax = 0;
       return Math.round(monthlyTax * 100) / 100;
     }
 
     /**
-     * Calculates Solidaritätszuschlag (solidarity surcharge).
-     * 5.5% of income tax, but only if income tax exceeds the Freigrenze.
-     * Freigrenze for 2026: ~18,130€ annual tax (single) / ~36,260€ (married/Steuerklasse 3).
-     * Below the Freigrenze, no Soli is charged.
+     * Smoothed German income-tax zone formula (§32a EStG-style).
+     * @param {number} zvE - "zu versteuerndes Einkommen" (annual taxable income)
+     * @returns {number} Annual tax (Einkommensteuer)
+     */
+    function _zoneTax2026(zvE) {
+      if (zvE <= 0) return 0;
+
+      // Zone boundaries (annual, EUR) for 2026
+      var Z1_END = 12348; // already deducted as freibetrag — zvE represents (annualBrutto - freibetrag)
+      var Z2_END = 17005 - 12348; // ~4,657 → zvE position where zone 2 ends
+      var Z3_END = 66760 - 12348; // ~54,412 → zvE position where zone 3 ends
+      var Z4_END = 277825 - 12348; // ~265,477 → top-bracket transition
+
+      if (zvE <= Z2_END) {
+        // Zone 2: marginal rate rises linearly from 14% to ~24%.
+        // Tax in zone 2 = ((rate(0) + rate(zvE)) / 2) * zvE   (trapezoidal area)
+        // Marginal rate rises linearly: r(z) = 0.14 + (0.24 - 0.14) * (z / Z2_END)
+        // → average over [0, zvE]: 0.14 + 0.05 * (zvE / Z2_END)
+        var avgRateZ2 = 0.14 + 0.05 * (zvE / Z2_END);
+        return zvE * avgRateZ2;
+      }
+
+      // Tax accumulated through end of zone 2
+      var taxAtZ2End = Z2_END * 0.19; // average 14%→24% over the zone = 19%
+
+      if (zvE <= Z3_END) {
+        // Zone 3: marginal rate rises linearly from 24% to 42% over [Z2_END, Z3_END]
+        var z3Span = Z3_END - Z2_END;
+        var z3Pos = zvE - Z2_END;
+        // average marginal in [Z2_END, zvE] = 0.24 + 0.09 * (z3Pos / z3Span)
+        var avgRateZ3 = 0.24 + 0.09 * (z3Pos / z3Span);
+        return taxAtZ2End + z3Pos * avgRateZ3;
+      }
+
+      // Tax accumulated through end of zone 3 = taxAtZ2End + (Z3_END - Z2_END) * 33%
+      var taxAtZ3End = taxAtZ2End + (Z3_END - Z2_END) * 0.33;
+
+      if (zvE <= Z4_END) {
+        // Zone 4: flat 42% marginal
+        return taxAtZ3End + (zvE - Z3_END) * 0.42;
+      }
+
+      // Zone 5: flat 45% marginal beyond Z4_END
+      var taxAtZ4End = taxAtZ3End + (Z4_END - Z3_END) * 0.42;
+      return taxAtZ4End + (zvE - Z4_END) * 0.45;
+    }
+
+    /**
+     * Calculates Solidaritätszuschlag with the proper Milderungszone phase-in.
+     * Below the lower threshold (18,130€ annual tax for Steuerklasse 1) no Soli
+     * is charged. Between the lower and upper threshold (36,260€), Soli phases
+     * in smoothly via:
+     *
+     *     soli = min(0.055 * annualTax, 0.119 * (annualTax - lowerThreshold))
+     *
+     * Above the upper threshold, the full 5.5% applies. This avoids cliffs.
      *
      * @param {number} monthlyIncomeTax - Monthly income tax amount
      * @param {number} steuerklasse - Tax class (1-6)
-     * @param {number} soliRate - Solidarity surcharge rate (e.g. 0.055)
-     * @returns {number} Monthly Solidaritätszuschlag
+     * @param {number} soliRate - Full solidarity surcharge rate (e.g. 0.055)
+     * @returns {number} Monthly Solidaritätszuschlag (rounded to cents)
      */
     function _calculateSoli(monthlyIncomeTax, steuerklasse, soliRate) {
-      // Annual income tax
+      if (!monthlyIncomeTax || monthlyIncomeTax <= 0) return 0;
+
       var annualTax = monthlyIncomeTax * 12;
 
-      // Freigrenze (below this, no Soli is charged)
-      var freigrenze = 18130; // Single
+      // Lower / upper thresholds (annual income tax, EUR)
+      var lower = 18130;
+      var upper = 36260;
       if (steuerklasse === 3) {
-        freigrenze = 36260; // Married
+        lower = 36260;
+        upper = 72520;
       }
 
-      if (annualTax <= freigrenze) {
-        return 0;
-      }
+      if (annualTax <= lower) return 0;
 
-      // Soli is 5.5% of income tax (with a Milderungszone near the Freigrenze,
-      // simplified here as full 5.5% once above Freigrenze)
-      var monthlySoli = monthlyIncomeTax * soliRate;
-      return Math.round(monthlySoli * 100) / 100;
+      var fullSoli = annualTax * soliRate;
+      var phaseIn = 0.119 * (annualTax - lower);
+
+      var annualSoli = (annualTax >= upper) ? fullSoli : Math.min(fullSoli, phaseIn);
+      if (annualSoli < 0) annualSoli = 0;
+
+      return Math.round((annualSoli / 12) * 100) / 100;
     }
 
     /**
@@ -8145,7 +8236,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.0.3';
+    const APP_VERSION = '2.0.4';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -12771,8 +12862,10 @@ const JobTracker = (function () {
   // Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8
   const PunchClock = (function () {
     var STORAGE_KEY = 'jt_punch_clock';
-    var WARNING_THRESHOLD_MS = 16 * 60 * 60 * 1000; // 16 hours in ms
+    var WARNING_THRESHOLD_MS = 16 * 60 * 60 * 1000; // 16 hours
+    var EIGHT_HOURS_MS = 8 * 60 * 60 * 1000;
     var TIMER_INTERVAL_MS = 1000;
+    var RING_CIRC = 2 * Math.PI * 44; // ≈ 276.46 — must match CSS stroke-dasharray
 
     var _timerInterval = null;
     var _shiftData = null; // { startTime, jobId, warningDismissed }
@@ -12781,91 +12874,68 @@ const JobTracker = (function () {
      * Initialize: restore active shift from localStorage, bind UI events.
      */
     function init() {
-      // Restore active shift from localStorage
       _restoreShift();
 
-      // Bind UI buttons
-      var startBtn = document.getElementById('punch-start-btn');
-      var stopBtn = document.getElementById('punch-stop-btn');
+      var centerBtn = document.getElementById('punch-center-btn');
       var warningEndBtn = document.getElementById('punch-warning-end-btn');
       var warningContinueBtn = document.getElementById('punch-warning-continue-btn');
 
-      if (startBtn) {
-        startBtn.addEventListener('click', function () {
-          startShift();
+      if (centerBtn && !centerBtn._punchBound) {
+        centerBtn._punchBound = true;
+        centerBtn.addEventListener('click', function () {
+          // Single button toggles between start and end based on shift state
+          if (_shiftData) {
+            endShift();
+          } else {
+            startShift();
+          }
         });
       }
 
-      if (stopBtn) {
-        stopBtn.addEventListener('click', function () {
-          endShift();
-        });
+      if (warningEndBtn && !warningEndBtn._punchBound) {
+        warningEndBtn._punchBound = true;
+        warningEndBtn.addEventListener('click', function () { endShift(); });
       }
 
-      if (warningEndBtn) {
-        warningEndBtn.addEventListener('click', function () {
-          endShift();
-        });
+      if (warningContinueBtn && !warningContinueBtn._punchBound) {
+        warningContinueBtn._punchBound = true;
+        warningContinueBtn.addEventListener('click', function () { dismissWarning(); });
       }
 
-      if (warningContinueBtn) {
-        warningContinueBtn.addEventListener('click', function () {
-          dismissWarning();
-        });
-      }
+      // Initialize ring to empty
+      _setRingProgress(0, false);
 
-      // If shift is active, start the timer display
       if (_shiftData) {
         _showActiveUI();
         _startTimer();
+      } else {
+        _showIdleUI();
       }
     }
 
     /**
      * Start a new shift. Stores timestamp in localStorage.
-     * @returns {{ success: boolean, startTime: number }}
      */
     function startShift() {
-      if (_shiftData) {
-        return { success: false };
-      }
+      if (_shiftData) return { success: false };
 
-      // Get the most recently used job from AppState
       var appState = AppState.getAppState();
       var jobId = appState.lastActiveJobId || null;
-
-      // Validate job exists via JobManager
-      if (jobId && !JobManager.getJob(jobId)) {
-        jobId = null;
-      }
-
-      // If no lastActiveJobId, try to use the first available job
+      if (jobId && !JobManager.getJob(jobId)) jobId = null;
       if (!jobId) {
         var jobs = JobManager.getAllJobs();
-        if (jobs.length > 0) {
-          jobId = jobs[0].id;
-        }
+        if (jobs.length > 0) jobId = jobs[0].id;
       }
 
       var startTime = Date.now();
-
-      _shiftData = {
-        startTime: startTime,
-        jobId: jobId,
-        warningDismissed: false
-      };
-
-      // Persist to localStorage
+      _shiftData = { startTime: startTime, jobId: jobId, warningDismissed: false };
       _saveShift();
 
-      // Update UI
       _showActiveUI();
       _startTimer();
 
-      // Emit event
       EventBus.emit('punch:started', { startTime: startTime, jobId: jobId });
 
-      // Trigger haptic tap
       if (HapticFeedbackService && HapticFeedbackService.tap) {
         HapticFeedbackService.tap(50);
       }
@@ -12874,25 +12944,17 @@ const JobTracker = (function () {
     }
 
     /**
-     * End the active shift. Calculates duration, rounds to 0.25h.
-     * @returns {{ success: boolean, duration: number, date: string }}
+     * End the active shift. Rounds duration up to the next 0.25h.
      */
     function endShift() {
-      if (!_shiftData) {
-        return { success: false };
-      }
+      if (!_shiftData) return { success: false };
 
       var now = Date.now();
       var elapsedMs = now - _shiftData.startTime;
       var elapsedHours = elapsedMs / (1000 * 60 * 60);
-
-      // Round up to nearest 0.25h, minimum 0.25h
       var duration = Math.ceil(elapsedHours / 0.25) * 0.25;
-      if (duration < 0.25) {
-        duration = 0.25;
-      }
+      if (duration < 0.25) duration = 0.25;
 
-      // Get the date from the shift start
       var shiftDate = new Date(_shiftData.startTime);
       var dateStr = shiftDate.getFullYear() + '-' +
         String(shiftDate.getMonth() + 1).padStart(2, '0') + '-' +
@@ -12900,23 +12962,18 @@ const JobTracker = (function () {
 
       var jobId = _shiftData.jobId;
 
-      // Stop timer and clear state
       _stopTimer();
       _shiftData = null;
       _clearStorage();
 
-      // Update UI
       _showIdleUI();
 
-      // Emit event
       EventBus.emit('punch:ended', { duration: duration, date: dateStr, jobId: jobId });
 
-      // Trigger haptic tap
       if (HapticFeedbackService && HapticFeedbackService.tap) {
         HapticFeedbackService.tap(50);
       }
 
-      // Navigate to entry form pre-filled
       _navigateToEntryForm(dateStr, duration, jobId);
 
       return { success: true, duration: duration, date: dateStr };
@@ -12924,19 +12981,11 @@ const JobTracker = (function () {
 
     /**
      * Get current shift status.
-     * @returns {{ active: boolean, startTime?: number, elapsed?: number }}
      */
     function getStatus() {
-      if (!_shiftData) {
-        return { active: false };
-      }
-
+      if (!_shiftData) return { active: false };
       var elapsed = Date.now() - _shiftData.startTime;
-      return {
-        active: true,
-        startTime: _shiftData.startTime,
-        elapsed: elapsed
-      };
+      return { active: true, startTime: _shiftData.startTime, elapsed: elapsed };
     }
 
     /**
@@ -12944,22 +12993,14 @@ const JobTracker = (function () {
      */
     function dismissWarning() {
       if (!_shiftData) return;
-
       _shiftData.warningDismissed = true;
       _saveShift();
-
-      // Hide warning banner
       var warningBanner = document.getElementById('punch-warning-banner');
-      if (warningBanner) {
-        warningBanner.style.display = 'none';
-      }
+      if (warningBanner) warningBanner.style.display = 'none';
     }
 
-    // ─── Private Methods ──────────────────────────────────────────────────────────
+    // ─── Private ─────────────────────────────────────────────────────────────
 
-    /**
-     * Restore shift data from localStorage.
-     */
     function _restoreShift() {
       try {
         var stored = localStorage.getItem(STORAGE_KEY);
@@ -12974,51 +13015,27 @@ const JobTracker = (function () {
           }
         }
       } catch (e) {
-        // Silently fail on parse error
         _shiftData = null;
       }
     }
 
-    /**
-     * Save shift data to localStorage.
-     */
     function _saveShift() {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(_shiftData));
-      } catch (e) {
-        // Silently fail on storage error
-      }
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(_shiftData)); } catch (e) {}
     }
 
-    /**
-     * Clear shift data from localStorage.
-     */
     function _clearStorage() {
-      try {
-        localStorage.removeItem(STORAGE_KEY);
-      } catch (e) {
-        // Silently fail
-      }
+      try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
     }
 
-    /**
-     * Start the timer interval that updates the display every second.
-     */
     function _startTimer() {
       if (_timerInterval) return;
-
-      // Update immediately
       _updateTimerDisplay();
-
       _timerInterval = setInterval(function () {
         _updateTimerDisplay();
         _checkWarning();
       }, TIMER_INTERVAL_MS);
     }
 
-    /**
-     * Stop the timer interval.
-     */
     function _stopTimer() {
       if (_timerInterval) {
         clearInterval(_timerInterval);
@@ -13027,14 +13044,13 @@ const JobTracker = (function () {
     }
 
     /**
-     * Update the timer display element with current elapsed time in HH:MM:SS format.
+     * Update the timer display (HH:MM:SS) and the SVG progress ring.
+     * After 8h, the ring stays full and switches to the "overtime" warm color.
      */
     function _updateTimerDisplay() {
       if (!_shiftData) return;
 
-      var timerEl = document.getElementById('punch-timer-display');
-      if (!timerEl) return;
-
+      var timerEl = document.getElementById('punch-center-timer');
       var elapsed = Date.now() - _shiftData.startTime;
       var totalSeconds = Math.floor(elapsed / 1000);
       var hours = Math.floor(totalSeconds / 3600);
@@ -13045,96 +13061,102 @@ const JobTracker = (function () {
         String(minutes).padStart(2, '0') + ':' +
         String(seconds).padStart(2, '0');
 
-      timerEl.textContent = display;
+      if (timerEl) timerEl.textContent = display;
+
+      // Ring progress: 0..1 over 8 hours, capped at 1
+      var progress = elapsed / EIGHT_HOURS_MS;
+      var overtime = false;
+      if (progress >= 1) {
+        progress = 1;
+        overtime = true;
+      }
+      _setRingProgress(progress, overtime);
     }
 
     /**
-     * Check if the 16-hour warning should be shown.
+     * Set the SVG progress-ring offset and overtime state.
+     * @param {number} progress - 0..1
+     * @param {boolean} overtime
      */
+    function _setRingProgress(progress, overtime) {
+      var ring = document.getElementById('punch-ring-progress');
+      if (!ring) return;
+      var p = Math.max(0, Math.min(progress, 1));
+      ring.style.strokeDashoffset = String(RING_CIRC * (1 - p));
+      if (overtime) {
+        ring.classList.add('punch-ring__progress--overtime');
+      } else {
+        ring.classList.remove('punch-ring__progress--overtime');
+      }
+    }
+
     function _checkWarning() {
       if (!_shiftData) return;
       if (_shiftData.warningDismissed) return;
-
       var elapsed = Date.now() - _shiftData.startTime;
-      if (elapsed > WARNING_THRESHOLD_MS) {
-        _showWarning();
-      }
+      if (elapsed > WARNING_THRESHOLD_MS) _showWarning();
     }
 
-    /**
-     * Show the 16-hour warning banner.
-     */
     function _showWarning() {
       var warningBanner = document.getElementById('punch-warning-banner');
-      if (warningBanner) {
-        warningBanner.style.display = '';
-      }
-
+      if (warningBanner) warningBanner.style.display = '';
       EventBus.emit('punch:warning', { elapsed: Date.now() - _shiftData.startTime });
     }
 
     /**
-     * Show the active shift UI (timer + stop button, hide start button).
+     * Show the active-shift UI: stop icon + timer, accent label, danger color.
      */
     function _showActiveUI() {
-      var startBtn = document.getElementById('punch-start-btn');
-      var stopBtn = document.getElementById('punch-stop-btn');
-      var timerEl = document.getElementById('punch-timer-display');
+      var container = document.getElementById('punch-clock-container');
+      var iconEl = document.getElementById('punch-center-icon');
+      var timerEl = document.getElementById('punch-center-timer');
+      var labelEl = document.getElementById('punch-label');
+      var btn = document.getElementById('punch-center-btn');
 
-      if (startBtn) startBtn.style.display = 'none';
-      if (stopBtn) stopBtn.style.display = '';
-      if (timerEl) {
-        timerEl.style.display = '';
-        timerEl.classList.add('punch-timer--active');
-      }
+      if (container) container.classList.add('punch-clock--active');
+      if (iconEl) iconEl.textContent = '⏹';
+      if (timerEl) timerEl.style.display = '';
+      if (labelEl) labelEl.textContent = 'Schicht beenden';
+      if (btn) btn.setAttribute('aria-label', 'Schicht beenden');
     }
 
     /**
-     * Show the idle UI (start button, hide timer + stop button).
+     * Show the idle UI: play icon, no timer, "Schicht starten" label.
      */
     function _showIdleUI() {
-      var startBtn = document.getElementById('punch-start-btn');
-      var stopBtn = document.getElementById('punch-stop-btn');
-      var timerEl = document.getElementById('punch-timer-display');
+      var container = document.getElementById('punch-clock-container');
+      var iconEl = document.getElementById('punch-center-icon');
+      var timerEl = document.getElementById('punch-center-timer');
+      var labelEl = document.getElementById('punch-label');
+      var btn = document.getElementById('punch-center-btn');
       var warningBanner = document.getElementById('punch-warning-banner');
 
-      if (startBtn) startBtn.style.display = '';
-      if (stopBtn) stopBtn.style.display = 'none';
+      if (container) container.classList.remove('punch-clock--active');
+      if (iconEl) iconEl.textContent = '▶';
       if (timerEl) {
         timerEl.style.display = 'none';
-        timerEl.classList.remove('punch-timer--active');
         timerEl.textContent = '00:00:00';
       }
+      if (labelEl) labelEl.textContent = 'Schicht starten';
+      if (btn) btn.setAttribute('aria-label', 'Schicht starten');
       if (warningBanner) warningBanner.style.display = 'none';
+      _setRingProgress(0, false);
     }
 
     /**
      * Navigate to the entry form pre-filled with shift data.
-     * @param {string} date - YYYY-MM-DD date string
-     * @param {number} hours - Rounded hours
-     * @param {string|null} jobId - Job ID to pre-select
      */
     function _navigateToEntryForm(date, hours, jobId) {
-      // Switch to entry view
       NavigationController.switchTo('view-entry');
-
-      // Pre-fill the form after a short delay to ensure the view is rendered
       setTimeout(function () {
         var dateInput = document.getElementById('entry-date');
         var hoursInput = document.getElementById('entry-hours');
         var jobSelect = document.getElementById('entry-job');
 
-        if (dateInput) {
-          dateInput.value = date;
-        }
-
-        if (hoursInput) {
-          hoursInput.value = hours;
-        }
-
+        if (dateInput) dateInput.value = date;
+        if (hoursInput) hoursInput.value = hours;
         if (jobSelect && jobId) {
           jobSelect.value = jobId;
-          // Trigger change event to update field visibility
           var changeEvent = new Event('change', { bubbles: true });
           jobSelect.dispatchEvent(changeEvent);
         }
@@ -13797,32 +13819,25 @@ const JobTracker = (function () {
   })();
 
   // ─── TaxSimulator ──────────────────────────────────────────────────────────────
-  // Interactive slider widget that simulates the net income impact of additional
-  // work hours using the user's tax profile and IncomeEngine calculations.
+  // Compact 1×1 glass-tile widget: realtime slider showing monthly netto-extra
+  // for additional hours, using IncomeEngine for the same calculation path as
+  // the rest of the app. Always-visible (no expand/collapse).
   // Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7
   const TaxSimulator = (function () {
-    var _expanded = false;
     var _selectedJobId = null;
     var _currentHours = 0;
+    var _initialized = false;
 
     /**
-     * Initialize: render collapsed widget, bind slider and toggle events,
-     * subscribe to EventBus for recalculation triggers.
+     * Initialize: bind slider + job-select, populate UI, subscribe to events.
      */
     function init() {
-      var toggleBtn = document.getElementById('tax-simulator-toggle');
-      var jobSelect = document.getElementById('tax-simulator-job-select');
+      if (_initialized) return;
+      _initialized = true;
 
-      if (toggleBtn && !toggleBtn._taxBound) {
-        toggleBtn._taxBound = true;
-        toggleBtn.addEventListener('click', function () {
-          toggle();
-        });
-      }
-
-      // Bind slider input event (idempotent)
       _bindSliderEvents();
 
+      var jobSelect = document.getElementById('tax-simulator-job-select');
       if (jobSelect && !jobSelect._taxBound) {
         jobSelect._taxBound = true;
         jobSelect.addEventListener('change', function () {
@@ -13831,156 +13846,116 @@ const JobTracker = (function () {
         });
       }
 
-      // Handle missing-profile link navigation
-      var missingProfileEl = document.getElementById('tax-simulator-missing-profile');
-      if (missingProfileEl) {
-        var link = missingProfileEl.querySelector('a[data-navigate]');
-        if (link && !link._taxBound) {
-          link._taxBound = true;
-          link.addEventListener('click', function (e) {
-            e.preventDefault();
-            var target = link.getAttribute('data-navigate');
-            if (target && NavigationController) {
-              NavigationController.switchTo(target);
-            }
-          });
-        }
-      }
-
-      // Populate job dropdown
       _populateJobSelect();
+      _runSimulation();
 
-      // Subscribe to EventBus events for recalculation
-      EventBus.on('income:updated', function () {
-        if (_expanded) {
-          _runSimulation();
-        }
-      });
-
-      EventBus.on('profile:updated', function () {
-        if (_expanded) {
-          _checkProfile();
-          _runSimulation();
-        }
-      });
-
-      EventBus.on('job:created', function () {
-        _populateJobSelect();
-      });
-
-      EventBus.on('job:deleted', function () {
-        _populateJobSelect();
-        if (_expanded) {
-          _runSimulation();
-        }
-      });
-
-      EventBus.on('job:updated', function () {
-        _populateJobSelect();
-        if (_expanded) {
+      EventBus.on('income:updated', function () { _runSimulation(); });
+      EventBus.on('profile:updated', function () { _runSimulation(); });
+      EventBus.on('job:created', function () { _populateJobSelect(); _runSimulation(); });
+      EventBus.on('job:deleted', function () { _populateJobSelect(); _runSimulation(); });
+      EventBus.on('job:updated', function () { _populateJobSelect(); _runSimulation(); });
+      EventBus.on('navigation:change', function (data) {
+        if (data && (data.viewId === 'view-daily' || data.view === 'view-daily')) {
+          _bindSliderEvents();
+          _populateJobSelect();
           _runSimulation();
         }
       });
     }
 
     /**
-     * Bind the slider input event handler. Idempotent — re-binding is a no-op.
-     * Extracted so we can rebind defensively when the widget body becomes visible.
+     * Bind the slider input event handler. Idempotent — safe to call repeatedly.
      */
     function _bindSliderEvents() {
       var slider = document.getElementById('tax-simulator-slider');
       if (!slider || slider._taxBound) return;
       slider._taxBound = true;
-      slider.addEventListener('input', function () {
+
+      var onChange = function () {
         _currentHours = parseInt(slider.value, 10) || 0;
         slider.setAttribute('aria-valuenow', _currentHours);
-        _updateSliderValueDisplay();
         _runSimulation();
         EventBus.emit('tax:slider_changed', { hours: _currentHours });
-      });
-      // Also handle 'change' for browsers that fire it for keyboard input
-      slider.addEventListener('change', function () {
-        _currentHours = parseInt(slider.value, 10) || 0;
-        slider.setAttribute('aria-valuenow', _currentHours);
-        _updateSliderValueDisplay();
-        _runSimulation();
-      });
+      };
+
+      slider.addEventListener('input', onChange);
+      slider.addEventListener('change', onChange);
     }
 
     /**
-     * Calculate net income for additional hours.
+     * Calculate the net-income delta from working `additionalHours` extra hours
+     * this month. Uses IncomeEngine.calculateNetForBrutto so we always agree
+     * with the dashboard's headline net figure — no parallel approximations.
+     *
+     * For fixed-salary jobs the additionalHours concept doesn't apply; we
+     * return a flagged result so the UI can surface it.
+     *
      * @param {number} additionalHours - 0 to 80
-     * @param {string} jobId - Job to use for hourly rate
-     * @returns {{ grossAdd: number, netAdd: number, effectiveRate: number }}
+     * @param {string} jobId
+     * @returns {{ grossAdd: number, netAdd: number, effectiveRate: number, supported: boolean }}
      */
     function simulate(additionalHours, jobId) {
       if (!additionalHours || additionalHours <= 0) {
-        return { grossAdd: 0, netAdd: 0, effectiveRate: 0 };
+        return { grossAdd: 0, netAdd: 0, effectiveRate: 0, supported: true };
       }
 
       var job = JobManager.getJob(jobId);
-      // Job hourly-rate property is `defaultHourlyRate` (not `hourlyRate`).
-      // For fixed-salary jobs we approximate an hourly equivalent (40 h/week × 4.33).
-      var rate = null;
-      if (job) {
-        if (typeof job.defaultHourlyRate === 'number' && job.defaultHourlyRate > 0) {
-          rate = job.defaultHourlyRate;
-        } else if (typeof job.fixedMonthlySalary === 'number' && job.fixedMonthlySalary > 0) {
-          rate = job.fixedMonthlySalary / (40 * 4.33);
-        } else if (typeof job.defaultDailyRate === 'number' && job.defaultDailyRate > 0) {
-          rate = job.defaultDailyRate / 8;
-        }
+      if (!job) {
+        return { grossAdd: 0, netAdd: 0, effectiveRate: 0, supported: false };
       }
-      if (!job || !rate) {
-        return { grossAdd: 0, netAdd: 0, effectiveRate: 0 };
+
+      // Determine hourly rate. Pure fixed-salary or daily-rate jobs don't have
+      // a meaningful "+X hours" simulation — flag as unsupported.
+      var rate = null;
+      if (typeof job.defaultHourlyRate === 'number' && job.defaultHourlyRate > 0) {
+        rate = job.defaultHourlyRate;
+      }
+      if (!rate) {
+        return { grossAdd: 0, netAdd: 0, effectiveRate: 0, supported: false };
       }
 
       var additionalGross = additionalHours * rate;
 
-      // Get current month's gross for this job
       var now = new Date();
       var year = now.getFullYear();
       var month = now.getMonth() + 1;
 
-      var currentMonthGross = 0;
-      var currentMonthNet = 0;
+      var currentBrutto = 0;
+      var currentNetto = 0;
       try {
-        currentMonthGross = IncomeEngine.calculateMonthlyBrutto(jobId, year, month) || 0;
-      } catch (e) { currentMonthGross = 0; }
+        currentBrutto = IncomeEngine.calculateMonthlyBrutto(jobId, year, month) || 0;
+      } catch (e) { currentBrutto = 0; }
 
       try {
-        var currentNetResult = IncomeEngine.calculateMonthlyNetto(jobId, year, month);
-        if (currentNetResult && currentNetResult.available) {
-          currentMonthNet = currentNetResult.netto;
+        var currentRes = IncomeEngine.calculateMonthlyNetto(jobId, year, month);
+        if (currentRes && currentRes.available) {
+          currentNetto = currentRes.netto;
         } else {
-          // Engine reports profile missing — IncomeEngine still returns 0 in that
-          // case for Teilzeit/Vollzeit, so we mirror that: net is unknown.
-          currentMonthNet = 0;
+          // Fallback: run net-from-brutto with the current brutto so the
+          // baseline matches the simulation path.
+          var fb = IncomeEngine.calculateNetForBrutto(jobId, currentBrutto, year);
+          currentNetto = (fb && fb.available) ? fb.netto : currentBrutto * 0.65;
         }
       } catch (e) {
-        currentMonthNet = 0;
+        currentNetto = currentBrutto * 0.65;
       }
 
-      // Calculate simulated net for (currentGross + additionalGross) using the
-      // exact same engine logic — this guarantees consistency with the rest of
-      // the app and avoids cliffs caused by parallel approximations.
-      var simulatedNet = currentMonthNet;
+      var simulatedNetto = currentNetto;
       try {
-        var simResult = IncomeEngine.calculateNetForBrutto(jobId, currentMonthGross + additionalGross, year);
-        if (simResult && simResult.available) {
-          simulatedNet = simResult.netto;
+        var simRes = IncomeEngine.calculateNetForBrutto(jobId, currentBrutto + additionalGross, year);
+        if (simRes && simRes.available) {
+          simulatedNetto = simRes.netto;
         } else {
-          // Profile missing for Teilzeit/Vollzeit — fall back to a flat ~35%
-          // deduction estimate on the additional gross only, leaving the
-          // current net unchanged.
-          simulatedNet = currentMonthNet + (additionalGross * 0.65);
+          // Profile incomplete — apply consistent ~35% deduction on the delta only.
+          simulatedNetto = currentNetto + additionalGross * 0.65;
         }
       } catch (e) {
-        simulatedNet = currentMonthNet + (additionalGross * 0.65);
+        simulatedNetto = currentNetto + additionalGross * 0.65;
       }
 
-      var netDelta = simulatedNet - currentMonthNet;
-      if (netDelta < 0) netDelta = additionalGross * 0.65;
+      var netDelta = simulatedNetto - currentNetto;
+      if (!isFinite(netDelta)) netDelta = 0;
+      if (netDelta < 0) netDelta = 0;
 
       var effectiveRate = additionalGross > 0
         ? ((additionalGross - netDelta) / additionalGross) * 100
@@ -13992,54 +13967,16 @@ const JobTracker = (function () {
       return {
         grossAdd: Math.round(additionalGross * 100) / 100,
         netAdd: Math.round(netDelta * 100) / 100,
-        effectiveRate: Math.round(effectiveRate * 10) / 10
+        effectiveRate: Math.round(effectiveRate * 10) / 10,
+        supported: true
       };
     }
 
-    /**
-     * Toggle widget expanded/collapsed state.
-     */
-    function toggle() {
-      _expanded = !_expanded;
-
-      var widget = document.getElementById('tax-simulator-widget');
-      var toggleBtn = document.getElementById('tax-simulator-toggle');
-      var body = document.getElementById('tax-simulator-body');
-
-      if (widget) {
-        if (_expanded) {
-          widget.classList.remove('tax-simulator--collapsed');
-          widget.classList.add('tax-simulator--expanded');
-        } else {
-          widget.classList.add('tax-simulator--collapsed');
-          widget.classList.remove('tax-simulator--expanded');
-        }
-      }
-
-      if (toggleBtn) {
-        toggleBtn.setAttribute('aria-expanded', String(_expanded));
-      }
-
-      if (body) {
-        if (_expanded) {
-          body.removeAttribute('hidden');
-        } else {
-          body.setAttribute('hidden', '');
-        }
-      }
-
-      if (_expanded) {
-        _bindSliderEvents(); // Defensively rebind in case slider was hidden/replaced
-        _populateJobSelect();
-        _checkProfile();
-        _runSimulation();
-      }
-    }
-
-    // ─── Private Methods ──────────────────────────────────────────────────────────
+    // ─── Private ─────────────────────────────────────────────────────────────
 
     /**
-     * Populate the job selection dropdown with available jobs.
+     * Populate the job selection dropdown. Only shows the dropdown when there
+     * are 2+ jobs configured.
      */
     function _populateJobSelect() {
       var jobSelect = document.getElementById('tax-simulator-job-select');
@@ -14049,7 +13986,6 @@ const JobTracker = (function () {
       var previousValue = jobSelect.value;
 
       jobSelect.innerHTML = '';
-
       for (var i = 0; i < jobs.length; i++) {
         var option = document.createElement('option');
         option.value = jobs[i].id;
@@ -14057,170 +13993,68 @@ const JobTracker = (function () {
         jobSelect.appendChild(option);
       }
 
-      // Restore previous selection or default to first job
       if (previousValue && jobSelect.querySelector('option[value="' + previousValue + '"]')) {
         jobSelect.value = previousValue;
       } else if (jobs.length > 0) {
         jobSelect.value = jobs[0].id;
       }
-
       _selectedJobId = jobSelect.value || null;
 
-      // Show/hide job select based on number of jobs
-      var jobSelectGroup = jobSelect.closest('.form-group');
-      if (jobSelectGroup) {
-        jobSelectGroup.style.display = jobs.length > 1 ? '' : 'none';
-      }
-
-      // If only one job, still set the selected job
-      if (jobs.length === 1) {
-        _selectedJobId = jobs[0].id;
-      }
+      // Show inline pill when there's more than one job
+      jobSelect.style.display = jobs.length > 1 ? '' : 'none';
     }
 
     /**
-     * Check if the user profile has required tax settings.
-     * Shows/hides the missing profile message accordingly.
-     * Does NOT disable the slider — simulation runs with sensible fallbacks
-     * even when the profile is incomplete.
-     * @returns {boolean} True if profile is complete (informational only)
+     * Update the small "Xh" label next to the slider.
      */
-    function _checkProfile() {
-      var userProfile = AppState.getState().userProfile;
-      var missingEl = document.getElementById('tax-simulator-missing-profile');
-      var slider = document.getElementById('tax-simulator-slider');
-
-      // For Teilzeit/Vollzeit jobs, full profile is helpful but not required
-      var job = _selectedJobId ? JobManager.getJob(_selectedJobId) : null;
-      var needsProfile = job && (job.type === 'Teilzeit' || job.type === 'Vollzeit');
-
-      var profileMissing = needsProfile && (!userProfile || !userProfile.steuerklasse || !userProfile.bundesland || !userProfile.krankenversicherung);
-
-      if (missingEl) {
-        if (profileMissing) {
-          missingEl.style.display = '';
-          missingEl.innerHTML = '⚠️ Steuerprofil unvollständig — Berechnung mit Standardwerten (Steuerklasse 1, gesetzliche KV). <a href="#" data-navigate="view-settings">Profil vervollständigen</a>';
-          // Re-bind navigation link
-          var lnk = missingEl.querySelector('a[data-navigate]');
-          if (lnk && !lnk._bound) {
-            lnk._bound = true;
-            lnk.addEventListener('click', function (e) {
-              e.preventDefault();
-              if (NavigationController) NavigationController.switchTo('view-settings');
-            });
-          }
-        } else {
-          missingEl.style.display = 'none';
-        }
-      }
-
-      // Slider is always enabled — fallback math kicks in if profile is missing
-      if (slider) {
-        slider.disabled = false;
-      }
-
-      return !profileMissing;
+    function _updateHoursLabel() {
+      var el = document.getElementById('tax-simulator-slider-value');
+      if (el) el.textContent = _currentHours + 'h';
     }
 
     /**
-     * Update the slider value display element.
-     */
-    function _updateSliderValueDisplay() {
-      var valueEl = document.getElementById('tax-simulator-slider-value');
-      if (valueEl) {
-        valueEl.textContent = _currentHours;
-      }
-    }
-
-    /**
-     * Run the simulation with current slider value and selected job, update UI.
-     * Always runs (even with incomplete profile) — fallback math kicks in.
+     * Run the simulation with the current slider + selected job and update UI.
      */
     function _runSimulation() {
       if (!_selectedJobId) {
-        // Try to pick the first available job
         var jobs = JobManager.getAllJobs();
         if (jobs.length > 0) _selectedJobId = jobs[0].id;
       }
-      if (!_selectedJobId) return;
 
-      // Update missing-profile message but do NOT bail out
-      _checkProfile();
+      _updateHoursLabel();
 
-      var result = simulate(_currentHours, _selectedJobId);
-
-      // Update result displays
-      var grossEl = document.getElementById('tax-simulator-gross-add');
       var netEl = document.getElementById('tax-simulator-net-add');
       var rateEl = document.getElementById('tax-simulator-rate');
+      var grossEl = document.getElementById('tax-simulator-gross-add');
+      var missingEl = document.getElementById('tax-simulator-missing-profile');
 
-      if (grossEl) {
-        grossEl.textContent = _formatCurrency(result.grossAdd);
-      }
-      if (netEl) {
-        netEl.textContent = _formatCurrency(result.netAdd);
-      }
-      if (rateEl) {
-        rateEl.textContent = result.effectiveRate.toFixed(1).replace('.', ',') + ' %';
-      }
-
-      // Update comparison bar
-      _updateComparisonBar(result);
-    }
-
-    /**
-     * Update the comparison bar showing current vs simulated income.
-     * Falls back to fallback math when IncomeEngine reports no profile.
-     * @param {{ grossAdd: number, netAdd: number }} result
-     */
-    function _updateComparisonBar(result) {
-      var barCurrent = document.getElementById('tax-simulator-bar-current');
-      var barSimulated = document.getElementById('tax-simulator-bar-simulated');
-
-      if (!barCurrent || !barSimulated) return;
-
-      // Get current month's net income for the selected job
-      var now = new Date();
-      var year = now.getFullYear();
-      var month = now.getMonth() + 1;
-
-      var currentNet = 0;
-      try {
-        var currentNetResult = IncomeEngine.calculateMonthlyNetto(_selectedJobId, year, month);
-        if (currentNetResult && currentNetResult.available) {
-          currentNet = currentNetResult.netto;
-        } else {
-          // Engine reports profile missing — try the same brutto path through
-          // calculateNetForBrutto so simulation and comparison agree.
-          var brutto = 0;
-          try { brutto = IncomeEngine.calculateMonthlyBrutto(_selectedJobId, year, month) || 0; } catch (e) {}
-          var fb = IncomeEngine.calculateNetForBrutto(_selectedJobId, brutto, year);
-          currentNet = (fb && fb.available) ? fb.netto : (brutto * 0.65);
-        }
-      } catch (e) {
-        currentNet = 0;
-      }
-      var simulatedAdd = result.netAdd || 0;
-
-      var total = currentNet + Math.max(simulatedAdd, 0);
-
-      if (total <= 0) {
-        barCurrent.style.width = '100%';
-        barSimulated.style.width = '0%';
-        barCurrent.textContent = '';
-        barSimulated.textContent = '';
+      if (!_selectedJobId) {
+        if (netEl) netEl.textContent = '+0,00 €';
+        if (rateEl) rateEl.textContent = '0,0 %';
+        if (grossEl) grossEl.textContent = '0,00 €';
+        if (missingEl) missingEl.style.display = 'none';
         return;
       }
 
-      var currentPercent = (currentNet / total) * 100;
-      var simulatedPercent = (Math.max(simulatedAdd, 0) / total) * 100;
+      var result = simulate(_currentHours, _selectedJobId);
 
-      barCurrent.style.width = currentPercent.toFixed(1) + '%';
-      barSimulated.style.width = simulatedPercent.toFixed(1) + '%';
+      // Surface fixed-salary / daily-rate jobs with a friendly message
+      if (!result.supported) {
+        if (netEl) netEl.textContent = '–';
+        if (rateEl) rateEl.textContent = '–';
+        if (grossEl) grossEl.textContent = '0,00 €';
+        if (missingEl) {
+          missingEl.style.display = '';
+          missingEl.textContent = 'Nur für Stundenlohn-Jobs verfügbar';
+        }
+        return;
+      }
 
-      // Add labels if segments are wide enough
-      barCurrent.textContent = currentNet > 0 ? _formatCurrency(currentNet) : '';
-      barSimulated.textContent = simulatedAdd > 0 ? '+' + _formatCurrency(simulatedAdd) : '';
+      if (missingEl) missingEl.style.display = 'none';
+
+      if (netEl) netEl.textContent = '+' + _formatCurrency(result.netAdd);
+      if (rateEl) rateEl.textContent = result.effectiveRate.toFixed(1).replace('.', ',') + ' %';
+      if (grossEl) grossEl.textContent = _formatCurrency(result.grossAdd);
     }
 
     /**
@@ -14234,42 +14068,47 @@ const JobTracker = (function () {
 
     return {
       init: init,
-      simulate: simulate,
-      toggle: toggle
+      simulate: simulate
     };
   })();
 
-  // ─── DashboardOrderManager ─────────────────────────────────────────────────
-  // Manages reordering of dashboard widgets (#view-daily) via an iOS-Home-Screen
-  // style slot system. Persists user-defined order in localStorage under
-  // 'jt_dashboard_order'. Widgets must carry data-reorderable="true" and
-  // data-widget-id="…" to participate. Edit mode is toggled via "Anordnen".
+  // ─── DashboardOrderManager ───────────────────────────────────────────────────
+  // Grid-based dashboard reorder for #view-daily / .dashboard-grid. Widgets
+  // declare a size via data-widget-size="full" | "small". The grid is a
+  // 2-column CSS grid; small widgets occupy one column, full widgets span
+  // both columns. Widget order is persisted in localStorage under
+  // 'jt_dashboard_order' as a flat array of data-widget-id values.
   //
-  // Touch / iOS Safari path (primary): touchstart/move/end with passive:false
-  // on touchmove so we can preventDefault() and own the gesture. The dragged
-  // widget is never detached from the DOM — it stays in place via
-  // position:relative + z-index + transform:translateY() so it can never
-  // "disappear". As the finger crosses an adjacent widget's midpoint, we
-  // swap that widget into the dragged widget's old slot and animate the swap
-  // with FLIP (capture rect → DOM swap → animate from old to new with
-  // transform: translateY + transition).
+  // Drag mechanic (iOS Homescreen-style):
+  //   - touchstart: capture pointer + widget rects
+  //   - touchmove (passive:false → preventDefault): translate the dragged
+  //     widget under the finger; hit-test sibling widgets to mark a target
+  //     slot. DO NOT mutate the DOM during move — instead apply preview
+  //     transforms to "displaced" widgets so the swap is visually rehearsed.
+  //   - touchend: commit the DOM reorder, reset all transforms, persist order.
   //
-  // Mouse path: pointerdown/move/up that mimic the touch flow exactly. No
-  // HTML5 drag-and-drop — that path was unreliable and is intentionally gone.
+  // The dragged widget never leaves the DOM. Its inline transform composes
+  // translate + scale + slight rotation for the iOS-elevated feel.
   const DashboardOrderManager = (function () {
     var STORAGE_KEY = 'jt_dashboard_order';
-    var SWAP_TRANSITION = 'transform 0.2s ease-out';
+    var DRAG_THRESHOLD_PX = 6;
+
     var _editMode = false;
     var _initialized = false;
 
-    // Drag state shared by touch + mouse paths
-    var _dragEl = null;            // The widget element being dragged
-    var _dragging = false;         // Flag flipped on first qualifying move
-    var _startY = 0;               // Initial pointer y (clientY)
-    var _startX = 0;               // Initial pointer x (for axis-lock)
-    var _baselineTop = 0;          // dragEl.getBoundingClientRect().top at drag start (pre-translate)
-    var _activePointerId = null;   // Pointer id (mouse path) — touch path uses single touch
-    var _dragMode = null;          // 'touch' | 'pointer'
+    // Drag session state
+    var _dragEl = null;
+    var _dragging = false;
+    var _startX = 0;
+    var _startY = 0;
+    var _startRect = null;        // rect of dragged widget at drag start (post-CSS-transform reset)
+    var _dragMode = null;         // 'touch' | 'pointer'
+    var _activePointerId = null;
+    var _siblings = [];           // siblings minus dragEl, captured at drag start
+    var _siblingStartRects = [];  // their rects at drag start
+    var _displacedTransforms = {};// widget-id → applied translate string (for cleanup)
+    var _previewTargetIdx = -1;   // index in _siblings of the widget the dragged item would swap with
+    var _previewInsertBefore = null; // 'true'/'false' boolean indicating insertion side relative to target
 
     /**
      * Initialize: apply saved order, wire edit-mode toggle, attach drag listeners.
@@ -14281,10 +14120,9 @@ const JobTracker = (function () {
       _applySavedOrder();
 
       var toggleBtn = document.getElementById('dashboard-edit-toggle');
-      if (toggleBtn) {
-        toggleBtn.addEventListener('click', function () {
-          setEditMode(!_editMode);
-        });
+      if (toggleBtn && !toggleBtn._reorderBound) {
+        toggleBtn._reorderBound = true;
+        toggleBtn.addEventListener('click', function () { setEditMode(!_editMode); });
       }
 
       _wireWidgets();
@@ -14297,14 +14135,14 @@ const JobTracker = (function () {
         if (data && (data.viewId === 'view-daily' || data.view === 'view-daily')) {
           _applySavedOrder();
           _wireWidgets();
-        } else {
-          if (_editMode) setEditMode(false);
+        } else if (_editMode) {
+          setEditMode(false);
         }
       });
     }
 
     /**
-     * Toggle reorder edit mode on the dashboard.
+     * Toggle reorder edit mode.
      * @param {boolean} enabled
      */
     function setEditMode(enabled) {
@@ -14328,43 +14166,46 @@ const JobTracker = (function () {
     }
 
     /**
-     * Wire touch + pointer listeners on all reorderable widgets. Idempotent.
+     * Wire touch + pointer listeners on each reorderable widget. Idempotent.
      */
     function _wireWidgets() {
       var widgets = _getReorderableWidgets();
       for (var i = 0; i < widgets.length; i++) {
         var w = widgets[i];
-        if (w._reorderWired) continue;
-        w._reorderWired = true;
+        if (w._gridReorderWired) continue;
+        w._gridReorderWired = true;
 
         // Make sure no leftover HTML5 DnD sneaks in
         w.removeAttribute('draggable');
 
-        // Touch path (iOS Safari) — must be passive:false on touchmove so we
-        // can preventDefault() and stop the page from scrolling under us.
+        // Touch path — passive:false on touchmove so we can preventDefault()
+        // and stop iOS Safari from hijacking the gesture as a page scroll.
         w.addEventListener('touchstart', _onTouchStart, { passive: true });
         w.addEventListener('touchmove', _onTouchMove, { passive: false });
         w.addEventListener('touchend', _onTouchEnd, { passive: true });
         w.addEventListener('touchcancel', _onTouchEnd, { passive: true });
 
-        // Mouse / pointer path mimics the touch flow exactly
+        // Pointer / mouse path
         w.addEventListener('pointerdown', _onPointerDown);
       }
     }
 
     /**
-     * Get all widgets marked as reorderable in current DOM order.
+     * Get reorderable widgets in current DOM order (the dashboard-grid children).
      * @returns {HTMLElement[]}
      */
     function _getReorderableWidgets() {
       var view = document.getElementById('view-daily');
       if (!view) return [];
-      var nodes = view.querySelectorAll('[data-reorderable="true"][data-widget-id]');
+      var grid = view.querySelector('.dashboard-grid');
+      var scope = grid || view;
+      var nodes = scope.querySelectorAll('[data-reorderable="true"][data-widget-id]');
       return Array.prototype.slice.call(nodes);
     }
 
     /**
-     * Apply the saved order from localStorage by reordering widgets in the DOM.
+     * Apply the saved order from localStorage by reordering grid children.
+     * Tolerates new widgets (appends them) and removed widgets (skipped).
      */
     function _applySavedOrder() {
       var saved = _loadOrder();
@@ -14399,7 +14240,7 @@ const JobTracker = (function () {
     }
 
     /**
-     * Persist the current widget order to localStorage.
+     * Persist current widget order to localStorage.
      */
     function _saveCurrentOrder() {
       var widgets = _getReorderableWidgets();
@@ -14413,10 +14254,6 @@ const JobTracker = (function () {
       } catch (e) { /* silent */ }
     }
 
-    /**
-     * Load saved order from localStorage.
-     * @returns {string[]|null}
-     */
     function _loadOrder() {
       try {
         var raw = localStorage.getItem(STORAGE_KEY);
@@ -14428,13 +14265,12 @@ const JobTracker = (function () {
       }
     }
 
-    // ─── Touch handlers (iOS Safari) ────────────────────────────────────────
+    // ─── Touch handlers ──────────────────────────────────────────────────────
 
     function _onTouchStart(e) {
       if (!_editMode) return;
-      if (_dragEl) return; // already dragging another
+      if (_dragEl) return;
       if (!e.touches || e.touches.length !== 1) return;
-
       var t = e.touches[0];
       _beginDrag(this, t.clientX, t.clientY, 'touch');
     }
@@ -14443,29 +14279,26 @@ const JobTracker = (function () {
       if (!_dragEl || _dragMode !== 'touch') return;
       if (!e.touches || e.touches.length !== 1) return;
       var t = e.touches[0];
-      // preventDefault must run regardless of axis-lock once a drag has been
-      // committed, otherwise iOS Safari hijacks the gesture for scrolling.
       if (_handleMove(t.clientX, t.clientY)) {
+        // Once a drag is committed, swallow the gesture so iOS doesn't scroll.
         e.preventDefault();
       }
     }
 
-    function _onTouchEnd(e) {
+    function _onTouchEnd() {
       if (!_dragEl || _dragMode !== 'touch') return;
       _endDrag();
     }
 
-    // ─── Pointer handlers (mouse path) ──────────────────────────────────────
+    // ─── Pointer / mouse handlers ────────────────────────────────────────────
 
     function _onPointerDown(e) {
       if (!_editMode) return;
-      if (e.pointerType === 'touch') return; // touch path owns this
+      if (e.pointerType === 'touch') return;  // touch path owns this
       if (_dragEl) return;
-
       _beginDrag(this, e.clientX, e.clientY, 'pointer');
       _activePointerId = e.pointerId;
       try { this.setPointerCapture(e.pointerId); } catch (err) {}
-
       this.addEventListener('pointermove', _onPointerMove);
       this.addEventListener('pointerup', _onPointerUp);
       this.addEventListener('pointercancel', _onPointerUp);
@@ -14480,25 +14313,19 @@ const JobTracker = (function () {
     function _onPointerUp(e) {
       if (!_dragEl || _dragMode !== 'pointer') return;
       if (e && e.pointerId !== undefined && e.pointerId !== _activePointerId) return;
-
       var el = _dragEl;
       try { el.releasePointerCapture(_activePointerId); } catch (err) {}
       el.removeEventListener('pointermove', _onPointerMove);
       el.removeEventListener('pointerup', _onPointerUp);
       el.removeEventListener('pointercancel', _onPointerUp);
-
       _endDrag();
     }
 
-    // ─── Shared drag logic ──────────────────────────────────────────────────
+    // ─── Shared drag logic ───────────────────────────────────────────────────
 
     /**
-     * Begin a drag on a widget. Captures the baseline rect; does NOT move it
-     * yet (we wait for movement to qualify so taps don't trigger drag).
-     * @param {HTMLElement} el
-     * @param {number} x
-     * @param {number} y
-     * @param {string} mode 'touch' | 'pointer'
+     * Begin a drag. Snapshots the widget rect — actual movement starts only
+     * once the pointer travels beyond the threshold (so taps don't trigger drag).
      */
     function _beginDrag(el, x, y, mode) {
       _dragEl = el;
@@ -14506,188 +14333,316 @@ const JobTracker = (function () {
       _startX = x;
       _startY = y;
       _dragMode = mode;
-      var rect = el.getBoundingClientRect();
-      _baselineTop = rect.top;
+      _previewTargetIdx = -1;
+      _previewInsertBefore = null;
+      _displacedTransforms = {};
+
+      // Capture rects right now (no transforms applied yet)
+      _startRect = el.getBoundingClientRect();
+      var widgets = _getReorderableWidgets();
+      _siblings = [];
+      _siblingStartRects = [];
+      for (var i = 0; i < widgets.length; i++) {
+        if (widgets[i] === el) continue;
+        _siblings.push(widgets[i]);
+        _siblingStartRects.push(widgets[i].getBoundingClientRect());
+      }
     }
 
     /**
-     * Handle a move during a drag. Returns true if the page should swallow
-     * the event (ie, we're actively dragging).
+     * Handle pointer movement during a drag. Returns true if a drag is active
+     * (so callers can preventDefault() to suppress page scrolling).
      */
     function _handleMove(x, y) {
       if (!_dragEl) return false;
-      var dy = y - _startY;
       var dx = x - _startX;
+      var dy = y - _startY;
 
       if (!_dragging) {
-        // Activate drag once vertical movement clearly dominates and exceeds 6px.
-        if (Math.abs(dy) > 6 && Math.abs(dy) > Math.abs(dx)) {
-          _dragging = true;
-          _dragEl.style.position = 'relative';
-          _dragEl.style.zIndex = '100';
-          _dragEl.style.transition = 'none';
-          _dragEl.classList.add('widget--dragging');
-        } else {
-          return false;
-        }
+        if (Math.abs(dx) < DRAG_THRESHOLD_PX && Math.abs(dy) < DRAG_THRESHOLD_PX) return false;
+        _dragging = true;
+        _dragEl.classList.add('widget--dragging');
+        _dragEl.style.transition = 'none';
       }
 
-      // Move the dragged element with the finger. translate is composed with
-      // the elevated state (scale + slight rotation) so iOS feels lively.
-      _dragEl.style.transform = 'translateY(' + dy + 'px) scale(1.04) rotate(0.5deg)';
+      // Compose translate + elevated state on the dragged widget. We never
+      // detach it from the DOM; iOS shadow + scale + rotation come from CSS
+      // .widget--dragging plus our inline transform.
+      _dragEl.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(1.05) rotate(0.6deg)';
 
-      // Slot-based hit test: walk siblings, find the one whose midpoint the
-      // pointer has crossed. Only a single swap per frame to avoid jitter.
-      var widgets = _getReorderableWidgets();
-      var parent = _dragEl.parentNode;
-      if (!parent) return true;
+      // Hit-test: where in the grid is the pointer? We use the dragged
+      // widget's CURRENT visual center to find which sibling slot it's over.
+      var draggedCenterX = _startRect.left + _startRect.width / 2 + dx;
+      var draggedCenterY = _startRect.top + _startRect.height / 2 + dy;
 
-      var draggedIdx = widgets.indexOf(_dragEl);
+      _updatePreview(draggedCenterX, draggedCenterY);
 
-      for (var i = 0; i < widgets.length; i++) {
-        var w = widgets[i];
-        if (w === _dragEl) continue;
-        if (w.parentNode !== parent) continue;
-        // Skip widgets currently mid-FLIP-animation — their rect is misleading.
-        var r = w.getBoundingClientRect();
-        var mid = r.top + r.height / 2;
-
-        // Dragging downward, neighbor is below us, finger has crossed mid → swap.
-        if (i > draggedIdx && y > mid) {
-          _swapWith(w);
-          return true;
-        }
-        // Dragging upward, neighbor is above us, finger has crossed mid → swap.
-        if (i < draggedIdx && y < mid) {
-          _swapWith(w);
-          return true;
-        }
-      }
       return true;
     }
 
     /**
-     * FLIP-swap the dragged widget with `target`. Captures both rects, performs
-     * the DOM swap, then animates `target` from old to new position via a
-     * transient transform+transition. The dragged widget keeps its
-     * finger-tracked transform (recomputed so it visually stays under the
-     * finger across the slot change).
-     * @param {HTMLElement} target
+     * Update the preview placement: figure out which slot the dragged widget
+     * would land in if released now, and apply translate transforms to the
+     * displaced widgets so the swap is visually rehearsed (FLIP-style).
+     *
+     * Slot semantics:
+     *   - Two small widgets sharing a row count as separate "half" slots.
+     *   - A full widget always occupies one full row.
+     *   - When the dragged widget is small over a small target on the same
+     *     row → swap them horizontally.
+     *   - When the dragged widget is small over a full target → it goes
+     *     above/below the full row depending on Y position.
+     *   - When the dragged widget is full over any target → it swaps
+     *     with the entire row at the target.
      */
-    function _swapWith(target) {
-      if (!_dragEl || !target) return;
-      var parent = _dragEl.parentNode;
-      if (!parent || target.parentNode !== parent) return;
-
-      // FIRST: capture rects pre-swap.
-      var draggedRectBefore = _dragEl.getBoundingClientRect();
-      var targetRectBefore = target.getBoundingClientRect();
-
-      // Briefly clear the dragged element's transform so the layout we sample
-      // after the DOM mutation reflects the natural slot positions.
-      var prevTransform = _dragEl.style.transform;
-      _dragEl.style.transform = '';
-
-      // PLAY: perform DOM swap.
-      var siblings = Array.prototype.slice.call(parent.children);
-      var draggedIdx = siblings.indexOf(_dragEl);
-      var targetIdx = siblings.indexOf(target);
-
-      if (draggedIdx < targetIdx) {
-        // Move dragged after target (downward swap)
-        if (target.nextSibling) {
-          parent.insertBefore(_dragEl, target.nextSibling);
-        } else {
-          parent.appendChild(_dragEl);
-        }
-      } else {
-        // Move dragged before target (upward swap)
-        parent.insertBefore(_dragEl, target);
+    function _updatePreview(centerX, centerY) {
+      var hit = _hitTest(centerX, centerY);
+      if (hit.targetIdx === _previewTargetIdx && hit.insertBefore === _previewInsertBefore) {
+        return; // No change
       }
 
-      // INVERT: read post-swap rects.
-      var draggedRectAfter = _dragEl.getBoundingClientRect();
-      var targetRectAfter = target.getBoundingClientRect();
+      _previewTargetIdx = hit.targetIdx;
+      _previewInsertBefore = hit.insertBefore;
 
-      // Animate the displaced (target) widget from its old position to its new
-      // position so it slides into the dragged's old slot.
-      var targetDelta = targetRectBefore.top - targetRectAfter.top;
-      target.style.transition = 'none';
-      target.style.transform = 'translateY(' + targetDelta + 'px)';
-      // force reflow so the browser registers the starting transform
-      target.getBoundingClientRect();
-      target.style.transition = SWAP_TRANSITION;
-      target.style.transform = '';
-
-      // Recompute the dragged element's transform so it stays visually under
-      // the finger after its DOM index moved.
-      //
-      //   visualTopBefore = T_oldSlot + prevDy
-      //   slotTopAfter    = T_newSlot
-      //   newDy           = visualTopBefore - slotTopAfter   (== draggedDelta below)
-      //
-      // For subsequent finger moves to compute the right dy, we adjust _startY:
-      //   prevDy = currentY - _startY_old
-      //   newDy  = currentY - _startY_new
-      //   ⇒ _startY_new = _startY_old + (prevDy - newDy)
-      var draggedDelta = draggedRectBefore.top - draggedRectAfter.top;
-      var match = /translateY\(([-\d.]+)px\)/.exec(prevTransform || '');
-      var prevDy = match ? parseFloat(match[1]) : 0;
-      var newDy = draggedDelta; // keeps visual top constant
-      _startY = _startY + (prevDy - newDy);
-      _dragEl.style.transition = 'none';
-      _dragEl.style.transform = 'translateY(' + newDy + 'px) scale(1.04) rotate(0.5deg)';
-
-      // Clean up the target's inline transform after the animation finishes
-      // so future swaps see a clean slate.
-      var cleanup = function () {
-        target.style.transition = '';
-        target.style.transform = '';
-        target.removeEventListener('transitionend', cleanup);
-      };
-      target.addEventListener('transitionend', cleanup);
-      // Fallback in case transitionend doesn't fire (e.g., element re-rendered)
-      setTimeout(cleanup, 260);
+      // Compute the would-be DOM order, then for each non-dragged widget
+      // calculate its predicted new rect and translate it from its current
+      // position to that target. This produces a smooth FLIP preview without
+      // mutating the actual DOM until pointerup.
+      _applyPreviewTransforms();
     }
 
     /**
-     * End a drag — animate the dragged widget back to translateY(0), persist
-     * the new order, and reset state.
+     * Hit-test: scan siblings, return which one (and which side) the pointer
+     * center is over. Returns { targetIdx, insertBefore } where targetIdx is
+     * the index in _siblings (-1 means no swap = stay in original slot).
+     */
+    function _hitTest(centerX, centerY) {
+      var draggedSize = _dragEl.getAttribute('data-widget-size') || 'full';
+
+      var bestIdx = -1;
+      var bestInsertBefore = false;
+
+      for (var i = 0; i < _siblings.length; i++) {
+        var sibling = _siblings[i];
+        var rect = sibling.getBoundingClientRect();
+
+        // Reject if sibling has been displaced and its inline transform moved
+        // it — use its ORIGINAL slot rect (from drag start) for predictable
+        // hit-testing. Once the user moves between slots, _siblingStartRects
+        // gives us the stable layout the user perceived at drag start.
+        var startRect = _siblingStartRects[i];
+
+        // Pointer must be vertically and horizontally inside the slot
+        var inX = centerX >= startRect.left && centerX <= startRect.right;
+        var inY = centerY >= startRect.top && centerY <= startRect.bottom;
+        if (!inX || !inY) continue;
+
+        var siblingSize = sibling.getAttribute('data-widget-size') || 'full';
+
+        if (draggedSize === 'small' && siblingSize === 'small') {
+          // Same-row horizontal swap: insertBefore depends on which half of
+          // the target's width the pointer is in.
+          var targetMidX = startRect.left + startRect.width / 2;
+          bestIdx = i;
+          bestInsertBefore = centerX < targetMidX;
+        } else if (draggedSize === 'small' && siblingSize === 'full') {
+          // Above or below depending on vertical center
+          var targetMidY = startRect.top + startRect.height / 2;
+          bestIdx = i;
+          bestInsertBefore = centerY < targetMidY;
+        } else if (draggedSize === 'full') {
+          // Full-width drag: swap with the whole row of the target. Direction
+          // (above or below) determined by vertical position.
+          var midY = startRect.top + startRect.height / 2;
+          bestIdx = i;
+          bestInsertBefore = centerY < midY;
+        } else {
+          // dragged full-but-treated-default fallback
+          bestIdx = i;
+          bestInsertBefore = centerY < (startRect.top + startRect.height / 2);
+        }
+        break;
+      }
+
+      return { targetIdx: bestIdx, insertBefore: bestInsertBefore };
+    }
+
+    /**
+     * Apply translate transforms to siblings based on the current preview.
+     * Uses FLIP: reads original rects (captured at drag start), computes the
+     * predicted post-DOM-mutation rects, applies a translate equal to
+     * (predicted - original) so the displaced widget appears to slide in.
+     */
+    function _applyPreviewTransforms() {
+      // Reset all sibling transforms first
+      for (var i = 0; i < _siblings.length; i++) {
+        var s = _siblings[i];
+        s.classList.remove('widget--displaced');
+        s.style.transform = '';
+      }
+      _displacedTransforms = {};
+
+      if (_previewTargetIdx < 0) return;
+
+      // Build the predicted new order array (data-widget-id strings) by
+      // simulating where the dragged item would be inserted.
+      var dragId = _dragEl.getAttribute('data-widget-id');
+      var siblingIds = _siblings.map(function (s) { return s.getAttribute('data-widget-id'); });
+
+      var targetSiblingId = _siblings[_previewTargetIdx].getAttribute('data-widget-id');
+      var newOrder = [];
+      for (var j = 0; j < siblingIds.length; j++) {
+        if (siblingIds[j] === targetSiblingId && _previewInsertBefore) {
+          newOrder.push(dragId);
+        }
+        newOrder.push(siblingIds[j]);
+        if (siblingIds[j] === targetSiblingId && !_previewInsertBefore) {
+          newOrder.push(dragId);
+        }
+      }
+      // If for any reason dragId wasn't placed, append it
+      if (newOrder.indexOf(dragId) < 0) newOrder.push(dragId);
+
+      // Use the rendered grid layout to compute predicted rects: build a
+      // detached clone of the grid container, populate it with cloned
+      // widgets in the predicted order, then read offsetTop/offsetLeft of
+      // each placeholder to derive the layout. Cheaper alternative: clone
+      // off-screen using the actual grid.
+      var grid = _dragEl.parentNode;
+      if (!grid) return;
+
+      var clone = grid.cloneNode(false);
+      // Match dimensions: use actual grid width
+      var gridRect = grid.getBoundingClientRect();
+      clone.style.position = 'absolute';
+      clone.style.visibility = 'hidden';
+      clone.style.left = '-99999px';
+      clone.style.top = '0';
+      clone.style.width = gridRect.width + 'px';
+      // Copy computed grid-template-columns + gap to ensure same layout
+      var gridStyle = window.getComputedStyle(grid);
+      clone.style.gridTemplateColumns = gridStyle.gridTemplateColumns;
+      clone.style.gap = gridStyle.gap;
+      clone.style.display = 'grid';
+
+      // Map id → predicted rect via a lightweight placeholder element per widget
+      var placeholders = {}; // id → placeholder element
+      var allIds = newOrder.slice();
+      for (var k = 0; k < allIds.length; k++) {
+        var id = allIds[k];
+        var origEl = (id === dragId) ? _dragEl : _siblings[siblingIds.indexOf(id)];
+        if (!origEl) continue;
+        var ph = document.createElement('div');
+        var origRect = (id === dragId) ? _startRect : _siblingStartRects[siblingIds.indexOf(id)];
+        ph.style.height = origRect.height + 'px';
+        ph.style.width = '100%';
+        var size = origEl.getAttribute('data-widget-size') || 'full';
+        if (size === 'full') {
+          ph.style.gridColumn = '1 / -1';
+        } else {
+          ph.style.gridColumn = 'span 1';
+        }
+        clone.appendChild(ph);
+        placeholders[id] = ph;
+      }
+
+      document.body.appendChild(clone);
+
+      // Read predicted positions (relative to the document)
+      var cloneRect = clone.getBoundingClientRect();
+      var predictedRects = {};
+      for (var pid in placeholders) {
+        if (Object.prototype.hasOwnProperty.call(placeholders, pid)) {
+          var phRect = placeholders[pid].getBoundingClientRect();
+          // Translate the clone's offset so we compare to the real grid coordinates
+          predictedRects[pid] = {
+            left: gridRect.left + (phRect.left - cloneRect.left),
+            top: gridRect.top + (phRect.top - cloneRect.top),
+            width: phRect.width,
+            height: phRect.height
+          };
+        }
+      }
+
+      document.body.removeChild(clone);
+
+      // Apply translate transforms to each displaced sibling so it appears
+      // at its predicted slot. Skip the dragged widget — it follows the
+      // finger via its own transform.
+      for (var m = 0; m < _siblings.length; m++) {
+        var sib = _siblings[m];
+        var sid = siblingIds[m];
+        var startR = _siblingStartRects[m];
+        var pr = predictedRects[sid];
+        if (!pr) continue;
+        var dx = pr.left - startR.left;
+        var dy = pr.top - startR.top;
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+          // No movement
+          continue;
+        }
+        sib.classList.add('widget--displaced');
+        var transformStr = 'translate(' + dx + 'px, ' + dy + 'px)';
+        sib.style.transform = transformStr;
+        _displacedTransforms[sid] = transformStr;
+      }
+    }
+
+    /**
+     * Commit the drag: mutate the DOM to reflect the preview, clear all
+     * transforms, persist the new order. The dragged widget snaps to its new
+     * grid slot naturally because we remove its inline transform after
+     * insertion.
      */
     function _endDrag() {
       if (!_dragEl) return;
-
       var el = _dragEl;
       var didDrag = _dragging;
+      var commitTargetIdx = _previewTargetIdx;
+      var commitInsertBefore = _previewInsertBefore;
 
-      if (didDrag) {
-        // Animate the dragged widget snapping into its slot via transition.
-        el.style.transition = SWAP_TRANSITION;
-        el.style.transform = '';
-        var done = function () {
-          el.style.transition = '';
-          el.style.transform = '';
-          el.style.position = '';
-          el.style.zIndex = '';
-          el.classList.remove('widget--dragging');
-          el.removeEventListener('transitionend', done);
-        };
-        el.addEventListener('transitionend', done);
-        // Fallback in case transitionend doesn't fire
-        setTimeout(done, 260);
-      } else {
-        // Tap (no drag committed) — clean immediately
-        el.style.transition = '';
-        el.style.transform = '';
-        el.style.position = '';
-        el.style.zIndex = '';
-        el.classList.remove('widget--dragging');
+      if (didDrag && commitTargetIdx >= 0) {
+        var grid = el.parentNode;
+        var targetSibling = _siblings[commitTargetIdx];
+
+        if (grid && targetSibling && targetSibling.parentNode === grid) {
+          if (commitInsertBefore) {
+            grid.insertBefore(el, targetSibling);
+          } else {
+            if (targetSibling.nextSibling) {
+              grid.insertBefore(el, targetSibling.nextSibling);
+            } else {
+              grid.appendChild(el);
+            }
+          }
+        }
       }
+
+      // Clear sibling transforms
+      for (var i = 0; i < _siblings.length; i++) {
+        var s = _siblings[i];
+        s.classList.remove('widget--displaced');
+        s.style.transform = '';
+        s.style.transition = '';
+      }
+
+      // Clear dragged widget styles. Grid auto-flow places it correctly.
+      el.style.transition = '';
+      el.style.transform = '';
+      el.style.position = '';
+      el.style.zIndex = '';
+      el.classList.remove('widget--dragging');
 
       _dragEl = null;
       _dragging = false;
       _activePointerId = null;
       _dragMode = null;
+      _siblings = [];
+      _siblingStartRects = [];
+      _previewTargetIdx = -1;
+      _previewInsertBefore = null;
+      _displacedTransforms = {};
+      _startRect = null;
 
       if (didDrag) {
         _saveCurrentOrder();
@@ -14703,6 +14658,11 @@ const JobTracker = (function () {
     function _cancelDrag() {
       if (!_dragEl) return;
       var el = _dragEl;
+      for (var i = 0; i < _siblings.length; i++) {
+        var s = _siblings[i];
+        s.classList.remove('widget--displaced');
+        s.style.transform = '';
+      }
       el.style.transition = '';
       el.style.transform = '';
       el.style.position = '';
@@ -14713,6 +14673,12 @@ const JobTracker = (function () {
       _dragging = false;
       _activePointerId = null;
       _dragMode = null;
+      _siblings = [];
+      _siblingStartRects = [];
+      _previewTargetIdx = -1;
+      _previewInsertBefore = null;
+      _displacedTransforms = {};
+      _startRect = null;
     }
 
     return {
@@ -15578,8 +15544,21 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.0.3';
+  const APP_VERSION = '2.0.4';
   const APP_CHANGELOG = [
+    {
+      version: '2.0.4',
+      date: '2026-05-25',
+      changes: [
+        'v2.0.4 — Dashboard-Grid, Punch-Clock & Steuer-Simulator',
+        '🧱 Dashboard im 2-Spalten-Grid: Punch-Clock & Steuer-Simulator als 1×1-Glaskacheln nebeneinander, alle anderen Widgets über volle Breite. Reihenfolge wird automatisch im Grid platziert',
+        '👆 Drag&Drop komplett neu: iOS-Home-Screen-Stil mit FLIP-Preview, Slot-basiertem Hit-Test und sauberen Swaps — keine seltsamen Andock-Effekte mehr',
+        '⏱️ Punch-Clock kreisrund: zentraler Play/Stop-Button, Fortschrittsring (8h voll), Farbwechsel ins Warme nach 8h Schicht, Timer im Inneren',
+        '💶 Steuer-Simulator als Kompakt-Kachel: kein Aufklappen mehr, Big-Net-Anzeige, schlanker Slider, Steuersatz unten',
+        '🐛 Steuer-Berechnung präzisiert: progressive deutsche Lohnsteuer 2026 in 4 Zonen ohne Cliff-Sprünge, Soli mit korrekter Milderungszone (smoothes Phase-In zwischen 18.130€ und 36.260€)',
+        '✅ Verifiziert: Schieberegler von 68h → 69h → 70h erzeugt jetzt gleichmäßige Netto-Schritte, keine Soli-Klippe'
+      ]
+    },
     {
       version: '2.0.3',
       date: '2026-05-24',
