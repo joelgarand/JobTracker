@@ -2287,7 +2287,10 @@ const JobTracker = (function () {
       if (geoFields) geoFields.style.display = 'none';
       if (geoLatField) geoLatField.value = '';
       if (geoLngField) geoLngField.value = '';
-      if (geoStatusEl) { geoStatusEl.textContent = ''; geoStatusEl.className = 'geo-status-text'; }
+      if (geoStatusEl) {
+        geoStatusEl.className = 'geo-status-badge geo-status-badge--inactive';
+        geoStatusEl.textContent = 'Inaktiv';
+      }
 
       // Reset salary type to hourly
       var hourlyRadio = document.querySelector('input[name="settings-salary-type"][value="hourly"]');
@@ -2372,11 +2375,14 @@ const JobTracker = (function () {
       if (geoLngField) geoLngField.value = (job.geoLng != null) ? String(job.geoLng) : '';
       if (geoStatusEl) {
         if (job.hasGeoReminder && job.geoLat != null && job.geoLng != null) {
-          geoStatusEl.textContent = 'Gespeichert: ' + job.geoLat.toFixed(6) + ', ' + job.geoLng.toFixed(6);
-          geoStatusEl.className = 'geo-status-text geo-status--ok';
+          geoStatusEl.className = 'geo-status-badge geo-status-badge--active';
+          geoStatusEl.textContent = 'Aktiv • ' + job.geoLat.toFixed(4) + ', ' + job.geoLng.toFixed(4);
+        } else if (job.hasGeoReminder) {
+          geoStatusEl.className = 'geo-status-badge geo-status-badge--inactive';
+          geoStatusEl.textContent = 'Position wählen';
         } else {
-          geoStatusEl.textContent = '';
-          geoStatusEl.className = 'geo-status-text';
+          geoStatusEl.className = 'geo-status-badge geo-status-badge--inactive';
+          geoStatusEl.textContent = 'Inaktiv';
         }
       }
 
@@ -2711,21 +2717,31 @@ const JobTracker = (function () {
         geoToggle.addEventListener('change', function () {
           if (geoFields) geoFields.style.display = geoToggle.checked ? '' : 'none';
 
-          // When user enables geo-reminder for the first time, request notification permission
-          if (geoToggle.checked && 'Notification' in window) {
-            if (Notification.permission === 'default') {
-              try {
-                Notification.requestPermission().then(function (permission) {
-                  if (permission !== 'granted' && geoStatusEl) {
-                    geoStatusEl.textContent = '⚠️ Benachrichtigungen sind deaktiviert. Geo-Erinnerungen funktionieren nicht ohne diese Berechtigung.';
-                    geoStatusEl.className = 'geo-status-text geo-status--error';
+          if (geoToggle.checked) {
+            // Default badge state when enabled but no coords yet
+            _setGeoStatusBadge(geoStatusEl, 'inactive', 'Position wählen');
+
+            // Request notification permission proactively
+            if ('Notification' in window) {
+              if (Notification.permission === 'default') {
+                try {
+                  var p = Notification.requestPermission();
+                  if (p && typeof p.then === 'function') {
+                    p.then(function (permission) {
+                      if (permission !== 'granted') {
+                        _setGeoStatusBadge(geoStatusEl, 'error', 'Benachrichtigungen blockiert');
+                      }
+                    });
                   }
-                });
-              } catch (e) {
-                // Some browsers don't support promise-based requestPermission
-                Notification.requestPermission(function () {});
+                } catch (e) {
+                  Notification.requestPermission(function () {});
+                }
+              } else if (Notification.permission === 'denied') {
+                _setGeoStatusBadge(geoStatusEl, 'error', 'Benachrichtigungen blockiert');
               }
             }
+          } else {
+            _setGeoStatusBadge(geoStatusEl, 'inactive', 'Inaktiv');
           }
         });
       }
@@ -2733,15 +2749,9 @@ const JobTracker = (function () {
       if (geoBtn && !geoBtn._bound) {
         geoBtn._bound = true;
         geoBtn.addEventListener('click', function () {
-          if (geoStatusEl) {
-            geoStatusEl.textContent = 'Standort wird ermittelt…';
-            geoStatusEl.className = 'geo-status-text';
-          }
+          _setGeoStatusBadge(geoStatusEl, 'inactive', 'Standort wird ermittelt…');
           if (typeof GeoReminderService === 'undefined' || !GeoReminderService.getCurrentPosition) {
-            if (geoStatusEl) {
-              geoStatusEl.textContent = 'Geolocation nicht verfügbar.';
-              geoStatusEl.className = 'geo-status-text geo-status--error';
-            }
+            _setGeoStatusBadge(geoStatusEl, 'error', 'Geolocation nicht verfügbar');
             return;
           }
           GeoReminderService.getCurrentPosition(function (result) {
@@ -2750,17 +2760,25 @@ const JobTracker = (function () {
               var lngField = document.getElementById('settings-job-geo-lng');
               if (latField) latField.value = String(result.lat);
               if (lngField) lngField.value = String(result.lng);
-              if (geoStatusEl) {
-                geoStatusEl.textContent = 'Gespeichert: ' + result.lat.toFixed(6) + ', ' + result.lng.toFixed(6);
-                geoStatusEl.className = 'geo-status-text geo-status--ok';
-              }
-            } else if (geoStatusEl) {
-              geoStatusEl.textContent = (result && result.error) ? 'Fehler: ' + result.error : 'Position konnte nicht ermittelt werden.';
-              geoStatusEl.className = 'geo-status-text geo-status--error';
+              _setGeoStatusBadge(geoStatusEl, 'active', 'Aktiv • ' + result.lat.toFixed(4) + ', ' + result.lng.toFixed(4));
+            } else {
+              _setGeoStatusBadge(geoStatusEl, 'error', (result && result.error) ? 'Fehler' : 'Position nicht verfügbar');
             }
           });
         });
       }
+    }
+
+    /**
+     * Update the geo-status badge element's class and text.
+     * @param {HTMLElement} el
+     * @param {'active'|'inactive'|'error'} state
+     * @param {string} text
+     */
+    function _setGeoStatusBadge(el, state, text) {
+      if (!el) return;
+      el.className = 'geo-status-badge geo-status-badge--' + state;
+      el.textContent = text;
     }
 
     /**
@@ -4439,6 +4457,38 @@ const JobTracker = (function () {
       if (!job) return { netto: 0, available: true };
 
       var brutto = calculateMonthlyBrutto(jobId, year, month);
+      return _netFromBrutto(brutto, job, year);
+    }
+
+    /**
+     * Public helper: calculate net income for a hypothetical monthly gross
+     * using the same logic as calculateMonthlyNetto. Used by TaxSimulator
+     * to project additional-hour scenarios without re-implementing tax math.
+     *
+     * @param {string} jobId
+     * @param {number} brutto - Hypothetical monthly gross
+     * @param {number} [year] - Tax year (defaults to current year)
+     * @returns {{ netto: number, available: boolean, reason?: string, deductions?: object }}
+     */
+    function calculateNetForBrutto(jobId, brutto, year) {
+      var job = _findJob(jobId);
+      if (!job) return { netto: 0, available: true };
+      var y = (typeof year === 'number') ? year : new Date().getFullYear();
+      var b = (typeof brutto === 'number' && isFinite(brutto) && brutto >= 0) ? brutto : 0;
+      return _netFromBrutto(b, job, y);
+    }
+
+    /**
+     * Internal: shared deduction logic used by both calculateMonthlyNetto and
+     * calculateNetForBrutto. Takes a brutto amount, job, and year — returns the
+     * full netto result with deduction breakdown.
+     *
+     * @param {number} brutto
+     * @param {object} job
+     * @param {number} year
+     * @returns {{ netto: number, available: boolean, reason?: string, deductions?: object }}
+     */
+    function _netFromBrutto(brutto, job, year) {
       var config = RuleConfigEngine.getConfig(year);
       var userProfile = AppState.getState().userProfile;
 
@@ -4877,6 +4927,7 @@ const JobTracker = (function () {
       calculateMonthlyBrutto: calculateMonthlyBrutto,
       calculateYearlyBrutto: calculateYearlyBrutto,
       calculateMonthlyNetto: calculateMonthlyNetto,
+      calculateNetForBrutto: calculateNetForBrutto,
       calculateYearlyNetto: calculateYearlyNetto,
       getAggregatedMonthly: getAggregatedMonthly,
       getAggregatedYearly: getAggregatedYearly,
@@ -8094,7 +8145,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.0.1';
+    const APP_VERSION = '2.0.2';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -11418,6 +11469,16 @@ const JobTracker = (function () {
     var _lastMicroTime = 0;
 
     /**
+     * Detect iOS Safari (iPhone / iPad / iPod). iOS does not implement the
+     * Vibration API at all — the toggle still exists so the user preference is
+     * preserved if/when Apple adds support, but we surface a clearer hint.
+     * @returns {boolean}
+     */
+    function _isIOS() {
+      return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    }
+
+    /**
      * Initialize: load preference from localStorage, detect support, subscribe to events, bind UI.
      */
     function init() {
@@ -11442,8 +11503,23 @@ const JobTracker = (function () {
 
       // Bind haptic-toggle UI element
       var toggle = document.getElementById('haptic-toggle');
+      var unsupportedHint = document.getElementById('haptic-unsupported-hint');
       if (toggle) {
         toggle.checked = _enabled;
+        if (!_supported) {
+          // Don't disable the toggle — preserve preference for the future.
+          // Just surface a hint explaining why nothing happens.
+          if (unsupportedHint) {
+            if (_isIOS()) {
+              unsupportedHint.textContent = 'ℹ️ Haptisches Feedback ist auf iOS leider nicht verfügbar (Apple-Beschränkung).';
+            } else {
+              unsupportedHint.textContent = '⚠️ Haptisches Feedback wird auf diesem Gerät nicht unterstützt.';
+            }
+            unsupportedHint.style.display = '';
+          }
+        } else {
+          if (unsupportedHint) unsupportedHint.style.display = 'none';
+        }
         toggle.addEventListener('change', function () {
           setEnabled(toggle.checked);
         });
@@ -12097,13 +12173,18 @@ const JobTracker = (function () {
       if (!e.touches || e.touches.length === 0) return;
 
       var touch = e.touches[0];
+      // Signed delta: positive = leftward swipe, negative = rightward swipe.
       var deltaX = _startX - touch.clientX;
+      var absX = Math.abs(deltaX);
       var deltaY = Math.abs(touch.clientY - _startY);
 
-      // Only lock into horizontal swipe if deltaX > 10 and deltaX > deltaY
-      if (deltaX > 10 && deltaX > deltaY) {
+      // Activate horizontal swipe in either direction once it dominates over
+      // vertical movement. This is the fix for "can't swipe right to close":
+      // previously only deltaX > 10 (left only) flipped _swiping to true, so
+      // _onTouchEnd bailed out for any rightward swipe.
+      if (absX > 10 && absX > deltaY) {
         _swiping = true;
-        // Prevent vertical scrolling while swiping horizontally
+        // Prevent vertical scrolling while a horizontal swipe is locked in.
         e.preventDefault();
       }
     }
@@ -12115,7 +12196,7 @@ const JobTracker = (function () {
       if (!_swiping) return;
 
       var touch = e.changedTouches[0];
-      var deltaX = _startX - touch.clientX;
+      var deltaX = _startX - touch.clientX; // positive = swipe-left, negative = swipe-right
 
       // Find the swipeable entry element
       var target = e.target;
@@ -12125,16 +12206,27 @@ const JobTracker = (function () {
         return;
       }
 
-      if (deltaX >= _threshold) {
-        // Reveal delete button
-        _revealDeleteButton(entry, containerId);
-      } else if (deltaX < 0 && _activeEntry === entry) {
-        // Swipe right on revealed entry → snap back
-        _snapBack(entry);
-        _activeEntry = null;
+      var isRevealed = entry.classList.contains('swipeable-entry--swiped');
+
+      if (isRevealed) {
+        // Already revealed: a meaningful right-swipe closes it.
+        if (deltaX <= -(_threshold / 2)) {
+          _snapBack(entry);
+          if (_activeEntry === entry) _activeEntry = null;
+        } else if (deltaX >= _threshold) {
+          // Further left swipe — keep revealed (already is)
+          // No-op
+        } else {
+          // Tiny movement — keep current state (revealed).
+        }
       } else {
-        // Snap back (swipe not far enough)
-        _snapBack(entry);
+        // Not revealed: a left-swipe past the threshold reveals it.
+        if (deltaX >= _threshold) {
+          _revealDeleteButton(entry, containerId);
+        } else {
+          // Snap back to clear any partial offset/state.
+          _snapBack(entry);
+        }
       }
 
       _swiping = false;
@@ -12411,12 +12503,16 @@ const JobTracker = (function () {
       // Get aggregated data points
       var dataPoints = _getDataPoints(type, windowDays);
 
-      // If fewer than 3 data points, hide sparkline and show only numeric total
+      // If fewer than 3 data points, show a tiny placeholder hint
+      // (visual feedback that the sparkline area exists and will populate later)
       if (dataPoints.length < MIN_DATA_POINTS) {
-        container.innerHTML = '';
-        container.classList.remove('sparkline-container');
+        container.innerHTML = '<span class="sparkline-empty" title="Mindestens 3 Tage mit Werten benötigt">📈 Bald verfügbar</span>';
+        container.classList.add('sparkline-container');
+        container.classList.add('sparkline-container--empty');
+        container.onclick = null;
         return;
       }
+      container.classList.remove('sparkline-container--empty');
 
       // Generate SVG
       var svg = _generateSVG(dataPoints);
@@ -13631,26 +13727,20 @@ const JobTracker = (function () {
      */
     function init() {
       var toggleBtn = document.getElementById('tax-simulator-toggle');
-      var slider = document.getElementById('tax-simulator-slider');
       var jobSelect = document.getElementById('tax-simulator-job-select');
 
-      if (toggleBtn) {
+      if (toggleBtn && !toggleBtn._taxBound) {
+        toggleBtn._taxBound = true;
         toggleBtn.addEventListener('click', function () {
           toggle();
         });
       }
 
-      if (slider) {
-        slider.addEventListener('input', function () {
-          _currentHours = parseInt(slider.value, 10) || 0;
-          slider.setAttribute('aria-valuenow', _currentHours);
-          _updateSliderValueDisplay();
-          _runSimulation();
-          EventBus.emit('tax:slider_changed', { hours: _currentHours });
-        });
-      }
+      // Bind slider input event (idempotent)
+      _bindSliderEvents();
 
-      if (jobSelect) {
+      if (jobSelect && !jobSelect._taxBound) {
+        jobSelect._taxBound = true;
         jobSelect.addEventListener('change', function () {
           _selectedJobId = jobSelect.value || null;
           _runSimulation();
@@ -13661,7 +13751,8 @@ const JobTracker = (function () {
       var missingProfileEl = document.getElementById('tax-simulator-missing-profile');
       if (missingProfileEl) {
         var link = missingProfileEl.querySelector('a[data-navigate]');
-        if (link) {
+        if (link && !link._taxBound) {
+          link._taxBound = true;
           link.addEventListener('click', function (e) {
             e.preventDefault();
             var target = link.getAttribute('data-navigate');
@@ -13709,6 +13800,30 @@ const JobTracker = (function () {
     }
 
     /**
+     * Bind the slider input event handler. Idempotent — re-binding is a no-op.
+     * Extracted so we can rebind defensively when the widget body becomes visible.
+     */
+    function _bindSliderEvents() {
+      var slider = document.getElementById('tax-simulator-slider');
+      if (!slider || slider._taxBound) return;
+      slider._taxBound = true;
+      slider.addEventListener('input', function () {
+        _currentHours = parseInt(slider.value, 10) || 0;
+        slider.setAttribute('aria-valuenow', _currentHours);
+        _updateSliderValueDisplay();
+        _runSimulation();
+        EventBus.emit('tax:slider_changed', { hours: _currentHours });
+      });
+      // Also handle 'change' for browsers that fire it for keyboard input
+      slider.addEventListener('change', function () {
+        _currentHours = parseInt(slider.value, 10) || 0;
+        slider.setAttribute('aria-valuenow', _currentHours);
+        _updateSliderValueDisplay();
+        _runSimulation();
+      });
+    }
+
+    /**
      * Calculate net income for additional hours.
      * @param {number} additionalHours - 0 to 80
      * @param {string} jobId - Job to use for hourly rate
@@ -13743,28 +13858,52 @@ const JobTracker = (function () {
       var year = now.getFullYear();
       var month = now.getMonth() + 1;
 
-      var currentMonthGross = IncomeEngine.calculateMonthlyBrutto(jobId, year, month);
+      var currentMonthGross = 0;
+      var currentMonthNet = 0;
+      try {
+        currentMonthGross = IncomeEngine.calculateMonthlyBrutto(jobId, year, month) || 0;
+      } catch (e) { currentMonthGross = 0; }
 
-      // Calculate current net
-      var currentNetResult = IncomeEngine.calculateMonthlyNetto(jobId, year, month);
-      if (!currentNetResult.available) {
-        return { grossAdd: additionalGross, netAdd: 0, effectiveRate: 0 };
+      try {
+        var currentNetResult = IncomeEngine.calculateMonthlyNetto(jobId, year, month);
+        if (currentNetResult && currentNetResult.available) {
+          currentMonthNet = currentNetResult.netto;
+        } else {
+          // Engine reports profile missing — IncomeEngine still returns 0 in that
+          // case for Teilzeit/Vollzeit, so we mirror that: net is unknown.
+          currentMonthNet = 0;
+        }
+      } catch (e) {
+        currentMonthNet = 0;
       }
-      var currentMonthNet = currentNetResult.netto;
 
-      // Calculate simulated net by computing netto for (currentGross + additionalGross)
-      // We need to use the same calculation logic but with a higher brutto
-      // Since calculateMonthlyNetto works from workday data, we simulate by
-      // computing the netto for the combined gross directly using the job type logic
-      var simulatedNet = _calculateNetForGross(currentMonthGross + additionalGross, job);
-      if (simulatedNet === null) {
-        return { grossAdd: additionalGross, netAdd: 0, effectiveRate: 0 };
+      // Calculate simulated net for (currentGross + additionalGross) using the
+      // exact same engine logic — this guarantees consistency with the rest of
+      // the app and avoids cliffs caused by parallel approximations.
+      var simulatedNet = currentMonthNet;
+      try {
+        var simResult = IncomeEngine.calculateNetForBrutto(jobId, currentMonthGross + additionalGross, year);
+        if (simResult && simResult.available) {
+          simulatedNet = simResult.netto;
+        } else {
+          // Profile missing for Teilzeit/Vollzeit — fall back to a flat ~35%
+          // deduction estimate on the additional gross only, leaving the
+          // current net unchanged.
+          simulatedNet = currentMonthNet + (additionalGross * 0.65);
+        }
+      } catch (e) {
+        simulatedNet = currentMonthNet + (additionalGross * 0.65);
       }
 
       var netDelta = simulatedNet - currentMonthNet;
+      if (netDelta < 0) netDelta = additionalGross * 0.65;
+
       var effectiveRate = additionalGross > 0
         ? ((additionalGross - netDelta) / additionalGross) * 100
         : 0;
+      if (!isFinite(effectiveRate)) effectiveRate = 0;
+      if (effectiveRate < 0) effectiveRate = 0;
+      if (effectiveRate > 100) effectiveRate = 100;
 
       return {
         grossAdd: Math.round(additionalGross * 100) / 100,
@@ -13806,6 +13945,7 @@ const JobTracker = (function () {
       }
 
       if (_expanded) {
+        _bindSliderEvents(); // Defensively rebind in case slider was hidden/replaced
         _populateJobSelect();
         _checkProfile();
         _runSimulation();
@@ -13813,158 +13953,6 @@ const JobTracker = (function () {
     }
 
     // ─── Private Methods ──────────────────────────────────────────────────────────
-
-    /**
-     * Calculate net income for a given gross amount using the job's type and user profile.
-     * Replicates IncomeEngine logic for a hypothetical gross value.
-     * @param {number} brutto - Total gross amount
-     * @param {object} job - Job object with type
-     * @returns {number|null} Net amount, or null if calculation unavailable
-     */
-    function _calculateNetForGross(brutto, job) {
-      if (!job) return null;
-
-      var year = new Date().getFullYear();
-      var config = RuleConfigEngine.getConfig(year);
-      var userProfile = AppState.getState().userProfile;
-
-      // Minijob: AN-Eigenanteil Rentenversicherung 3,6%
-      if (job.type === 'Minijob') {
-        var minijobRVRate = 0.036;
-        return Math.round((brutto - (brutto * minijobRVRate)) * 100) / 100;
-      }
-
-      // KFB: Pauschale Lohnsteuer 25% + Soli + ggf. Kirchensteuer
-      if (job.type === 'KFB') {
-        var kfbIncomeTax = brutto * 0.25;
-        var kfbSoli = kfbIncomeTax * config.solidaritaetszuschlag;
-        var kfbKirchensteuer = 0;
-        if (userProfile && userProfile.kirchensteuer && userProfile.bundesland) {
-          var ksRate = (userProfile.bundesland === 'Bayern' || userProfile.bundesland === 'Baden-Württemberg') ? 0.08 : 0.09;
-          kfbKirchensteuer = kfbIncomeTax * ksRate;
-        }
-        var kfbNetto = brutto - kfbIncomeTax - kfbSoli - kfbKirchensteuer;
-        return Math.round(Math.max(kfbNetto, 0) * 100) / 100;
-      }
-
-      // Werkstudent: only pension insurance (9.3%)
-      if (job.type === 'Werkstudent') {
-        var pensionRate = config.socialInsuranceRates.pension;
-        return Math.round((brutto - (brutto * pensionRate)) * 100) / 100;
-      }
-
-      // Teilzeit / Vollzeit: full tax + social insurance
-      if (!userProfile || !userProfile.steuerklasse || !userProfile.bundesland) {
-        return null;
-      }
-
-      var socialRates = config.socialInsuranceRates;
-      var pensionContrib = brutto * socialRates.pension;
-      var healthContrib = 0;
-      var careContrib = 0;
-      var unemploymentContrib = brutto * socialRates.unemployment;
-
-      var kvTyp = userProfile.krankenversicherung || 'gesetzlich';
-      if (kvTyp === 'gesetzlich') {
-        healthContrib = brutto * socialRates.health;
-        var careRate = socialRates.care;
-        if (!userProfile.hasChildren) {
-          careRate = socialRates.careChildless;
-        }
-        if (userProfile.bundesland === 'Sachsen') {
-          careRate += 0.005;
-        }
-        careContrib = brutto * careRate;
-      }
-
-      var totalSocial = pensionContrib + healthContrib + careContrib + unemploymentContrib;
-
-      // Income tax approximation using progressive rates
-      var monthlyIncomeTax = _approximateIncomeTax(brutto, userProfile.steuerklasse);
-
-      // Solidaritätszuschlag
-      var monthlySoli = _approximateSoli(monthlyIncomeTax, userProfile.steuerklasse, config.solidaritaetszuschlag);
-
-      // Kirchensteuer
-      var monthlyKirchensteuer = 0;
-      if (userProfile.kirchensteuer) {
-        var ksRate2 = (userProfile.bundesland === 'Bayern' || userProfile.bundesland === 'Baden-Württemberg') ? 0.08 : 0.09;
-        monthlyKirchensteuer = monthlyIncomeTax * ksRate2;
-      }
-
-      var totalDeductions = totalSocial + monthlyIncomeTax + monthlySoli + monthlyKirchensteuer;
-      var netto = brutto - totalDeductions;
-      return Math.round(Math.max(netto, 0) * 100) / 100;
-    }
-
-    /**
-     * Approximate monthly income tax using simplified progressive brackets.
-     * Uses the same logic as IncomeEngine's _calculateIncomeTax if available.
-     * @param {number} monthlyBrutto
-     * @param {string} steuerklasse
-     * @returns {number}
-     */
-    function _approximateIncomeTax(monthlyBrutto, steuerklasse) {
-      // Use IncomeEngine's internal calculation by computing the difference
-      // between two netto calculations. Since we can't call the private function
-      // directly, we use a simplified progressive tax approximation.
-      var annualBrutto = monthlyBrutto * 12;
-      var taxableIncome = annualBrutto;
-
-      // Basic allowance per Steuerklasse
-      var basicAllowance = 11784; // 2026 Grundfreibetrag
-      if (steuerklasse === '3') {
-        basicAllowance = basicAllowance * 2;
-      } else if (steuerklasse === '5' || steuerklasse === '6') {
-        basicAllowance = 0;
-      }
-
-      taxableIncome = Math.max(taxableIncome - basicAllowance, 0);
-
-      // Simplified progressive tax calculation (German 2026 approximation)
-      var annualTax = 0;
-      if (taxableIncome <= 0) {
-        annualTax = 0;
-      } else if (taxableIncome <= 17005) {
-        // Zone 2: 14% to ~24%
-        var y = (taxableIncome - 1) / 10000;
-        annualTax = (922.98 * y + 1400) * y;
-      } else if (taxableIncome <= 66760) {
-        // Zone 3: ~24% to 42%
-        var z = (taxableIncome - 17005) / 10000;
-        annualTax = (181.19 * z + 2397) * z + 991.21;
-      } else if (taxableIncome <= 277825) {
-        // Zone 4: 42%
-        annualTax = 0.42 * taxableIncome - 10636.31;
-      } else {
-        // Zone 5: 45%
-        annualTax = 0.45 * taxableIncome - 18971.06;
-      }
-
-      annualTax = Math.max(annualTax, 0);
-      return Math.round((annualTax / 12) * 100) / 100;
-    }
-
-    /**
-     * Approximate Solidaritätszuschlag.
-     * @param {number} incomeTax - Monthly income tax
-     * @param {string} steuerklasse
-     * @param {number} soliRate - 0.055
-     * @returns {number}
-     */
-    function _approximateSoli(incomeTax, steuerklasse, soliRate) {
-      // Soli exemption threshold (monthly): ~1,413€/month for Steuerklasse 1
-      // Simplified: no Soli if annual tax < ~18,130€ (Steuerklasse 1)
-      var annualTax = incomeTax * 12;
-      var threshold = 18130;
-      if (steuerklasse === '3') {
-        threshold = 36260;
-      }
-      if (annualTax <= threshold) {
-        return 0;
-      }
-      return Math.round((incomeTax * soliRate) * 100) / 100;
-    }
 
     /**
      * Populate the job selection dropdown with available jobs.
@@ -14009,28 +13997,42 @@ const JobTracker = (function () {
     /**
      * Check if the user profile has required tax settings.
      * Shows/hides the missing profile message accordingly.
-     * @returns {boolean} True if profile is complete
+     * Does NOT disable the slider — simulation runs with sensible fallbacks
+     * even when the profile is incomplete.
+     * @returns {boolean} True if profile is complete (informational only)
      */
     function _checkProfile() {
       var userProfile = AppState.getState().userProfile;
       var missingEl = document.getElementById('tax-simulator-missing-profile');
       var slider = document.getElementById('tax-simulator-slider');
-      var jobSelect = document.getElementById('tax-simulator-job-select');
 
-      // For Teilzeit/Vollzeit jobs, we need steuerklasse, bundesland, and krankenversicherung
-      // For Minijob/Werkstudent/KFB, profile is not strictly required
+      // For Teilzeit/Vollzeit jobs, full profile is helpful but not required
       var job = _selectedJobId ? JobManager.getJob(_selectedJobId) : null;
       var needsProfile = job && (job.type === 'Teilzeit' || job.type === 'Vollzeit');
 
       var profileMissing = needsProfile && (!userProfile || !userProfile.steuerklasse || !userProfile.bundesland || !userProfile.krankenversicherung);
 
       if (missingEl) {
-        missingEl.style.display = profileMissing ? '' : 'none';
+        if (profileMissing) {
+          missingEl.style.display = '';
+          missingEl.innerHTML = '⚠️ Steuerprofil unvollständig — Berechnung mit Standardwerten (Steuerklasse 1, gesetzliche KV). <a href="#" data-navigate="view-settings">Profil vervollständigen</a>';
+          // Re-bind navigation link
+          var lnk = missingEl.querySelector('a[data-navigate]');
+          if (lnk && !lnk._bound) {
+            lnk._bound = true;
+            lnk.addEventListener('click', function (e) {
+              e.preventDefault();
+              if (NavigationController) NavigationController.switchTo('view-settings');
+            });
+          }
+        } else {
+          missingEl.style.display = 'none';
+        }
       }
 
-      // Disable slider when profile is missing
+      // Slider is always enabled — fallback math kicks in if profile is missing
       if (slider) {
-        slider.disabled = profileMissing;
+        slider.disabled = false;
       }
 
       return !profileMissing;
@@ -14048,11 +14050,18 @@ const JobTracker = (function () {
 
     /**
      * Run the simulation with current slider value and selected job, update UI.
+     * Always runs (even with incomplete profile) — fallback math kicks in.
      */
     function _runSimulation() {
+      if (!_selectedJobId) {
+        // Try to pick the first available job
+        var jobs = JobManager.getAllJobs();
+        if (jobs.length > 0) _selectedJobId = jobs[0].id;
+      }
       if (!_selectedJobId) return;
 
-      if (!_checkProfile()) return;
+      // Update missing-profile message but do NOT bail out
+      _checkProfile();
 
       var result = simulate(_currentHours, _selectedJobId);
 
@@ -14077,6 +14086,7 @@ const JobTracker = (function () {
 
     /**
      * Update the comparison bar showing current vs simulated income.
+     * Falls back to fallback math when IncomeEngine reports no profile.
      * @param {{ grossAdd: number, netAdd: number }} result
      */
     function _updateComparisonBar(result) {
@@ -14090,8 +14100,22 @@ const JobTracker = (function () {
       var year = now.getFullYear();
       var month = now.getMonth() + 1;
 
-      var currentNetResult = IncomeEngine.calculateMonthlyNetto(_selectedJobId, year, month);
-      var currentNet = currentNetResult.available ? currentNetResult.netto : 0;
+      var currentNet = 0;
+      try {
+        var currentNetResult = IncomeEngine.calculateMonthlyNetto(_selectedJobId, year, month);
+        if (currentNetResult && currentNetResult.available) {
+          currentNet = currentNetResult.netto;
+        } else {
+          // Engine reports profile missing — try the same brutto path through
+          // calculateNetForBrutto so simulation and comparison agree.
+          var brutto = 0;
+          try { brutto = IncomeEngine.calculateMonthlyBrutto(_selectedJobId, year, month) || 0; } catch (e) {}
+          var fb = IncomeEngine.calculateNetForBrutto(_selectedJobId, brutto, year);
+          currentNet = (fb && fb.available) ? fb.netto : (brutto * 0.65);
+        }
+      } catch (e) {
+        currentNet = 0;
+      }
       var simulatedAdd = result.netAdd || 0;
 
       var total = currentNet + Math.max(simulatedAdd, 0);
@@ -14135,16 +14159,28 @@ const JobTracker = (function () {
   // Manages drag-and-drop reordering of dashboard widgets (#view-daily).
   // Persists the user-defined order in localStorage under key 'jt_dashboard_order'.
   // Widgets must be marked with data-reorderable="true" and data-widget-id="..."
-  // to participate in the reorder mechanism. An "Anordnen" button in the
-  // dashboard toggles edit mode; widgets can also be reordered via long-press.
+  // to participate. Edit mode is toggled exclusively via the "Anordnen" button.
+  //
+  // Touch path: pointer-based live drag (works reliably on iOS Safari, where
+  // HTML5 drag-and-drop is flaky). On desktop, native HTML5 drag-and-drop is
+  // still used as a fallback when pointerType is "mouse".
   const DashboardOrderManager = (function () {
     var STORAGE_KEY = 'jt_dashboard_order';
-    var LONG_PRESS_MS = 500;
     var _editMode = false;
     var _initialized = false;
+
+    // HTML5 drag-and-drop state (desktop)
     var _draggingEl = null;
-    var _longPressTimer = null;
-    var _longPressStartY = 0;
+
+    // Pointer-drag state (mobile / touch)
+    var _ptrDragging = false;
+    var _ptrEl = null;          // The widget element being dragged
+    var _ptrPointerId = null;
+    var _ptrStartY = 0;
+    var _ptrStartX = 0;
+    var _ptrCurrentY = 0;
+    var _ptrOffsetY = 0;        // current translateY applied to dragged element
+    var _ptrInitialRectTop = 0; // for hit-testing other widgets
 
     /**
      * Initialize: apply saved order, wire edit-mode toggle, attach drag listeners.
@@ -14175,6 +14211,9 @@ const JobTracker = (function () {
         if (data && (data.viewId === 'view-daily' || data.view === 'view-daily')) {
           _applySavedOrder();
           _wireWidgets();
+        } else {
+          // Leaving daily view — exit edit mode if active
+          if (_editMode) setEditMode(false);
         }
       });
     }
@@ -14195,6 +14234,8 @@ const JobTracker = (function () {
         document.body.classList.add('dashboard-edit-mode');
       } else {
         document.body.classList.remove('dashboard-edit-mode');
+        // Cancel any in-flight drag on exit
+        _ptrCancel();
       }
       _wireWidgets();
       if (typeof showToast === 'function' && _editMode) {
@@ -14203,7 +14244,7 @@ const JobTracker = (function () {
     }
 
     /**
-     * Wire drag and long-press listeners on all reorderable widgets.
+     * Wire drag and pointer listeners on all reorderable widgets.
      */
     function _wireWidgets() {
       var widgets = _getReorderableWidgets();
@@ -14212,7 +14253,7 @@ const JobTracker = (function () {
         if (w._reorderWired) continue;
         w._reorderWired = true;
 
-        // HTML5 Drag and Drop API
+        // HTML5 Drag and Drop (desktop / mouse)
         w.setAttribute('draggable', 'true');
         w.addEventListener('dragstart', _onDragStart);
         w.addEventListener('dragover', _onDragOver);
@@ -14220,11 +14261,8 @@ const JobTracker = (function () {
         w.addEventListener('drop', _onDrop);
         w.addEventListener('dragend', _onDragEnd);
 
-        // Long-press (touch) to reveal handle
-        w.addEventListener('touchstart', _onTouchStart, { passive: true });
-        w.addEventListener('touchmove', _onTouchMove, { passive: true });
-        w.addEventListener('touchend', _onTouchEnd, { passive: true });
-        w.addEventListener('touchcancel', _onTouchEnd, { passive: true });
+        // Pointer-based drag for touch (iOS Safari path)
+        w.addEventListener('pointerdown', _onPointerDown);
       }
     }
 
@@ -14256,7 +14294,6 @@ const JobTracker = (function () {
         if (id) byId[id] = widgets[i];
       }
 
-      // Determine common parent (assume all reorderable widgets share the same parent)
       var parent = widgets[0].parentNode;
       if (!parent) return;
 
@@ -14269,7 +14306,6 @@ const JobTracker = (function () {
           seen[sid] = true;
         }
       }
-      // Append any unseen widgets at the end (preserve original order)
       for (var k = 0; k < widgets.length; k++) {
         var wid = widgets[k].getAttribute('data-widget-id');
         if (wid && !seen[wid] && widgets[k].parentNode === parent) {
@@ -14310,7 +14346,7 @@ const JobTracker = (function () {
       }
     }
 
-    // ── Drag and Drop event handlers ──
+    // ── HTML5 Drag and Drop event handlers (desktop fallback) ──
 
     function _onDragStart(e) {
       if (!_editMode) {
@@ -14330,12 +14366,18 @@ const JobTracker = (function () {
       e.preventDefault();
       try { e.dataTransfer.dropEffect = 'move'; } catch (err) {}
       if (this !== _draggingEl) {
+        // Compute insertion point based on midpoint to prevent flicker when
+        // the dragged widget is above vs. below the target.
+        var rect = this.getBoundingClientRect();
+        var midY = rect.top + rect.height / 2;
+        this._dragOverHalf = e.clientY < midY ? 'top' : 'bottom';
         this.classList.add('widget--drag-over');
       }
     }
 
     function _onDragLeave() {
       this.classList.remove('widget--drag-over');
+      this._dragOverHalf = null;
     }
 
     function _onDrop(e) {
@@ -14345,26 +14387,41 @@ const JobTracker = (function () {
       this.classList.remove('widget--drag-over');
       if (this === _draggingEl) return;
 
-      // Insert _draggingEl before this if it's positioned after, otherwise after
       var parent = this.parentNode;
       if (!parent) return;
-      var siblings = Array.prototype.slice.call(parent.children);
-      var draggedIdx = siblings.indexOf(_draggingEl);
-      var targetIdx = siblings.indexOf(this);
-      if (draggedIdx < targetIdx) {
-        // dragged was above target → insert after target
+
+      // Use the cached drop-half from dragover; fall back to position-based
+      // calc using current DOM order if missing.
+      var half = this._dragOverHalf;
+      this._dragOverHalf = null;
+
+      if (half === 'top') {
+        parent.insertBefore(_draggingEl, this);
+      } else if (half === 'bottom') {
         if (this.nextSibling) {
           parent.insertBefore(_draggingEl, this.nextSibling);
         } else {
           parent.appendChild(_draggingEl);
         }
       } else {
-        parent.insertBefore(_draggingEl, this);
+        // Fallback: dragged-was-above → insert after target; otherwise before
+        var siblings = Array.prototype.slice.call(parent.children);
+        var draggedIdx = siblings.indexOf(_draggingEl);
+        var targetIdx = siblings.indexOf(this);
+        if (draggedIdx < targetIdx) {
+          if (this.nextSibling) {
+            parent.insertBefore(_draggingEl, this.nextSibling);
+          } else {
+            parent.appendChild(_draggingEl);
+          }
+        } else {
+          parent.insertBefore(_draggingEl, this);
+        }
       }
 
       _saveCurrentOrder();
       if (typeof HapticFeedbackService !== 'undefined' && HapticFeedbackService.tap) {
-        HapticFeedbackService.tap(30);
+        HapticFeedbackService.tap(20);
       }
     }
 
@@ -14373,44 +14430,150 @@ const JobTracker = (function () {
       var widgets = _getReorderableWidgets();
       for (var i = 0; i < widgets.length; i++) {
         widgets[i].classList.remove('widget--drag-over');
+        widgets[i]._dragOverHalf = null;
       }
       _draggingEl = null;
     }
 
-    // ── Touch / long-press handlers ──
+    // ── Pointer-based drag (touch / iOS Safari) ──
+    //
+    // HTML5 drag-and-drop is unreliable on mobile Safari. Instead, when the
+    // user is in edit mode and starts a touch on a widget, we follow the
+    // finger using transform: translateY() and live-reorder by hit-testing
+    // which widget the touch position is currently over.
 
-    function _onTouchStart(e) {
-      if (_editMode) return; // already in edit mode, no need for long-press
-      if (!e.touches || e.touches.length === 0) return;
-      _longPressStartY = e.touches[0].clientY;
-      var widget = this;
-      _longPressTimer = setTimeout(function () {
-        widget.classList.add('widget--show-handle');
+    function _onPointerDown(e) {
+      // Only mobile/touch path. Mouse keeps the HTML5 drag flow above.
+      if (e.pointerType === 'mouse') return;
+      if (!_editMode) return;
+
+      _ptrEl = this;
+      _ptrPointerId = e.pointerId;
+      _ptrStartY = e.clientY;
+      _ptrStartX = e.clientX;
+      _ptrCurrentY = e.clientY;
+      _ptrOffsetY = 0;
+      _ptrDragging = false;
+
+      var rect = _ptrEl.getBoundingClientRect();
+      _ptrInitialRectTop = rect.top;
+
+      try { _ptrEl.setPointerCapture(e.pointerId); } catch (err) {}
+
+      // Attach move/up listeners on the element itself (capture is set so the
+      // events keep flowing here).
+      _ptrEl.addEventListener('pointermove', _onPointerMove);
+      _ptrEl.addEventListener('pointerup', _onPointerUp);
+      _ptrEl.addEventListener('pointercancel', _onPointerUp);
+    }
+
+    function _onPointerMove(e) {
+      if (!_ptrEl || e.pointerId !== _ptrPointerId) return;
+
+      var dy = e.clientY - _ptrStartY;
+      var dx = e.clientX - _ptrStartX;
+
+      if (!_ptrDragging) {
+        // Activate drag once vertical movement clearly dominates and exceeds 6px.
+        if (Math.abs(dy) > 6 && Math.abs(dy) > Math.abs(dx)) {
+          _ptrDragging = true;
+          _ptrEl.classList.add('widget--dragging');
+        } else {
+          return;
+        }
+      }
+
+      e.preventDefault();
+      _ptrCurrentY = e.clientY;
+      _ptrOffsetY = dy;
+      _ptrEl.style.transform = 'translateY(' + dy + 'px)';
+
+      // Hit-test: find the widget whose vertical midpoint the finger is closest
+      // to (ignoring the dragged widget itself), then reorder the DOM live so
+      // the user sees siblings reflow under their finger.
+      var widgets = _getReorderableWidgets();
+      var ptrY = e.clientY;
+      var swapTarget = null;
+      for (var i = 0; i < widgets.length; i++) {
+        var w = widgets[i];
+        if (w === _ptrEl) continue;
+        var r = w.getBoundingClientRect();
+        if (ptrY >= r.top && ptrY <= r.bottom) {
+          swapTarget = w;
+          break;
+        }
+      }
+
+      if (swapTarget) {
+        var parent = _ptrEl.parentNode;
+        if (parent && swapTarget.parentNode === parent) {
+          var siblings = Array.prototype.slice.call(parent.children);
+          var draggedIdx = siblings.indexOf(_ptrEl);
+          var targetIdx = siblings.indexOf(swapTarget);
+          // Reset transform briefly so the recompute is based on natural
+          // positions, then re-apply translateY relative to the new slot.
+          var prevRect = _ptrEl.getBoundingClientRect();
+          _ptrEl.style.transform = '';
+          if (draggedIdx < targetIdx) {
+            // dragged is above target → move dragged after target
+            if (swapTarget.nextSibling) {
+              parent.insertBefore(_ptrEl, swapTarget.nextSibling);
+            } else {
+              parent.appendChild(_ptrEl);
+            }
+          } else {
+            parent.insertBefore(_ptrEl, swapTarget);
+          }
+          // Recompute offset so the widget visually stays under the finger.
+          var newRect = _ptrEl.getBoundingClientRect();
+          var diff = prevRect.top - newRect.top;
+          _ptrOffsetY = dy + diff;
+          _ptrStartY = e.clientY - _ptrOffsetY;
+          _ptrEl.style.transform = 'translateY(' + _ptrOffsetY + 'px)';
+        }
+      }
+    }
+
+    function _onPointerUp(e) {
+      if (!_ptrEl) return;
+      if (e && e.pointerId !== undefined && e.pointerId !== _ptrPointerId) return;
+
+      var el = _ptrEl;
+      el.removeEventListener('pointermove', _onPointerMove);
+      el.removeEventListener('pointerup', _onPointerUp);
+      el.removeEventListener('pointercancel', _onPointerUp);
+
+      try { el.releasePointerCapture(_ptrPointerId); } catch (err) {}
+
+      el.style.transform = '';
+      el.classList.remove('widget--dragging');
+
+      var didDrag = _ptrDragging;
+      _ptrEl = null;
+      _ptrPointerId = null;
+      _ptrDragging = false;
+      _ptrOffsetY = 0;
+
+      if (didDrag) {
+        _saveCurrentOrder();
         if (typeof HapticFeedbackService !== 'undefined' && HapticFeedbackService.tap) {
-          HapticFeedbackService.tap(30);
-        }
-        // Auto-hide handle after 4 seconds
-        setTimeout(function () {
-          widget.classList.remove('widget--show-handle');
-        }, 4000);
-      }, LONG_PRESS_MS);
-    }
-
-    function _onTouchMove(e) {
-      if (_longPressTimer && e.touches && e.touches.length > 0) {
-        var dy = Math.abs(e.touches[0].clientY - _longPressStartY);
-        if (dy > 10) {
-          clearTimeout(_longPressTimer);
-          _longPressTimer = null;
+          HapticFeedbackService.tap(20);
         }
       }
     }
 
-    function _onTouchEnd() {
-      if (_longPressTimer) {
-        clearTimeout(_longPressTimer);
-        _longPressTimer = null;
-      }
+    function _ptrCancel() {
+      if (!_ptrEl) return;
+      _ptrEl.removeEventListener('pointermove', _onPointerMove);
+      _ptrEl.removeEventListener('pointerup', _onPointerUp);
+      _ptrEl.removeEventListener('pointercancel', _onPointerUp);
+      try { _ptrEl.releasePointerCapture(_ptrPointerId); } catch (err) {}
+      _ptrEl.style.transform = '';
+      _ptrEl.classList.remove('widget--dragging');
+      _ptrEl = null;
+      _ptrPointerId = null;
+      _ptrDragging = false;
+      _ptrOffsetY = 0;
     }
 
     return {
@@ -14921,8 +15084,20 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.0.1';
+  const APP_VERSION = '2.0.2';
   const APP_CHANGELOG = [
+    {
+      version: '2.0.2',
+      date: '2026-05-23',
+      changes: [
+        'v2.0.2 — Reorder/Tax/Swipe Fixes',
+        '🎨 Dashboard-Anordnen: iOS-Style Wiggle-Animation, sauberer Akzent-Glow statt gestrichelter Outlines',
+        '👆 Dashboard-Anordnen: Pointer-basiertes Live-Drag auf Touch (HTML5 DnD ist auf iOS Safari unzuverlässig)',
+        '🐛 Steuer-Simulator: Nutzt jetzt IncomeEngine direkt — keine Soli-Klippe mehr zwischen 69h und 70h, korrekte Berücksichtigung von Steuerklasse, Bundesland, KV-Typ und Kirchensteuer',
+        '🐛 Swipe-to-Delete: Wischen nach rechts schließt jetzt zuverlässig (deltaX wurde nur in eine Richtung erkannt)',
+        'ℹ️ Haptisches Feedback: Klarer iOS-Hinweis (Apple-Beschränkung) statt generischer Warnung; Toggle bleibt aktivierbar'
+      ]
+    },
     {
       version: '2.0.1',
       date: '2026-05-22',

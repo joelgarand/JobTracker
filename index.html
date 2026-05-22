@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=47">
+  <link rel="stylesheet" href="style.css?v=48">
   <title>JobTracker</title>
 </head>
 <body>
@@ -783,6 +783,7 @@
             <span class="toggle-text">Haptisches Feedback</span>
           </label>
         </div>
+        <p id="haptic-unsupported-hint" class="form-hint haptic-unsupported-hint" style="display:none;">⚠️ Nicht unterstützt auf diesem Gerät (z. B. iOS Safari).</p>
         <div class="settings-test-row">
           <button type="button" id="haptic-test-btn" class="btn btn-secondary">📳 Test Vibration</button>
           <button type="button" id="notification-test-btn" class="btn btn-secondary">🔔 Test-Benachrichtigung senden</button>
@@ -953,18 +954,28 @@
               <span class="form-hint">Ab diesem Tag zählt der nächste Monat. Leer = Monatsende.</span>
             </div>
 
-            <div class="toggle-group">
-              <label class="toggle-label" for="settings-job-geo-reminder">
-                <input type="checkbox" id="settings-job-geo-reminder" class="toggle-input">
-                <span class="toggle-switch"></span>
-                <span class="toggle-text">📍 Geo-Erinnerung beim Verlassen</span>
-              </label>
-            </div>
-            <div id="settings-job-geo-fields" class="geo-fields" style="display:none;">
-              <button type="button" id="settings-job-geo-use-current" class="btn btn-secondary">📍 Aktuellen Standort verwenden</button>
-              <p id="settings-job-geo-status" class="geo-status-text"></p>
-              <input type="hidden" id="settings-job-geo-lat" value="">
-              <input type="hidden" id="settings-job-geo-lng" value="">
+            <div class="form-group optional-section">
+              <h3 class="optional-heading">📍 Geo-Erinnerung</h3>
+              <p class="form-hint">Erhalte eine Erinnerung wenn du den Arbeitsplatz verlässt.</p>
+              <div class="toggle-group">
+                <label class="toggle-label" for="settings-job-geo-reminder">
+                  <input type="checkbox" id="settings-job-geo-reminder" class="toggle-input">
+                  <span class="toggle-switch"></span>
+                  <span class="toggle-text">Aktivieren</span>
+                </label>
+              </div>
+              <div id="settings-job-geo-fields" class="geo-fields" style="display:none;">
+                <div class="form-group">
+                  <label class="form-label" for="settings-job-geo-lat">Breitengrad</label>
+                  <input type="number" id="settings-job-geo-lat" class="form-input" step="0.000001" placeholder="52.520008" readonly>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="settings-job-geo-lng">Längengrad</label>
+                  <input type="number" id="settings-job-geo-lng" class="form-input" step="0.000001" placeholder="13.404954" readonly>
+                </div>
+                <button type="button" id="settings-job-geo-use-current" class="btn btn-secondary geo-use-current-btn">📍 Aktuelle Position verwenden</button>
+                <span id="settings-job-geo-status" class="geo-status-badge geo-status-badge--inactive">Inaktiv</span>
+              </div>
             </div>
           </div>
 
