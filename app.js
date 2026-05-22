@@ -8236,7 +8236,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.0.6';
+    const APP_VERSION = '2.0.7';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -13025,11 +13025,12 @@ const JobTracker = (function () {
     /**
      * Update the timer display (HH:MM:SS) and the SVG progress ring.
      * After 8h, the ring stays full and switches to the "overtime" warm color.
+     * Timer is shown in the label area below the ring (not inside the button).
      */
     function _updateTimerDisplay() {
       if (!_shiftData) return;
 
-      var timerEl = document.getElementById('punch-center-timer');
+      var timerEl = document.getElementById('punch-timer-text');
       var elapsed = Date.now() - _shiftData.startTime;
       var totalSeconds = Math.floor(elapsed / 1000);
       var hours = Math.floor(totalSeconds / 3600);
@@ -13083,17 +13084,20 @@ const JobTracker = (function () {
     }
 
     /**
-     * Show the active-shift UI: stop icon + timer, accent label, danger color.
+     * Show the active-shift UI: small stop icon in center, timer + "läuft seit"
+     * label below the ring, "Schicht beenden" label.
      */
     function _showActiveUI() {
       var container = document.getElementById('punch-clock-container');
       var iconEl = document.getElementById('punch-center-icon');
-      var timerEl = document.getElementById('punch-center-timer');
+      var prelabelEl = document.getElementById('punch-prelabel');
+      var timerEl = document.getElementById('punch-timer-text');
       var labelEl = document.getElementById('punch-label');
       var btn = document.getElementById('punch-center-btn');
 
       if (container) container.classList.add('punch-clock--active');
       if (iconEl) iconEl.textContent = '⏹';
+      if (prelabelEl) prelabelEl.style.display = '';
       if (timerEl) timerEl.style.display = '';
       if (labelEl) labelEl.textContent = 'Schicht beenden';
       if (btn) btn.setAttribute('aria-label', 'Schicht beenden');
@@ -13105,13 +13109,15 @@ const JobTracker = (function () {
     function _showIdleUI() {
       var container = document.getElementById('punch-clock-container');
       var iconEl = document.getElementById('punch-center-icon');
-      var timerEl = document.getElementById('punch-center-timer');
+      var prelabelEl = document.getElementById('punch-prelabel');
+      var timerEl = document.getElementById('punch-timer-text');
       var labelEl = document.getElementById('punch-label');
       var btn = document.getElementById('punch-center-btn');
       var warningBanner = document.getElementById('punch-warning-banner');
 
       if (container) container.classList.remove('punch-clock--active');
       if (iconEl) iconEl.textContent = '▶';
+      if (prelabelEl) prelabelEl.style.display = 'none';
       if (timerEl) {
         timerEl.style.display = 'none';
         timerEl.textContent = '00:00:00';
@@ -13156,6 +13162,8 @@ const JobTracker = (function () {
       var skipBtn = document.getElementById('punch-extras-skip');
 
       var onConfirm = function () {
+        // Confirm: always save the workday entry, even if tip/provision are empty.
+        // Empty fields default to 0€.
         var tipVal = 0;
         var provVal = 0;
         var tipInput = document.getElementById('punch-tip-input');
@@ -13164,14 +13172,14 @@ const JobTracker = (function () {
         if (provInput && provInput.value) provVal = parseFloat(provInput.value) || 0;
 
         // Save workday entry
-        var entryResult = TimeTrackerModule.createEntry({
+        TimeTrackerModule.createEntry({
           jobId: jobId,
           date: date,
           hours: hours,
           status: 'worked'
         });
 
-        // Save extras
+        // Save extras only when the user actually entered a value > 0
         if (tipVal > 0 && hasTip) {
           EarningsExtraModule.addEarning({
             jobId: jobId,
@@ -13193,23 +13201,18 @@ const JobTracker = (function () {
         formEl.style.display = 'none';
         formEl.innerHTML = '';
 
-        showToast('Schicht + Extras eingetragen ✓');
+        if (tipVal > 0 || provVal > 0) {
+          showToast('Schicht + Extras eingetragen ✓');
+        } else {
+          showToast('Schicht eingetragen ✓');
+        }
       };
 
       var onSkip = function () {
-        // Save workday entry without extras
-        TimeTrackerModule.createEntry({
-          jobId: jobId,
-          date: date,
-          hours: hours,
-          status: 'worked'
-        });
-
-        // Hide form, reset
+        // Skip: discard the shift entirely. Don't save the workday entry.
         formEl.style.display = 'none';
         formEl.innerHTML = '';
-
-        showToast('Schicht eingetragen ✓');
+        showToast('Schicht verworfen');
       };
 
       if (confirmBtn) confirmBtn.addEventListener('click', onConfirm);
@@ -15759,8 +15762,21 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.0.6';
+  const APP_VERSION = '2.0.7';
   const APP_CHANGELOG = [
+    {
+      version: '2.0.7',
+      date: '2026-05-28',
+      changes: [
+        'v2.0.7 — Punch-Layout, optionale Extras, History, Light-Mode',
+        '⏱️ Punch-Clock: Aktive Schicht zeigt Stop-Icon im Ring + großen Timer mit "läuft seit" Label darunter (kein Quetschen mehr)',
+        '✅ Punch-Extras: "Bestätigen" speichert Schicht auch ohne Trinkgeld/Provision (0 €). "Überspringen" verwirft die Schicht komplett',
+        '📋 "Letzte Einträge": Kein max-height mehr — Liste scrollt mit dem View, jeder Eintrag mit konstanter Mindesthöhe',
+        '🐛 Header: Grauer Balken beim Scrollen entfernt (border-bottom + Surface-Background)',
+        '☀️ Light-Mode: Punch-Ring und Steuer-Slider sind jetzt sichtbar (dunklere Tracks statt weiß-auf-weiß)',
+        '💶 Steuer-Tile kompakter: Betrag 20px, Slider-Thumb 24px, engerer Innenabstand'
+      ]
+    },
     {
       version: '2.0.6',
       date: '2026-05-27',

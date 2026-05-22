@@ -133,8 +133,8 @@ a {
   justify-content: center;
   padding: var(--spacing-sm) var(--spacing-md);
   padding-top: calc(env(safe-area-inset-top, 0px) + var(--spacing-sm));
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+  border-bottom: 0;
   position: -webkit-sticky;
   position: sticky;
   top: 0;
@@ -3214,6 +3214,43 @@ body.theme-light .form-textarea {
   background: #ffffff;
 }
 
+/* Light theme: punch ring + tax slider track use darker stroke/fill so they
+   remain visible against the white-ish surface. The dark-theme defaults
+   (rgba 255,255,255,...) are nearly invisible on light backgrounds. */
+body.theme-light .punch-ring__bg {
+  stroke: rgba(0, 0, 0, 0.1);
+}
+
+body.theme-light .punch-ring__bg-depth {
+  stroke: rgba(0, 0, 0, 0.05);
+}
+
+body.theme-light .tax-tile-slider {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+body.theme-light .tax-tile-slider::-webkit-slider-runnable-track {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+body.theme-light .tax-tile-slider::-moz-range-track {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+body.theme-light .tax-tile-slider::-webkit-slider-thumb {
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+body.theme-light .tax-tile-slider::-moz-range-thumb {
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
 /* ============================================================
    Animations & Reduced Motion
    ============================================================ */
@@ -3555,19 +3592,19 @@ input[type="number"]::-webkit-outer-spin-button {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
-  max-height: 300px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .entry-recent-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: 12px 16px;
   background: #0f0f1f;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
+  min-height: 56px;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .entry-recent-info {
@@ -4379,27 +4416,37 @@ details[open] .dashboard-details-toggle::after {
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.15));
 }
 
-.punch-center-timer {
-  font-size: 12px;
+/* Active state: smaller stop icon (timer is now in the label area below the ring) */
+.punch-clock--active .punch-center-icon {
+  font-size: 18px;
+}
+
+/* Label area below the ring — stacks "läuft seit" + timer + label vertically */
+.punch-label-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: 8px;
+  flex-shrink: 0;
+}
+
+.punch-prelabel {
+  font-size: 10px;
+  opacity: 0.5;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-tertiary);
+}
+
+.punch-timer-text {
+  font-size: 16px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.3px;
+  color: var(--color-text-primary);
+  letter-spacing: 0.5px;
   font-family: var(--punch-timer-font, var(--font-family));
-}
-
-/* Active state: icon smaller, timer larger, both visible stacked */
-.punch-clock--active .punch-center-icon {
-  font-size: 16px;
-}
-
-.punch-clock--active .punch-center-timer {
-  font-size: 14px;
-  display: block;
-}
-
-.punch-clock--active .punch-center-btn {
-  overflow: hidden;
-  text-overflow: clip;
+  line-height: 1.1;
 }
 
 /* Label below the ring */
@@ -4412,12 +4459,11 @@ details[open] .dashboard-details-toggle::after {
   color: var(--color-text-secondary);
   -webkit-tap-highlight-color: transparent;
   pointer-events: none;
-  margin-top: 6px;
   flex-shrink: 0;
 }
 
 .punch-clock--active .punch-label {
-  color: var(--color-success);
+  color: var(--color-danger);
 }
 
 /* Light theme: stronger card surface */
@@ -4694,8 +4740,8 @@ body.theme-light .punch-extras-form__input {
   backdrop-filter: blur(24px) saturate(180%);
   border: 0.5px solid rgba(255, 255, 255, 0.12);
   border-radius: 24px;
-  padding: var(--spacing-md);
-  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  gap: 6px;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.06) inset,
     0 8px 24px rgba(0, 0, 0, 0.18);
@@ -4747,7 +4793,7 @@ body.theme-light .tax-tile {
   flex-direction: column;
   justify-content: center;
   align-items: stretch;
-  gap: var(--spacing-sm);
+  gap: 6px;
   position: relative;
   z-index: 1;
   min-height: 0;
@@ -4762,7 +4808,7 @@ body.theme-light .tax-tile {
 }
 
 .tax-tile__main-amount {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--color-accent);
@@ -4815,19 +4861,19 @@ body.theme-light .tax-tile {
 .tax-tile-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--color-accent);
   border: 2px solid rgba(255, 255, 255, 0.95);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   cursor: pointer;
-  margin-top: -10px;
+  margin-top: -8px;
 }
 
 .tax-tile-slider::-moz-range-thumb {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--color-accent);
   border: 2px solid rgba(255, 255, 255, 0.95);

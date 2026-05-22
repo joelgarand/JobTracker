@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=52">
+  <link rel="stylesheet" href="style.css?v=53">
   <title>JobTracker</title>
 </head>
 <body>
@@ -395,10 +395,13 @@
             </svg>
             <button type="button" id="punch-center-btn" class="punch-center-btn" aria-label="Schicht starten">
               <span class="punch-center-icon" id="punch-center-icon" aria-hidden="true">▶</span>
-              <span class="punch-center-timer" id="punch-center-timer" style="display:none;">00:00:00</span>
             </button>
           </div>
-          <div class="punch-label" id="punch-label">Schicht starten</div>
+          <div class="punch-label-area">
+            <span class="punch-prelabel" id="punch-prelabel" style="display:none;">läuft seit</span>
+            <span class="punch-timer-text" id="punch-timer-text" style="display:none;">00:00:00</span>
+            <span class="punch-label" id="punch-label">Schicht starten</span>
+          </div>
           <!-- Inline extras form (shown after shift end if tip/provision enabled) -->
           <div id="punch-extras-form" class="punch-extras-form" style="display:none;"></div>
           <!-- 16-hour warning banner overlay -->
