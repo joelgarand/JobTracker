@@ -8317,7 +8317,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.1.1';
+    const APP_VERSION = '2.1.2';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -13215,41 +13215,36 @@ const JobTracker = (function () {
 
     /**
      * Show the active-shift UI: small stop icon in center, timer + "läuft seit"
-     * label below the ring, "Schicht beenden" label.
-     * Uses `.punch-clock--active` on the container so the prelabel + timer
-     * become visible via CSS (they're always rendered with reserved space, so
-     * the layout doesn't shift between idle and active states).
+     * in the bottom area below the ring.
      */
     function _showActiveUI() {
       var container = document.getElementById('punch-clock-container');
       var iconEl = document.getElementById('punch-center-icon');
-      var labelEl = document.getElementById('punch-label');
       var btn = document.getElementById('punch-center-btn');
+      var bottomArea = document.getElementById('punch-bottom-area');
 
       if (container) container.classList.add('punch-clock--active');
       if (iconEl) iconEl.textContent = '⏹';
-      if (labelEl) labelEl.textContent = 'Schicht beenden';
       if (btn) btn.setAttribute('aria-label', 'Schicht beenden');
+      if (bottomArea) {
+        bottomArea.innerHTML = '<span class="punch-prelabel">läuft seit</span><span class="punch-timer-text" id="punch-timer-text">00:00:00</span>';
+      }
     }
 
     /**
-     * Show the idle UI: play icon, no timer, "Schicht starten" label.
-     * Prelabel + timer remain in the DOM with reserved space (CSS hides them
-     * via visibility:hidden) so the ring's position doesn't shift.
+     * Show the idle UI: play icon, empty bottom area.
      */
     function _showIdleUI() {
       var container = document.getElementById('punch-clock-container');
       var iconEl = document.getElementById('punch-center-icon');
-      var timerEl = document.getElementById('punch-timer-text');
-      var labelEl = document.getElementById('punch-label');
       var btn = document.getElementById('punch-center-btn');
+      var bottomArea = document.getElementById('punch-bottom-area');
       var warningBanner = document.getElementById('punch-warning-banner');
 
       if (container) container.classList.remove('punch-clock--active');
       if (iconEl) iconEl.textContent = '▶';
-      if (timerEl) timerEl.textContent = '00:00:00';
-      if (labelEl) labelEl.textContent = 'Schicht starten';
       if (btn) btn.setAttribute('aria-label', 'Schicht starten');
+      if (bottomArea) bottomArea.innerHTML = '';
       if (warningBanner) warningBanner.style.display = 'none';
       _setRingProgress(0, false);
     }
@@ -14355,9 +14350,17 @@ const JobTracker = (function () {
   const DashboardOrderManager = (function () {
     var STORAGE_KEY = 'jt_dashboard_order';
     var DRAG_THRESHOLD_PX = 6;
+    var LONG_PRESS_MS = 500;
+    var LONG_PRESS_MOVE_TOLERANCE = 10;
 
     var _editMode = false;
     var _initialized = false;
+
+    // Long-press state
+    var _longPressTimer = null;
+    var _longPressStartX = 0;
+    var _longPressStartY = 0;
+    var _longPressTarget = null;
 
     // Drag session state
     var _dragEl = null;
@@ -14376,21 +14379,36 @@ const JobTracker = (function () {
     var _moveRafId = null;        // rAF ID for debouncing touchmove hit-test
 
     /**
-     * Initialize: apply saved order, wire edit-mode toggle, attach drag listeners.
+     * Initialize: apply saved order, wire long-press + drag listeners, wire Fertig button.
      */
     function init() {
       if (_initialized) return;
       _initialized = true;
 
       _applySavedOrder();
+      _wireWidgets();
 
-      var toggleBtn = document.getElementById('dashboard-edit-toggle');
-      if (toggleBtn && !toggleBtn._reorderBound) {
-        toggleBtn._reorderBound = true;
-        toggleBtn.addEventListener('click', function () { setEditMode(!_editMode); });
+      // Wire "Fertig" button to exit edit mode
+      var doneBtn = document.getElementById('dashboard-edit-done');
+      if (doneBtn && !doneBtn._reorderBound) {
+        doneBtn._reorderBound = true;
+        doneBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          setEditMode(false);
+        });
       }
 
-      _wireWidgets();
+      // Tap outside widgets to exit edit mode
+      document.addEventListener('click', function (e) {
+        if (!_editMode) return;
+        var target = e.target;
+        // Check if tap is on a widget or the done button
+        var isWidget = target.closest && target.closest('[data-reorderable="true"]');
+        var isDone = target.closest && target.closest('#dashboard-edit-done');
+        if (!isWidget && !isDone) {
+          setEditMode(false);
+        }
+      });
 
       EventBus.on('data:imported', function () {
         _applySavedOrder();
@@ -14412,11 +14430,11 @@ const JobTracker = (function () {
      */
     function setEditMode(enabled) {
       _editMode = !!enabled;
-      var btn = document.getElementById('dashboard-edit-toggle');
-      if (btn) {
-        btn.setAttribute('aria-pressed', String(_editMode));
-        var label = btn.querySelector('.dashboard-edit-label');
-        if (label) label.textContent = _editMode ? 'Fertig' : 'Anordnen';
+
+      // Show/hide the Fertig button
+      var doneBtn = document.getElementById('dashboard-edit-done');
+      if (doneBtn) {
+        doneBtn.style.display = _editMode ? '' : 'none';
       }
 
       var grid = document.querySelector('.dashboard-grid');
@@ -14433,6 +14451,7 @@ const JobTracker = (function () {
         }
       } else {
         document.body.classList.remove('dashboard-edit-mode');
+        document.body.classList.remove('widget-dragging');
         // Remove GPU hints
         if (grid) {
           grid.style.contain = '';
@@ -14444,13 +14463,12 @@ const JobTracker = (function () {
         _cancelDrag();
       }
       _wireWidgets();
-      if (typeof showToast === 'function' && _editMode) {
-        showToast('Halten und ziehen, um Widgets neu anzuordnen.', 2500);
-      }
     }
 
     /**
      * Wire touch + pointer listeners on each reorderable widget. Idempotent.
+     * In non-edit mode: long-press detection to enter edit mode.
+     * In edit mode: direct drag on touch.
      */
     function _wireWidgets() {
       var widgets = _getReorderableWidgets();
@@ -14552,17 +14570,53 @@ const JobTracker = (function () {
     // ─── Touch handlers ──────────────────────────────────────────────────────
 
     function _onTouchStart(e) {
-      if (!_editMode) return;
       if (_dragEl) return;
       if (!e.touches || e.touches.length !== 1) return;
       var t = e.touches[0];
-      _beginDrag(this, t.clientX, t.clientY, 'touch');
+
+      if (_editMode) {
+        // Already in edit mode — start drag immediately
+        _beginDrag(this, t.clientX, t.clientY, 'touch');
+      } else {
+        // Not in edit mode — start long-press timer
+        _longPressTarget = this;
+        _longPressStartX = t.clientX;
+        _longPressStartY = t.clientY;
+        _longPressTimer = setTimeout(function () {
+          _longPressTimer = null;
+          // Enter edit mode and immediately start dragging this widget
+          if (typeof HapticFeedbackService !== 'undefined' && HapticFeedbackService.tap) {
+            HapticFeedbackService.tap(30);
+          }
+          setEditMode(true);
+          _beginDrag(_longPressTarget, _longPressStartX, _longPressStartY, 'touch');
+          // Force into dragging state immediately (skip threshold)
+          _dragging = true;
+          _dragEl.classList.add('widget--dragging');
+          _dragEl.style.transition = 'none';
+          document.body.classList.add('widget-dragging');
+          _longPressTarget = null;
+        }, LONG_PRESS_MS);
+      }
     }
 
     function _onTouchMove(e) {
-      if (!_dragEl || _dragMode !== 'touch') return;
       if (!e.touches || e.touches.length !== 1) return;
       var t = e.touches[0];
+
+      // If long-press timer is active, check if finger moved too much
+      if (_longPressTimer) {
+        var dx = t.clientX - _longPressStartX;
+        var dy = t.clientY - _longPressStartY;
+        if (Math.abs(dx) > LONG_PRESS_MOVE_TOLERANCE || Math.abs(dy) > LONG_PRESS_MOVE_TOLERANCE) {
+          clearTimeout(_longPressTimer);
+          _longPressTimer = null;
+          _longPressTarget = null;
+        }
+        return;
+      }
+
+      if (!_dragEl || _dragMode !== 'touch') return;
       if (_handleMove(t.clientX, t.clientY)) {
         // Once a drag is committed, swallow the gesture so iOS doesn't scroll.
         e.preventDefault();
@@ -14570,6 +14624,12 @@ const JobTracker = (function () {
     }
 
     function _onTouchEnd() {
+      // Cancel long-press if finger lifted before 500ms
+      if (_longPressTimer) {
+        clearTimeout(_longPressTimer);
+        _longPressTimer = null;
+        _longPressTarget = null;
+      }
       if (!_dragEl || _dragMode !== 'touch') return;
       _endDrag();
     }
@@ -14650,6 +14710,8 @@ const JobTracker = (function () {
         _dragging = true;
         _dragEl.classList.add('widget--dragging');
         _dragEl.style.transition = 'none';
+        // Prevent page scroll during drag
+        document.body.classList.add('widget-dragging');
       }
 
       // GPU-accelerated transform with translate3d
@@ -14942,6 +15004,9 @@ const JobTracker = (function () {
       el.style.zIndex = '';
       el.classList.remove('widget--dragging');
 
+      // Remove scroll lock
+      document.body.classList.remove('widget-dragging');
+
       _dragEl = null;
       _dragging = false;
       _activePointerId = null;
@@ -14971,6 +15036,13 @@ const JobTracker = (function () {
       // Cancel any pending rAF
       if (_moveRafId) { cancelAnimationFrame(_moveRafId); _moveRafId = null; }
 
+      // Cancel any long-press timer
+      if (_longPressTimer) {
+        clearTimeout(_longPressTimer);
+        _longPressTimer = null;
+        _longPressTarget = null;
+      }
+
       // Remove cached clone
       if (_cachedClone && _cachedClone.parentNode) {
         _cachedClone.parentNode.removeChild(_cachedClone);
@@ -14987,6 +15059,7 @@ const JobTracker = (function () {
       el.style.position = '';
       el.style.zIndex = '';
       el.classList.remove('widget--dragging');
+      document.body.classList.remove('widget-dragging');
       try { if (_activePointerId !== null) el.releasePointerCapture(_activePointerId); } catch (err) {}
       _dragEl = null;
       _dragging = false;
@@ -15863,8 +15936,21 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.1.1';
+  const APP_VERSION = '2.1.2';
   const APP_CHANGELOG = [
+    {
+      version: '2.1.2',
+      date: '2026-05-31',
+      changes: [
+        'v2.1.2 — Long-Press Reorder, Stable Punch, Tab Font, Drag Scroll Fix',
+        '🔄 Dashboard: "Anordnen"-Button entfernt — Widgets per Long-Press (500ms) neu anordnen',
+        '✓ "Fertig"-Pill oben rechts zum Beenden des Bearbeitungsmodus',
+        '⏱️ Punch-Clock: Stabiles Layout — Tile ändert nie die Größe, Ring bleibt zentriert',
+        '📋 Letzte Einträge: Exakt 5 Einträge sichtbar ohne Abschneiden',
+        '🧭 Tabs: Emojis entfernt, kleinere Schrift — "Einstellungen" passt jetzt komplett',
+        '↕️ Widget-Drag: Scrolling wird beim Ziehen korrekt blockiert (kein Hochscrollen mehr)'
+      ]
+    },
     {
       version: '2.1.1',
       date: '2026-05-30',
