@@ -8,23 +8,25 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=53">
+  <link rel="stylesheet" href="style.css?v=54">
   <title>JobTracker</title>
 </head>
 <body>
 
   <!-- Header Bar -->
   <header class="app-header">
-    <div class="app-header-center">
-      <span class="app-header-title">JobTracker</span>
-      <svg class="app-header-swirl" width="90" height="10" viewBox="0 0 90 10" fill="none">
-        <path d="M5 8C20 2 35 2 45 5C55 8 70 8 85 3" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-      </svg>
+    <div class="app-header__top">
+      <span class="app-header__logo">JobTracker</span>
+      <div class="app-header__actions">
+        <button type="button" id="header-theme-toggle" class="app-header__icon-btn" aria-label="Theme wechseln">🌙</button>
+        <button type="button" id="header-rules-info-btn" class="app-header__icon-btn" aria-label="Arbeitsrecht-Info">ℹ️</button>
+      </div>
     </div>
-    <div class="app-header-actions">
-      <button type="button" id="header-theme-toggle" class="header-theme-toggle" aria-label="Theme wechseln">🌙</button>
-      <button type="button" id="header-rules-info-btn" class="header-rules-btn" aria-label="Arbeitsrecht-Info">ℹ️</button>
-    </div>
+    <nav class="app-header__tabs" aria-label="Hauptnavigation">
+      <button class="header-tab active" data-view="view-daily" aria-current="page" type="button">📊 Übersicht</button>
+      <button class="header-tab" data-view="view-entry" type="button">✏️ Eintragen</button>
+      <button class="header-tab" data-view="view-settings" type="button">⚙️ Einstellungen</button>
+    </nav>
   </header>
 
   <!-- Error banner for localStorage errors -->
@@ -398,8 +400,8 @@
             </button>
           </div>
           <div class="punch-label-area">
-            <span class="punch-prelabel" id="punch-prelabel" style="display:none;">läuft seit</span>
-            <span class="punch-timer-text" id="punch-timer-text" style="display:none;">00:00:00</span>
+            <span class="punch-prelabel" id="punch-prelabel">läuft seit</span>
+            <span class="punch-timer-text" id="punch-timer-text">00:00:00</span>
             <span class="punch-label" id="punch-label">Schicht starten</span>
           </div>
           <!-- Inline extras form (shown after shift end if tip/provision enabled) -->
@@ -474,24 +476,28 @@
         </div>
       </div>
 
-      <!-- Tax Simulator Widget (small 1×1 tile, always-visible compact form) -->
-      <div id="tax-simulator-widget" class="tax-simulator" data-reorderable="true" data-widget-id="tax-simulator" data-widget-size="small">
+      <!-- Tax Simulator Widget (full-width 2×1 wide tile, always-visible compact form) -->
+      <div id="tax-simulator-widget" class="tax-simulator" data-reorderable="true" data-widget-id="tax-simulator" data-widget-size="full">
         <div class="tax-tile">
           <header class="tax-tile__header">
             <span class="tax-tile__icon" aria-hidden="true">💶</span>
-            <span class="tax-tile__title">Steuer</span>
+            <span class="tax-tile__title">Steuer-Simulator</span>
           </header>
           <div class="tax-tile__body">
-            <div class="tax-tile__main-value">
-              <span class="tax-tile__main-amount" id="tax-simulator-net-add">+0,00 €</span>
-              <span class="tax-tile__main-label">netto extra</span>
+            <div class="tax-tile__row">
+              <span class="tax-tile__row-label">Aktuell</span>
+              <span class="tax-tile__row-value" id="tax-sim-current">0,00 € / 0,00 €</span>
+            </div>
+            <div class="tax-tile__row">
+              <span class="tax-tile__row-label">Mit +<span id="tax-sim-hours-display">0</span>h</span>
+              <span class="tax-tile__row-value" id="tax-sim-new">0,00 € / 0,00 €</span>
             </div>
             <div class="tax-tile__slider-row">
-              <input type="range" id="tax-simulator-slider" class="tax-tile-slider" min="0" max="80" value="0" step="1" aria-label="Zusätzliche Stunden" aria-valuemin="0" aria-valuemax="80" aria-valuenow="0">
-              <span class="tax-tile__hours" id="tax-simulator-slider-value">0h</span>
+              <input type="range" id="tax-simulator-slider" class="tax-tile-slider" min="0" max="160" value="0" step="1" aria-label="Zusätzliche Stunden" aria-valuemin="0" aria-valuemax="160" aria-valuenow="0">
             </div>
-            <div class="tax-tile__detail">
-              <span id="tax-simulator-rate">0,0 %</span> Steuersatz
+            <div class="tax-tile__delta">
+              <span class="tax-tile__delta-label">Netto extra</span>
+              <span class="tax-tile__delta-amount" id="tax-simulator-net-add">+0,00 €</span>
             </div>
           </div>
           <select id="tax-simulator-job-select" class="tax-tile__job-select" style="display:none;" aria-label="Job auswählen"></select>
@@ -762,6 +768,19 @@
           <button id="year-change-confirm-btn" class="btn btn-primary" type="button">Bestätigen</button>
           <button id="year-change-dismiss-btn" class="btn btn-secondary" type="button">Später</button>
         </div>
+      </div>
+
+      <!-- Version & Changelog Section (moved to top so users see new updates first) -->
+      <div class="glass-surface layer-content settings-card">
+        <h2 class="settings-section-title">Version & Updates</h2>
+        <div class="settings-version-info">
+          <span class="settings-version-label">Aktuelle Version</span>
+          <span class="settings-version-number" id="settings-app-version">1.2.0</span>
+        </div>
+        <details class="settings-changelog" id="settings-changelog">
+          <summary class="settings-changelog-toggle">📋 Was ist neu?</summary>
+          <div class="settings-changelog-content" id="settings-changelog-content"></div>
+        </details>
       </div>
 
       <!-- Preferences -->
@@ -1102,19 +1121,6 @@
         </div>
       </div>
 
-      <!-- Version & Changelog Section -->
-      <div class="glass-surface layer-content settings-card">
-        <h2 class="settings-section-title">Version & Updates</h2>
-        <div class="settings-version-info">
-          <span class="settings-version-label">Aktuelle Version</span>
-          <span class="settings-version-number" id="settings-app-version">1.2.0</span>
-        </div>
-        <details class="settings-changelog" id="settings-changelog">
-          <summary class="settings-changelog-toggle">📋 Was ist neu?</summary>
-          <div class="settings-changelog-content" id="settings-changelog-content"></div>
-        </details>
-      </div>
-
       <!-- Export/Import Section -->
       <div class="glass-surface layer-content settings-card">
         <h2 class="settings-section-title">Datenverwaltung</h2>
@@ -1279,22 +1285,6 @@
     </div>
   </div>
 
-  <!-- Bottom Navigation Bar — 3 visible tabs -->
-  <nav class="bottom-nav" aria-label="Hauptnavigation">
-    <button class="nav-tab active" data-view="view-daily" aria-label="Übersicht" aria-current="page">
-      <span class="nav-tab-icon">📊</span>
-      <span class="nav-tab-label">Übersicht</span>
-    </button>
-    <button class="nav-tab" data-view="view-entry" aria-label="Eintragen">
-      <span class="nav-tab-icon">✏️</span>
-      <span class="nav-tab-label">Eintragen</span>
-    </button>
-    <button class="nav-tab" data-view="view-settings" aria-label="Einstellungen">
-      <span class="nav-tab-icon">⚙️</span>
-      <span class="nav-tab-label">Einstellungen</span>
-    </button>
-  </nav>
-
-  <script src="app.js?v=39" defer></script>
+  <script src="app.js?v=40" defer></script>
 </body>
 </html>

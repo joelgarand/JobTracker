@@ -954,10 +954,10 @@ const JobTracker = (function () {
   })();
 
   // ─── NavigationController ─────────────────────────────────────────────────────
-  // Manages view switching (3-tab bottom nav + sub-nav within Tracking).
-  // Bottom nav: Übersicht (view-daily), Eintragen (view-entry), Einstellungen (view-settings)
+  // Manages view switching (3-tab top header nav + sub-nav within Tracking).
+  // Header tabs: Übersicht (view-daily), Eintragen (view-entry), Einstellungen (view-settings)
   // Sub-nav within Tracking: Übersicht (view-daily), Monat (view-monthly), Jahr (view-yearly)
-  // Hides bottom nav during onboarding. Emits navigation:change event via EventBus.
+  // Hides header tabs during onboarding. Emits navigation:change event via EventBus.
   // Persists active view/sub-view to AppState.
   // Requirements: 2.1, 2.3, 2.4, 2.5, 2.6, 2.7
   const NavigationController = (function () {
@@ -1032,19 +1032,20 @@ const JobTracker = (function () {
     }
 
     /**
-     * Updates the bottom nav bar to highlight the active tab.
+     * Updates the header tab bar to highlight the active tab.
      * For tracking sub-views (view-daily, view-monthly, view-yearly),
-     * the "Tracking" tab (data-view="view-daily") stays highlighted.
+     * the "Übersicht" tab (data-view="view-daily") stays highlighted.
+     * Also keeps any legacy bottom-nav .nav-tab elements in sync if present.
      * @param {string} viewId
      */
     function _updateNavBar(viewId) {
-      // Determine which bottom tab should be active
+      // Determine which top tab should be active
       var activeTabView = viewId;
       if (TRACKING_VIEWS.indexOf(viewId) !== -1) {
-        activeTabView = 'view-daily'; // Tracking tab always highlighted for sub-views
+        activeTabView = 'view-daily'; // Übersicht tab always highlighted for sub-views
       }
 
-      var tabs = document.querySelectorAll('.nav-tab');
+      var tabs = document.querySelectorAll('.header-tab, .nav-tab');
       for (var i = 0; i < tabs.length; i++) {
         var tab = tabs[i];
         if (tab.getAttribute('data-view') === activeTabView) {
@@ -1074,10 +1075,15 @@ const JobTracker = (function () {
     }
 
     /**
-     * Shows or hides the bottom nav bar.
+     * Shows or hides the header tab bar (used during onboarding).
      * @param {boolean} visible - true to show, false to hide
      */
     function _setBottomNavVisible(visible) {
+      var tabsBar = document.querySelector('.app-header__tabs');
+      if (tabsBar) {
+        tabsBar.style.display = visible ? '' : 'none';
+      }
+      // Also hide legacy bottom-nav if present (defensive)
       var nav = document.querySelector('.bottom-nav');
       if (nav) {
         nav.style.display = visible ? '' : 'none';
@@ -1089,7 +1095,7 @@ const JobTracker = (function () {
      * @param {boolean} disabled
      */
     function _setNavTabsDisabled(disabled) {
-      var tabs = document.querySelectorAll('.nav-tab');
+      var tabs = document.querySelectorAll('.header-tab, .nav-tab');
       for (var i = 0; i < tabs.length; i++) {
         tabs[i].disabled = disabled;
         if (disabled) {
@@ -1254,10 +1260,10 @@ const JobTracker = (function () {
     }
 
     /**
-     * Binds click handlers to bottom nav tab buttons.
+     * Binds click handlers to top header tab buttons (and legacy bottom nav .nav-tab).
      */
     function _bindNavTabs() {
-      var tabs = document.querySelectorAll('.nav-tab');
+      var tabs = document.querySelectorAll('.header-tab, .nav-tab');
       for (var i = 0; i < tabs.length; i++) {
         tabs[i].addEventListener('click', function () {
           var viewId = this.getAttribute('data-view');
@@ -3509,10 +3515,12 @@ const JobTracker = (function () {
 
       // Navigate to daily view
       _hideRetryButton();
-      // Show bottom nav, enable nav tabs, and switch to daily view
+      // Show header tabs, enable nav tabs, and switch to daily view
+      var tabsBar = document.querySelector('.app-header__tabs');
+      if (tabsBar) tabsBar.style.display = '';
       var bottomNav = document.querySelector('.bottom-nav');
       if (bottomNav) bottomNav.style.display = '';
-      var tabs = document.querySelectorAll('.nav-tab');
+      var tabs = document.querySelectorAll('.header-tab, .nav-tab');
       for (var j = 0; j < tabs.length; j++) {
         tabs[j].disabled = false;
         tabs[j].removeAttribute('aria-disabled');
@@ -8236,7 +8244,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.0.7';
+    const APP_VERSION = '2.1.0';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -13086,30 +13094,30 @@ const JobTracker = (function () {
     /**
      * Show the active-shift UI: small stop icon in center, timer + "läuft seit"
      * label below the ring, "Schicht beenden" label.
+     * Uses `.punch-clock--active` on the container so the prelabel + timer
+     * become visible via CSS (they're always rendered with reserved space, so
+     * the layout doesn't shift between idle and active states).
      */
     function _showActiveUI() {
       var container = document.getElementById('punch-clock-container');
       var iconEl = document.getElementById('punch-center-icon');
-      var prelabelEl = document.getElementById('punch-prelabel');
-      var timerEl = document.getElementById('punch-timer-text');
       var labelEl = document.getElementById('punch-label');
       var btn = document.getElementById('punch-center-btn');
 
       if (container) container.classList.add('punch-clock--active');
       if (iconEl) iconEl.textContent = '⏹';
-      if (prelabelEl) prelabelEl.style.display = '';
-      if (timerEl) timerEl.style.display = '';
       if (labelEl) labelEl.textContent = 'Schicht beenden';
       if (btn) btn.setAttribute('aria-label', 'Schicht beenden');
     }
 
     /**
      * Show the idle UI: play icon, no timer, "Schicht starten" label.
+     * Prelabel + timer remain in the DOM with reserved space (CSS hides them
+     * via visibility:hidden) so the ring's position doesn't shift.
      */
     function _showIdleUI() {
       var container = document.getElementById('punch-clock-container');
       var iconEl = document.getElementById('punch-center-icon');
-      var prelabelEl = document.getElementById('punch-prelabel');
       var timerEl = document.getElementById('punch-timer-text');
       var labelEl = document.getElementById('punch-label');
       var btn = document.getElementById('punch-center-btn');
@@ -13117,11 +13125,7 @@ const JobTracker = (function () {
 
       if (container) container.classList.remove('punch-clock--active');
       if (iconEl) iconEl.textContent = '▶';
-      if (prelabelEl) prelabelEl.style.display = 'none';
-      if (timerEl) {
-        timerEl.style.display = 'none';
-        timerEl.textContent = '00:00:00';
-      }
+      if (timerEl) timerEl.textContent = '00:00:00';
       if (labelEl) labelEl.textContent = 'Schicht starten';
       if (btn) btn.setAttribute('aria-label', 'Schicht starten');
       if (warningBanner) warningBanner.style.display = 'none';
@@ -13983,7 +13987,7 @@ const JobTracker = (function () {
         if (ratio < 0) ratio = 0;
         if (ratio > 1) ratio = 1;
         var min = parseInt(slider.min, 10) || 0;
-        var max = parseInt(slider.max, 10) || 80;
+        var max = parseInt(slider.max, 10) || 160;
         var newVal = Math.round(min + ratio * (max - min));
         slider.value = newVal;
         var inputEvt = new Event('input', { bubbles: true });
@@ -14006,18 +14010,20 @@ const JobTracker = (function () {
      * For fixed-salary jobs the additionalHours concept doesn't apply; we
      * return a flagged result so the UI can surface it.
      *
-     * @param {number} additionalHours - 0 to 80
+     * @param {number} additionalHours - 0 to 160
      * @param {string} jobId
-     * @returns {{ grossAdd: number, netAdd: number, effectiveRate: number, supported: boolean }}
+     * @returns {{ grossAdd: number, netAdd: number, effectiveRate: number, supported: boolean,
+     *            currentBrutto: number, currentNetto: number,
+     *            simulatedBrutto: number, simulatedNetto: number }}
      */
     function simulate(additionalHours, jobId) {
-      if (!additionalHours || additionalHours <= 0) {
-        return { grossAdd: 0, netAdd: 0, effectiveRate: 0, supported: true };
-      }
-
       var job = JobManager.getJob(jobId);
       if (!job) {
-        return { grossAdd: 0, netAdd: 0, effectiveRate: 0, supported: false };
+        return {
+          grossAdd: 0, netAdd: 0, effectiveRate: 0, supported: false,
+          currentBrutto: 0, currentNetto: 0,
+          simulatedBrutto: 0, simulatedNetto: 0
+        };
       }
 
       // Determine hourly rate. Pure fixed-salary or daily-rate jobs don't have
@@ -14027,10 +14033,15 @@ const JobTracker = (function () {
         rate = job.defaultHourlyRate;
       }
       if (!rate) {
-        return { grossAdd: 0, netAdd: 0, effectiveRate: 0, supported: false };
+        return {
+          grossAdd: 0, netAdd: 0, effectiveRate: 0, supported: false,
+          currentBrutto: 0, currentNetto: 0,
+          simulatedBrutto: 0, simulatedNetto: 0
+        };
       }
 
-      var additionalGross = additionalHours * rate;
+      var hrs = additionalHours > 0 ? additionalHours : 0;
+      var additionalGross = hrs * rate;
 
       var now = new Date();
       var year = now.getFullYear();
@@ -14056,9 +14067,10 @@ const JobTracker = (function () {
         currentNetto = currentBrutto * 0.65;
       }
 
+      var simulatedBrutto = currentBrutto + additionalGross;
       var simulatedNetto = currentNetto;
       try {
-        var simRes = IncomeEngine.calculateNetForBrutto(jobId, currentBrutto + additionalGross, year);
+        var simRes = IncomeEngine.calculateNetForBrutto(jobId, simulatedBrutto, year);
         if (simRes && simRes.available) {
           simulatedNetto = simRes.netto;
         } else {
@@ -14084,7 +14096,11 @@ const JobTracker = (function () {
         grossAdd: Math.round(additionalGross * 100) / 100,
         netAdd: Math.round(netDelta * 100) / 100,
         effectiveRate: Math.round(effectiveRate * 10) / 10,
-        supported: true
+        supported: true,
+        currentBrutto: Math.round(currentBrutto * 100) / 100,
+        currentNetto: Math.round(currentNetto * 100) / 100,
+        simulatedBrutto: Math.round(simulatedBrutto * 100) / 100,
+        simulatedNetto: Math.round(simulatedNetto * 100) / 100
       };
     }
 
@@ -14121,15 +14137,16 @@ const JobTracker = (function () {
     }
 
     /**
-     * Update the small "Xh" label next to the slider.
+     * Update the slider hours display in the "Mit +Xh" row label.
      */
     function _updateHoursLabel() {
-      var el = document.getElementById('tax-simulator-slider-value');
-      if (el) el.textContent = _currentHours + 'h';
+      var el = document.getElementById('tax-sim-hours-display');
+      if (el) el.textContent = String(_currentHours);
     }
 
     /**
      * Run the simulation with the current slider + selected job and update UI.
+     * Renders 4 lines: current brutto/netto, simulated brutto/netto, slider, big delta.
      */
     function _runSimulation() {
       if (!_selectedJobId) {
@@ -14139,14 +14156,16 @@ const JobTracker = (function () {
 
       _updateHoursLabel();
 
-      var netEl = document.getElementById('tax-simulator-net-add');
-      var rateEl = document.getElementById('tax-simulator-rate');
-      var grossEl = document.getElementById('tax-simulator-gross-add');
+      var deltaEl = document.getElementById('tax-simulator-net-add');
+      var currentEl = document.getElementById('tax-sim-current');
+      var newEl = document.getElementById('tax-sim-new');
+      var grossEl = document.getElementById('tax-simulator-gross-add'); // legacy hidden
       var missingEl = document.getElementById('tax-simulator-missing-profile');
 
       if (!_selectedJobId) {
-        if (netEl) netEl.textContent = '+0,00 €';
-        if (rateEl) rateEl.textContent = '0,0 %';
+        if (deltaEl) deltaEl.textContent = '+0,00 €';
+        if (currentEl) currentEl.textContent = '0,00 € / 0,00 €';
+        if (newEl) newEl.textContent = '0,00 € / 0,00 €';
         if (grossEl) grossEl.textContent = '0,00 €';
         if (missingEl) missingEl.style.display = 'none';
         return;
@@ -14156,8 +14175,9 @@ const JobTracker = (function () {
 
       // Surface fixed-salary / daily-rate jobs with a friendly message
       if (!result.supported) {
-        if (netEl) netEl.textContent = '–';
-        if (rateEl) rateEl.textContent = '–';
+        if (deltaEl) deltaEl.textContent = '–';
+        if (currentEl) currentEl.textContent = '–';
+        if (newEl) newEl.textContent = '–';
         if (grossEl) grossEl.textContent = '0,00 €';
         if (missingEl) {
           missingEl.style.display = '';
@@ -14168,55 +14188,14 @@ const JobTracker = (function () {
 
       if (missingEl) missingEl.style.display = 'none';
 
-      if (netEl) netEl.textContent = '+' + _formatCurrency(result.netAdd);
-      if (rateEl) rateEl.textContent = result.effectiveRate.toFixed(1).replace('.', ',') + ' %';
+      if (currentEl) {
+        currentEl.textContent = _formatCurrency(result.currentBrutto) + ' / ' + _formatCurrency(result.currentNetto);
+      }
+      if (newEl) {
+        newEl.textContent = _formatCurrency(result.simulatedBrutto) + ' / ' + _formatCurrency(result.simulatedNetto);
+      }
+      if (deltaEl) deltaEl.textContent = '+' + _formatCurrency(result.netAdd);
       if (grossEl) grossEl.textContent = _formatCurrency(result.grossAdd);
-
-      // Show job-type info label so user understands the deduction basis
-      _updateInfoLabel();
-    }
-
-    /**
-     * Show a small info label below the tax detail indicating the job type
-     * and deduction basis (e.g. "Werkstudent · nur RV").
-     */
-    function _updateInfoLabel() {
-      var infoEl = document.getElementById('tax-simulator-info');
-      if (!infoEl) {
-        // Create the element if it doesn't exist yet
-        var detailEl = document.querySelector('.tax-tile__detail');
-        if (!detailEl) return;
-        infoEl = document.createElement('span');
-        infoEl.id = 'tax-simulator-info';
-        infoEl.className = 'tax-tile__info';
-        detailEl.parentNode.insertBefore(infoEl, detailEl.nextSibling);
-      }
-
-      var job = _selectedJobId ? JobManager.getJob(_selectedJobId) : null;
-      if (!job) {
-        infoEl.textContent = '';
-        return;
-      }
-
-      var label = '';
-      switch (job.type) {
-        case 'Werkstudent':
-          label = 'Werkstudent · nur RV 9,3%';
-          break;
-        case 'Minijob':
-          label = 'Minijob · 3,6% RV';
-          break;
-        case 'KFB':
-          label = 'KFB · 25% pauschal';
-          break;
-        case 'Teilzeit':
-        case 'Vollzeit':
-          label = 'Stkl. ' + (AppState.getState().userProfile ? AppState.getState().userProfile.steuerklasse || '1' : '1') + ' · Gesetzl. SV';
-          break;
-        default:
-          label = '';
-      }
-      infoEl.textContent = label;
     }
 
     /**
@@ -15762,8 +15741,19 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.0.7';
+  const APP_VERSION = '2.1.0';
   const APP_CHANGELOG = [
+    {
+      version: '2.1.0',
+      date: '2026-05-29',
+      changes: [
+        'v2.1.0 — Top-Navigation, neuer Steuer-Simulator',
+        '🧭 Navigation: Tabs sind jetzt oben in der Sticky-Header-Leiste — kein Bottom-Nav mehr',
+        '💶 Steuer-Simulator: Neuer Look mit aktuellem & neuem Brutto/Netto, Slider bis +160h, große Netto-Differenz',
+        '⏱️ Punch-Clock: Ring bleibt beim Schichtstart in fester Position (kein Springen mehr)',
+        '⚙️ Einstellungen: "Version & Updates" steht jetzt ganz oben'
+      ]
+    },
     {
       version: '2.0.7',
       date: '2026-05-28',

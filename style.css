@@ -101,7 +101,7 @@ body {
   background-color: var(--color-bg);
   min-height: 100vh;
   min-height: 100dvh;
-  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -125,90 +125,100 @@ a {
 }
 
 /* ============================================================
-   Header Bar — Sticky top, surface background
+   Header Bar — Sticky top, contains logo, icons, and tabs
    ============================================================ */
 .app-header {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--spacing-sm) var(--spacing-md);
-  padding-top: calc(env(safe-area-inset-top, 0px) + var(--spacing-sm));
-  background: var(--color-bg);
-  border-bottom: 0;
   position: -webkit-sticky;
   position: sticky;
   top: 0;
   z-index: var(--z-glass-overlay);
+  background: color-mix(in srgb, var(--color-bg) 90%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  padding-top: env(safe-area-inset-top, 0px);
+  border-bottom: 0.5px solid color-mix(in srgb, var(--color-border) 50%, transparent);
 }
 
-.app-header-center {
+.app-header__top {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  padding: 8px 16px;
 }
 
-.app-header-title {
+.app-header__logo {
   font-family: 'Georgia', 'Times New Roman', serif;
-  font-size: 19px;
-  font-weight: 400;
+  font-size: 18px;
+  font-weight: 700;
   font-style: italic;
+  letter-spacing: -0.3px;
   color: var(--color-text-primary);
-  letter-spacing: 0.5px;
 }
 
-.app-header-swirl {
-  display: block;
-  margin-top: -4px;
-  color: var(--color-text-primary);
-  opacity: 0.7;
-}
-
-.app-header-actions {
-  position: absolute;
-  right: var(--spacing-md);
-  top: 50%;
-  transform: translateY(-50%);
-  padding-top: calc(env(safe-area-inset-top, 0px) / 2);
+.app-header__actions {
   display: flex;
   align-items: center;
   gap: 2px;
 }
 
-.header-theme-toggle {
+.app-header__icon-btn {
   background: none;
   border: none;
-  font-size: 18px;
+  font-size: 20px;
+  padding: 8px;
+  border-radius: 8px;
   cursor: pointer;
-  padding: 6px;
-  border-radius: 6px;
-  transition: background 0.2s;
   min-width: 36px;
   min-height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background 0.2s;
+  color: var(--color-text-primary);
+  -webkit-tap-highlight-color: transparent;
 }
-.header-theme-toggle:hover {
-  background: rgba(255,255,255,0.1);
+.app-header__icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
-.header-rules-btn {
-  background: none;
-  border: none;
-  font-size: 18px;
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 6px;
-  transition: background 0.2s;
-  min-width: 36px;
-  min-height: 36px;
+.app-header__tabs {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 0 12px 8px;
+  gap: 4px;
 }
-.header-rules-btn:hover {
-  background: rgba(255,255,255,0.1);
+
+.header-tab {
+  flex: 1;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-family: var(--font-family);
+  transition: background 0.2s ease, color 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 40px;
+}
+
+.header-tab.active {
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+  color: var(--color-accent);
+}
+
+.header-tab:active {
+  transform: scale(0.96);
+  transition: transform 0.1s ease;
+}
+
+.header-tab:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 /* ============================================================
@@ -234,99 +244,6 @@ a {
 .layer-overlay {
   position: relative;
   z-index: var(--z-glass-overlay);
-}
-
-/* ============================================================
-   Bottom Navigation — Fixed bottom, 3 tabs
-   ============================================================ */
-.bottom-nav,
-.nav-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: var(--z-glass-overlay);
-  background: var(--nav-bg);
-  border-top: none;
-  display: flex;
-  align-items: stretch;
-  gap: 6px;
-  padding: 6px;
-  padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
-}
-
-.nav-tab {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  padding: 8px 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  color: var(--color-text-tertiary);
-  font-size: 10px;
-  font-family: var(--font-family);
-  transition: color 0.25s ease, background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
-  -webkit-tap-highlight-color: transparent;
-  flex: 1;
-  border-radius: 12px;
-  border: 1.5px solid transparent;
-  position: relative;
-}
-
-.nav-tab::before {
-  display: none;
-}
-
-.nav-tab-icon {
-  font-size: 18px;
-  line-height: 1;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.nav-tab-label {
-  font-size: 10px;
-  font-weight: 500;
-  transition: font-weight 0.2s ease;
-}
-
-.nav-tab.active {
-  color: var(--color-accent);
-  background: rgba(var(--accent-rgb), 0.12);
-  border-color: rgba(var(--accent-rgb), 0.25);
-  box-shadow: 0 2px 12px rgba(var(--accent-rgb), 0.1);
-  backdrop-filter: blur(12px) saturate(1.4);
-  -webkit-backdrop-filter: blur(12px) saturate(1.4);
-}
-
-.nav-tab.active::before {
-  display: none;
-}
-
-.nav-tab.active .nav-tab-icon {
-  transform: scale(1.05);
-}
-
-.nav-tab.active .nav-tab-label {
-  font-weight: 600;
-}
-
-.nav-tab:active {
-  transform: scale(0.92);
-}
-
-.nav-tab:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
-}
-
-/* Hide monthly/yearly nav tabs (accessed via sub-nav) */
-.nav-tab[data-view="view-monthly"],
-.nav-tab[data-view="view-yearly"] {
-  display: none;
 }
 
 /* ============================================================
@@ -393,13 +310,9 @@ a {
   display: block;
 }
 
-/* Scrollable content area */
+/* Scrollable content area — flows with body scroll under sticky header */
 .scroll-content {
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   position: relative;
-  max-height: calc(100vh - var(--nav-height) - 60px);
-  max-height: calc(100dvh - var(--nav-height) - 60px);
 }
 
 /* ============================================================
@@ -755,7 +668,7 @@ a {
    ============================================================ */
 .fab {
   position: fixed;
-  bottom: calc(var(--nav-height) + var(--spacing-md));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--spacing-md));
   right: var(--spacing-md);
   width: 56px;
   height: 56px;
@@ -836,7 +749,7 @@ a {
 /* Toast notification */
 .toast {
   position: fixed;
-  bottom: calc(var(--nav-height) + var(--spacing-lg));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--spacing-lg));
   left: 50%;
   transform: translateX(-50%) translateY(100px);
   z-index: calc(var(--z-glass-overlay) + 15);
@@ -869,7 +782,7 @@ a {
    ============================================================ */
 .update-banner {
   position: fixed;
-  bottom: calc(var(--nav-height) + var(--spacing-md));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--spacing-md));
   left: var(--spacing-md);
   right: var(--spacing-md);
   z-index: calc(var(--z-glass-overlay) + 5);
@@ -3274,8 +3187,7 @@ body.theme-light .tax-tile-slider::-moz-range-thumb {
    ============================================================ */
 @media (prefers-reduced-transparency: reduce) {
   .glass-surface,
-  .bottom-nav,
-  .nav-bar {
+  .app-header {
     background: var(--color-surface-solid) !important;
   }
 }
@@ -3476,18 +3388,18 @@ html, body {
 .scroll-content {
   -webkit-overflow-scrolling: touch;
   overflow-y: auto;
-  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 16px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
 }
 
 /* Ensure view sections fill available space */
 .view-section {
-  min-height: calc(100vh - var(--nav-height));
-  min-height: calc(100dvh - var(--nav-height));
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Touch-friendly minimum sizes for interactive elements */
 .btn,
-.nav-tab,
+.header-tab,
 .sub-nav-btn,
 .toggle-label,
 .radio-label {
@@ -3543,10 +3455,7 @@ input[type="number"]::-webkit-outer-spin-button {
   overflow: hidden;
 }
 
-/* Bottom nav safe area padding */
-.bottom-nav {
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
-}
+/* Bottom safe area handled via body padding-bottom */
 
 /* Small screen adjustments */
 @media (max-width: 360px) {
@@ -4421,13 +4330,16 @@ details[open] .dashboard-details-toggle::after {
   font-size: 18px;
 }
 
-/* Label area below the ring — stacks "läuft seit" + timer + label vertically */
+/* Label area below the ring — stacks "läuft seit" + timer + label vertically.
+   Reserves a fixed min-height so layout doesn't shift between idle/active states. */
 .punch-label-area {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
   margin-top: 8px;
+  min-height: 56px;
+  justify-content: center;
   flex-shrink: 0;
 }
 
@@ -4437,6 +4349,14 @@ details[open] .dashboard-details-toggle::after {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--color-text-tertiary);
+  /* always reserves space so layout doesn't shift when shift starts */
+  visibility: hidden;
+  height: 14px;
+  line-height: 14px;
+}
+
+.punch-clock--active .punch-prelabel {
+  visibility: visible;
 }
 
 .punch-timer-text {
@@ -4446,7 +4366,14 @@ details[open] .dashboard-details-toggle::after {
   color: var(--color-text-primary);
   letter-spacing: 0.5px;
   font-family: var(--punch-timer-font, var(--font-family));
-  line-height: 1.1;
+  line-height: 22px;
+  height: 22px;
+  /* always reserves space so layout doesn't shift when shift starts */
+  visibility: hidden;
+}
+
+.punch-clock--active .punch-timer-text {
+  visibility: visible;
 }
 
 /* Label below the ring */
@@ -4731,7 +4658,6 @@ body.theme-light .punch-extras-form__input {
 }
 
 .tax-tile {
-  aspect-ratio: 1;
   width: 100%;
   display: grid;
   grid-template-rows: auto 1fr auto;
@@ -4740,8 +4666,8 @@ body.theme-light .punch-extras-form__input {
   backdrop-filter: blur(24px) saturate(180%);
   border: 0.5px solid rgba(255, 255, 255, 0.12);
   border-radius: 24px;
-  padding: var(--spacing-sm);
-  gap: 6px;
+  padding: var(--spacing-md);
+  gap: 8px;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.06) inset,
     0 8px 24px rgba(0, 0, 0, 0.18);
@@ -4799,28 +4725,52 @@ body.theme-light .tax-tile {
   min-height: 0;
 }
 
-.tax-tile__main-value {
+.tax-tile__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  padding: 4px 0;
+  gap: 8px;
+}
+
+.tax-tile__row-label {
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+}
+
+.tax-tile__row-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+  font-weight: 500;
+  text-align: right;
+}
+
+.tax-tile__delta {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  text-align: left;
+  align-items: center;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 0.5px solid color-mix(in srgb, var(--color-border) 50%, transparent);
 }
 
-.tax-tile__main-amount {
-  font-size: 20px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-accent);
-  line-height: 1.1;
-  letter-spacing: -0.3px;
-}
-
-.tax-tile__main-label {
+.tax-tile__delta-label {
   font-size: 11px;
   opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   color: var(--color-text-secondary);
-  letter-spacing: 0.2px;
+}
+
+.tax-tile__delta-amount {
+  font-size: 28px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-success);
+  letter-spacing: -0.5px;
+  margin-top: 2px;
+  line-height: 1.1;
 }
 
 .tax-tile__slider-row {
@@ -4883,30 +4833,6 @@ body.theme-light .tax-tile {
 
 /* Slider container touch handling for iOS is handled by the existing .tax-tile__slider-row rule */
 
-.tax-tile__hours {
-  font-size: 11px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text-secondary);
-  min-width: 28px;
-  text-align: right;
-}
-
-.tax-tile__detail {
-  font-size: 11px;
-  opacity: 0.7;
-  text-align: center;
-  color: var(--color-text-secondary);
-  position: relative;
-  z-index: 1;
-}
-
-.tax-tile__detail #tax-simulator-rate {
-  color: var(--color-accent);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
 .tax-tile__job-select {
   font-size: 11px;
   padding: 4px 8px;
@@ -4934,15 +4860,6 @@ body.theme-light .tax-tile {
   text-align: center;
   z-index: 2;
   margin: 0;
-}
-
-.tax-tile__info {
-  font-size: 10px;
-  color: var(--color-text-tertiary);
-  text-align: center;
-  opacity: 0.8;
-  letter-spacing: 0.1px;
-  margin-top: 2px;
 }
 
 /* Notification time picker — constrained size */
