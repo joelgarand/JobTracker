@@ -3555,7 +3555,7 @@ input[type="number"]::-webkit-outer-spin-button {
 .entry-title {
   font-size: var(--font-size-xxl);
   margin-bottom: var(--spacing-lg);
-  padding-top: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md) 0 var(--spacing-md);
 }
 
 .entry-form-card {
@@ -3745,7 +3745,6 @@ details[open] .dashboard-details-toggle::after {
   margin-top: var(--spacing-md);
   padding: var(--spacing-sm) 0;
   border-top: 1px solid var(--color-border);
-  border-bottom: 1px solid var(--color-border);
 }
 
 .dashboard-absence-item {
@@ -4252,32 +4251,30 @@ details[open] .dashboard-details-toggle::after {
    Punch Clock — iOS 26 circular glass tile (1×1 small dashboard widget)
    ============================================================ */
 .punch-clock {
-  /* Outer container is the dashboard slot — the inner .punch-clock-tile is
-     the actual visual surface. The tile is square via aspect-ratio:1, so the
-     outer wrapper just needs to allow the inner element to sit naturally. */
+  /* Outer container — full-width in the Eintragen tab */
   width: 100%;
   display: block;
   background: transparent;
   border: 0;
   padding: 0;
+  margin-bottom: var(--spacing-md);
   position: relative;
 }
 
 .punch-clock-tile {
-  /* Square aspect tile — stable layout that never changes size */
-  aspect-ratio: 1;
+  /* Full-width horizontal layout */
   width: 100%;
-  position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  position: relative;
   background: color-mix(in srgb, var(--color-surface) 55%, transparent);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   backdrop-filter: blur(24px) saturate(180%);
   border: 0.5px solid rgba(255, 255, 255, 0.12);
-  border-radius: 24px;
-  padding: var(--spacing-sm);
+  border-radius: 20px;
+  min-height: 100px;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.06) inset,
     0 8px 24px rgba(0, 0, 0, 0.18);
@@ -4286,7 +4283,7 @@ details[open] .dashboard-details-toggle::after {
 
 /* Remove the old active override that changed aspect-ratio */
 .punch-clock--active .punch-clock-tile {
-  aspect-ratio: 1;
+  /* no aspect-ratio change */
 }
 
 .punch-clock-tile::before {
@@ -4300,20 +4297,17 @@ details[open] .dashboard-details-toggle::after {
   border-radius: inherit;
 }
 
-/* Ring container — centered via flex on parent */
+/* Ring container — fixed size on left side */
 .punch-ring-container {
   position: relative;
-  width: 60%;
-  aspect-ratio: 1;
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
 }
 
-/* Punch tile title — absolute at top so it doesn't affect ring centering */
+/* Punch tile title — static in the bottom area flex column */
 .punch-tile-title {
-  position: absolute;
-  top: 12px;
-  left: 0;
-  right: 0;
-  text-align: center;
+  position: static;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -4322,16 +4316,14 @@ details[open] .dashboard-details-toggle::after {
   opacity: 0.7;
 }
 
-/* Bottom area — absolute at bottom so it doesn't push ring up */
+/* Bottom area — static flex column on the right side */
 .punch-bottom-area {
-  position: absolute;
-  bottom: 12px;
-  left: 0;
-  right: 0;
+  position: static;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 2px;
+  flex: 1;
   min-height: 32px;
   justify-content: center;
 }
@@ -4740,8 +4732,8 @@ body.theme-light .punch-extras-form__input {
   backdrop-filter: blur(24px) saturate(180%);
   border: 0.5px solid rgba(255, 255, 255, 0.12);
   border-radius: 24px;
-  padding: var(--spacing-md);
-  gap: 8px;
+  padding: var(--spacing-sm) 0;
+  gap: 0;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.06) inset,
     0 8px 24px rgba(0, 0, 0, 0.18);
@@ -4770,7 +4762,10 @@ body.theme-light .tax-tile {
 .tax-tile__header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text-secondary);
@@ -4788,6 +4783,24 @@ body.theme-light .tax-tile {
   font-size: 13px;
 }
 
+.tax-tile__preview {
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent);
+}
+
+.tax-tile__chevron {
+  font-size: 10px;
+  transition: transform 0.2s ease;
+  opacity: 0.5;
+}
+
+.tax-tile__header[aria-expanded="true"] .tax-tile__chevron {
+  transform: rotate(180deg);
+}
+
 .tax-tile__body {
   display: flex;
   flex-direction: column;
@@ -4797,6 +4810,11 @@ body.theme-light .tax-tile {
   position: relative;
   z-index: 1;
   min-height: 0;
+  padding: 0 var(--spacing-md) var(--spacing-md);
+}
+
+.tax-tile__body[hidden] {
+  display: none;
 }
 
 .tax-tile__row {
@@ -5360,16 +5378,22 @@ body.widget-dragging .view-section {
   display: flex;
   gap: 8px;
   align-items: center;
+  width: 100%;
 }
 .geo-input-row .form-input {
   flex: 1;
+  min-width: 0; /* prevent flex overflow */
 }
 .geo-input-row .btn-sm {
-  padding: 8px 12px;
-  font-size: 16px;
-  min-width: 44px;
-  min-height: 44px;
   flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  border-radius: 12px;
 }
 
 /* ============================================================

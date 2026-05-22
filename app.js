@@ -2837,9 +2837,17 @@ const JobTracker = (function () {
               if (result) {
                 document.getElementById('settings-job-geo-lat').value = String(result.lat);
                 document.getElementById('settings-job-geo-lng').value = String(result.lng);
-                if (geoStatusEl) geoStatusEl.textContent = '✓ Standort gefunden: ' + _shortenAddress(result.display);
+                if (geoStatusEl) {
+                  geoStatusEl.textContent = '✓ Standort gefunden: ' + _shortenAddress(result.display);
+                  geoStatusEl.classList.remove('geo-status--error');
+                  geoStatusEl.classList.add('geo-status--ok');
+                }
               } else {
-                if (geoStatusEl) geoStatusEl.textContent = '✗ Adresse nicht gefunden';
+                if (geoStatusEl) {
+                  geoStatusEl.textContent = '✗ Adresse nicht gefunden';
+                  geoStatusEl.classList.remove('geo-status--ok');
+                  geoStatusEl.classList.add('geo-status--error');
+                }
               }
             });
           }
@@ -2870,10 +2878,18 @@ const JobTracker = (function () {
               // Reverse geocode to show address
               _reverseGeocode(result.lat, result.lng, function (displayName) {
                 if (geoAddressInput) geoAddressInput.value = displayName;
-                if (geoStatusEl) geoStatusEl.textContent = '✓ Standort gefunden';
+                if (geoStatusEl) {
+                  geoStatusEl.textContent = '✓ Standort gefunden';
+                  geoStatusEl.classList.remove('geo-status--error');
+                  geoStatusEl.classList.add('geo-status--ok');
+                }
               });
             } else {
-              if (geoStatusEl) geoStatusEl.textContent = '✗ Position nicht verfügbar';
+              if (geoStatusEl) {
+                geoStatusEl.textContent = '✗ Position nicht verfügbar';
+                geoStatusEl.classList.remove('geo-status--ok');
+                geoStatusEl.classList.add('geo-status--error');
+              }
             }
           });
         });
@@ -8392,7 +8408,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.1.3';
+    const APP_VERSION = '2.1.4';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -12842,7 +12858,7 @@ const JobTracker = (function () {
       // If fewer than 3 data points, show a tiny placeholder hint
       // (visual feedback that the sparkline area exists and will populate later)
       if (dataPoints.length < MIN_DATA_POINTS) {
-        container.innerHTML = '<span class="sparkline-empty" title="Mindestens 3 Tage mit Werten benötigt">📈 Bald verfügbar</span>';
+        container.innerHTML = '';
         container.classList.add('sparkline-container');
         container.classList.add('sparkline-container--empty');
         container.onclick = null;
@@ -13298,7 +13314,7 @@ const JobTracker = (function () {
 
     /**
      * Show the active-shift UI: small stop icon in center, timer + "läuft seit"
-     * in the bottom area below the ring.
+     * in the bottom area next to the ring.
      */
     function _showActiveUI() {
       var container = document.getElementById('punch-clock-container');
@@ -13315,7 +13331,7 @@ const JobTracker = (function () {
     }
 
     /**
-     * Show the idle UI: play icon, empty bottom area.
+     * Show the idle UI: play icon, title + subtitle in bottom area.
      */
     function _showIdleUI() {
       var container = document.getElementById('punch-clock-container');
@@ -13327,7 +13343,7 @@ const JobTracker = (function () {
       if (container) container.classList.remove('punch-clock--active');
       if (iconEl) iconEl.textContent = '▶';
       if (btn) btn.setAttribute('aria-label', 'Schicht starten');
-      if (bottomArea) bottomArea.innerHTML = '';
+      if (bottomArea) bottomArea.innerHTML = '<span class="punch-tile-title">Schicht</span><span class="punch-prelabel">Tippe zum Starten</span>';
       if (warningBanner) warningBanner.style.display = 'none';
       _setRingProgress(0, false);
     }
@@ -14122,6 +14138,7 @@ const JobTracker = (function () {
       _initialized = true;
 
       _bindSliderEvents();
+      _bindToggle();
 
       var jobSelect = document.getElementById('tax-simulator-job-select');
       if (jobSelect && !jobSelect._taxBound) {
@@ -14147,6 +14164,22 @@ const JobTracker = (function () {
           _runSimulation();
         }
       });
+    }
+
+    /**
+     * Bind the collapse/expand toggle on the tax tile header.
+     */
+    function _bindToggle() {
+      var toggleEl = document.getElementById('tax-tile-toggle');
+      if (toggleEl && !toggleEl._taxToggleBound) {
+        toggleEl._taxToggleBound = true;
+        toggleEl.addEventListener('click', function () {
+          var body = document.getElementById('tax-tile-body');
+          var expanded = body && !body.hidden;
+          if (body) body.hidden = expanded;
+          toggleEl.setAttribute('aria-expanded', String(!expanded));
+        });
+      }
     }
 
     /**
@@ -14396,6 +14429,10 @@ const JobTracker = (function () {
       }
       if (deltaEl) deltaEl.textContent = '+' + _formatCurrency(result.netAdd);
       if (grossEl) grossEl.textContent = _formatCurrency(result.grossAdd);
+
+      // Update collapsed preview with the netto-delta value
+      var previewEl = document.getElementById('tax-tile-preview');
+      if (previewEl) previewEl.textContent = '+' + _formatCurrency(result.netAdd);
     }
 
     /**
@@ -16023,8 +16060,21 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.1.3';
+  const APP_VERSION = '2.1.4';
   const APP_CHANGELOG = [
+    {
+      version: '2.1.4',
+      date: '2026-06-02',
+      changes: [
+        'v2.1.4 — Punch Clock → Eintragen, Steuer-Simulator klappbar, Layout-Fixes',
+        '⏱️ Punch Clock: Verschoben in den Eintragen-Tab als volle Breite (horizontal)',
+        '💶 Steuer-Simulator: Klappbar — zeigt Netto-Delta im Header, Tap zum Öffnen/Schließen',
+        '📐 Eintragen-Titel: Korrekte Ausrichtung mit Inhaltsblöcken',
+        '🗑️ "Bald verfügbar" Text in Gesamtübersicht entfernt',
+        '➖ Krankheitstage: Doppelte Linie entfernt (nur noch eine Trennlinie)',
+        '📍 Geo-Adresseingabe: Layout korrigiert — Eingabefeld volle Breite, Button 44×44px'
+      ]
+    },
     {
       version: '2.1.3',
       date: '2026-06-01',
