@@ -3742,9 +3742,9 @@ details[open] .dashboard-details-toggle::after {
   align-items: center;
   justify-content: center;
   gap: var(--spacing-md);
-  margin-top: var(--spacing-md);
-  padding: var(--spacing-sm) 0;
-  border-top: 1px solid var(--color-border);
+  padding: var(--spacing-md) 0;
+  margin: 0;
+  border-top: 0.5px solid var(--color-border);
 }
 
 .dashboard-absence-item {
@@ -3774,9 +3774,9 @@ details[open] .dashboard-details-toggle::after {
 }
 
 .dashboard-extras-row {
-  margin-top: var(--spacing-md);
-  padding-top: var(--spacing-sm);
-  border-top: 1px solid var(--color-border);
+  margin-top: 0;
+  padding: var(--spacing-md) 0;
+  border-top: 0.5px solid var(--color-border);
 }
 
 .dashboard-extra-item {
@@ -4262,22 +4262,19 @@ details[open] .dashboard-details-toggle::after {
 }
 
 .punch-clock-tile {
-  /* Full-width horizontal layout */
+  /* Full-width centered vertical layout */
   width: 100%;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--spacing-md);
+  justify-content: center;
+  gap: var(--spacing-sm);
   padding: var(--spacing-md);
   position: relative;
-  background: color-mix(in srgb, var(--color-surface) 55%, transparent);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
-  border: 0.5px solid rgba(255, 255, 255, 0.12);
-  border-radius: 20px;
-  min-height: 100px;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.06) inset,
-    0 8px 24px rgba(0, 0, 0, 0.18);
+  background: var(--color-content-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  min-height: 140px;
   overflow: hidden;
 }
 
@@ -4287,57 +4284,46 @@ details[open] .dashboard-details-toggle::after {
 }
 
 .punch-clock-tile::before {
-  /* Subtle top highlight for vibrant material look */
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 30%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 100%);
-  pointer-events: none;
-  border-radius: inherit;
+  display: none;
 }
 
-/* Ring container — fixed size on left side */
+/* Ring container — fixed size centered */
 .punch-ring-container {
   position: relative;
-  width: 72px;
-  height: 72px;
+  width: 64px;
+  height: 64px;
   flex-shrink: 0;
 }
 
 /* Punch tile title — static in the bottom area flex column */
 .punch-tile-title {
   position: static;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--color-text-secondary);
-  opacity: 0.7;
+  color: var(--color-text-primary);
 }
 
-/* Bottom area — static flex column on the right side */
+/* Bottom area — centered flex column below the ring */
 .punch-bottom-area {
   position: static;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  flex: 1;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
   min-height: 32px;
   justify-content: center;
 }
 
 .punch-bottom-area .punch-prelabel {
-  font-size: 9px;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  opacity: 0.5;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
 }
 
 .punch-bottom-area .punch-timer-text {
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--color-text-primary);
@@ -4391,45 +4377,30 @@ details[open] .dashboard-details-toggle::after {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 56%;
-  aspect-ratio: 1;
+  width: 48px;
+  height: 48px;
   transform: translate(-50%, -50%);
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
   border-radius: 50%;
-  border: 0.5px solid rgba(255, 255, 255, 0.16);
-  background: color-mix(in srgb, var(--color-accent) 78%, transparent);
-  color: #ffffff;
+  border: none;
+  background: var(--color-accent);
+  color: #fff;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   font-family: var(--font-family);
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
-  box-shadow:
-    0 6px 18px rgba(var(--accent-rgb), 0.32),
-    0 1px 2px rgba(0, 0, 0, 0.12),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.25);
-  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.2s ease, background-color 0.3s ease;
+  transition: transform 0.15s ease, background 0.2s ease;
   padding: 0;
   min-width: 44px;
   min-height: 44px;
-  animation: punch-idle-pulse 2.5s ease-in-out infinite;
 }
 
 .punch-center-btn:active {
-  transform: translate(-50%, -50%) scale(0.94);
-  animation: none;
+  transform: translate(-50%, -50%) scale(0.92);
 }
 
-/* Idle pulse animation — only when NOT active */
-@keyframes punch-idle-pulse {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); }
-  50% { transform: translate(-50%, -50%) scale(1.03); }
-}
-
-/* Disable pulse when shift is active */
+/* Disable pulse — removed */
 .punch-clock--active .punch-center-btn {
   animation: none;
 }
@@ -4441,31 +4412,39 @@ details[open] .dashboard-details-toggle::after {
 
 /* Active shift: stop button uses the danger color */
 .punch-clock--active .punch-center-btn {
-  background: color-mix(in srgb, var(--color-danger) 78%, transparent);
-  box-shadow:
-    0 6px 18px rgba(239, 68, 68, 0.32),
-    0 1px 2px rgba(0, 0, 0, 0.12),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.25);
+  background: var(--color-danger);
 }
 
 .punch-center-icon {
-  font-size: 24px;
+  font-size: 20px;
   line-height: 1;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.15));
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* Active state: smaller stop icon (timer is now in the bottom area below the ring) */
+/* Active state: same size stop icon */
 .punch-clock--active .punch-center-icon {
   font-size: 18px;
 }
 
-/* Light theme: stronger card surface */
+/* Skip button — discard active shift */
+.punch-skip-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+  padding: 8px;
+  cursor: pointer;
+  text-decoration: underline;
+  font-family: var(--font-family);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Light theme: standard card surface */
 body.theme-light .punch-clock-tile {
-  background: rgba(255, 255, 255, 0.55);
-  border-color: rgba(0, 0, 0, 0.06);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.5) inset,
-    0 4px 16px rgba(0, 0, 0, 0.06);
+  background: var(--color-content-bg);
+  border-color: var(--color-border);
 }
 
 /* Punch clock inline extras form (tip/provision after shift end) */
@@ -4727,36 +4706,22 @@ body.theme-light .punch-extras-form__input {
   width: 100%;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  background: color-mix(in srgb, var(--color-surface) 55%, transparent);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
-  border: 0.5px solid rgba(255, 255, 255, 0.12);
-  border-radius: 24px;
+  background: var(--color-content-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   padding: var(--spacing-sm) 0;
   gap: 0;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.06) inset,
-    0 8px 24px rgba(0, 0, 0, 0.18);
   position: relative;
   overflow: hidden;
 }
 
 .tax-tile::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 30%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 100%);
-  pointer-events: none;
-  border-radius: inherit;
+  display: none;
 }
 
 body.theme-light .tax-tile {
-  background: rgba(255, 255, 255, 0.55);
-  border-color: rgba(0, 0, 0, 0.06);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.5) inset,
-    0 4px 16px rgba(0, 0, 0, 0.06);
+  background: var(--color-content-bg);
+  border-color: var(--color-border);
 }
 
 .tax-tile__header {
@@ -5282,6 +5247,11 @@ body.dashboard-edit-mode .dashboard-grid > [data-reorderable="true"] a {
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   -webkit-tap-highlight-color: transparent;
+  display: none;
+}
+
+body.dashboard-edit-mode .dashboard-edit-done {
+  display: block;
 }
 
 .dashboard-edit-done:active {

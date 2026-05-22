@@ -8408,7 +8408,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.1.4';
+    const APP_VERSION = '2.1.5';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -13100,6 +13100,15 @@ const JobTracker = (function () {
         warningContinueBtn.addEventListener('click', function () { dismissWarning(); });
       }
 
+      // Wire skip button — discard active shift
+      var skipBtn = document.getElementById('punch-skip-btn');
+      if (skipBtn && !skipBtn._punchBound) {
+        skipBtn._punchBound = true;
+        skipBtn.addEventListener('click', function () {
+          _skipShift();
+        });
+      }
+
       // Initialize ring to empty
       _setRingProgress(0, false);
 
@@ -13235,6 +13244,20 @@ const JobTracker = (function () {
       try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
     }
 
+    /**
+     * Skip (discard) the active shift without saving anything.
+     */
+    function _skipShift() {
+      if (!_shiftData) return;
+      _stopTimer();
+      _shiftData = null;
+      _clearStorage();
+      _showIdleUI();
+      if (typeof ToastModule !== 'undefined' && ToastModule.show) {
+        ToastModule.show('Schicht verworfen', 'info');
+      }
+    }
+
     function _startTimer() {
       if (_timerInterval) return;
       _updateTimerDisplay();
@@ -13321,13 +13344,15 @@ const JobTracker = (function () {
       var iconEl = document.getElementById('punch-center-icon');
       var btn = document.getElementById('punch-center-btn');
       var bottomArea = document.getElementById('punch-bottom-area');
+      var skipBtn = document.getElementById('punch-skip-btn');
 
       if (container) container.classList.add('punch-clock--active');
-      if (iconEl) iconEl.textContent = '⏹';
+      if (iconEl) iconEl.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>';
       if (btn) btn.setAttribute('aria-label', 'Schicht beenden');
       if (bottomArea) {
         bottomArea.innerHTML = '<span class="punch-prelabel">läuft seit</span><span class="punch-timer-text" id="punch-timer-text">00:00:00</span>';
       }
+      if (skipBtn) skipBtn.style.display = '';
     }
 
     /**
@@ -13339,12 +13364,14 @@ const JobTracker = (function () {
       var btn = document.getElementById('punch-center-btn');
       var bottomArea = document.getElementById('punch-bottom-area');
       var warningBanner = document.getElementById('punch-warning-banner');
+      var skipBtn = document.getElementById('punch-skip-btn');
 
       if (container) container.classList.remove('punch-clock--active');
-      if (iconEl) iconEl.textContent = '▶';
+      if (iconEl) iconEl.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
       if (btn) btn.setAttribute('aria-label', 'Schicht starten');
       if (bottomArea) bottomArea.innerHTML = '<span class="punch-tile-title">Schicht</span><span class="punch-prelabel">Tippe zum Starten</span>';
       if (warningBanner) warningBanner.style.display = 'none';
+      if (skipBtn) skipBtn.style.display = 'none';
       _setRingProgress(0, false);
     }
 
@@ -14550,12 +14577,6 @@ const JobTracker = (function () {
      */
     function setEditMode(enabled) {
       _editMode = !!enabled;
-
-      // Show/hide the Fertig button
-      var doneBtn = document.getElementById('dashboard-edit-done');
-      if (doneBtn) {
-        doneBtn.style.display = _editMode ? '' : 'none';
-      }
 
       var grid = document.querySelector('.dashboard-grid');
 
@@ -16060,8 +16081,20 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.1.4';
+  const APP_VERSION = '2.1.5';
   const APP_CHANGELOG = [
+    {
+      version: '2.1.5',
+      date: '2026-06-03',
+      changes: [
+        'v2.1.5 — Flat Tax Tile, Centered Punch Clock, Remove Progress Bar, Fix Fertig Button',
+        '📊 Prognose: Fortschrittsbalken aus Minijob-Forecast entfernt',
+        '🤒 Krankheitstage: Vertikale Zentrierung zwischen Trennlinien korrigiert',
+        '💶 Steuer-Simulator: Flaches Design — kein Glaseffekt, kein Shimmer, moderater Radius',
+        '✓ Fertig-Button: Erscheint nur noch im Bearbeitungsmodus (kein Anzeigen bei Pull-to-Refresh)',
+        '⏱️ Punch Clock: Zentriertes vertikales Layout, SVG-Icons, Überspringen-Option, kein Gloss'
+      ]
+    },
     {
       version: '2.1.4',
       date: '2026-06-02',

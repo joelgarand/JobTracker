@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=58">
+  <link rel="stylesheet" href="style.css?v=59">
   <title>JobTracker</title>
 </head>
 <body>
@@ -376,7 +376,7 @@
       </div>
 
       <!-- Dashboard Edit Done Button (shown in edit mode) -->
-      <button id="dashboard-edit-done" class="dashboard-edit-done" style="display:none;" type="button">✓ Fertig</button>
+      <button id="dashboard-edit-done" class="dashboard-edit-done" type="button">✓ Fertig</button>
 
       <!-- Dashboard Grid: 2-column CSS grid; small widgets span 1 col, full widgets span both -->
       <div class="dashboard-grid" id="dashboard-grid">
@@ -490,9 +490,7 @@
             <span class="forecast-widget__value" id="minijob-forecast-remaining">7.236,00 €</span>
           </div>
         </div>
-        <div class="forecast-progress-bar">
-          <div class="forecast-progress-fill" style="width: 0%;"></div>
-        </div>
+
         <div class="forecast-widget__footer">
           <span id="minijob-forecast-status" class="forecast-status forecast-status--safe" aria-label="Status"></span>
           <span id="minijob-forecast-warning" class="forecast-widget__warning" style="display:none;"></span>
@@ -656,13 +654,14 @@
               <circle class="punch-ring__progress" id="punch-ring-progress" cx="50" cy="50" r="44"></circle>
             </svg>
             <button type="button" id="punch-center-btn" class="punch-center-btn" aria-label="Schicht starten">
-              <span class="punch-center-icon" id="punch-center-icon" aria-hidden="true">▶</span>
+              <span class="punch-center-icon" id="punch-center-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>
             </button>
           </div>
           <div class="punch-bottom-area" id="punch-bottom-area">
             <span class="punch-tile-title">Schicht</span>
             <span class="punch-prelabel">Tippe zum Starten</span>
           </div>
+          <button type="button" id="punch-skip-btn" class="punch-skip-btn" style="display:none;">Überspringen</button>
           <!-- Inline extras form (shown after shift end if tip/provision enabled) -->
           <div id="punch-extras-form" class="punch-extras-form" style="display:none;"></div>
           <!-- 16-hour warning banner overlay -->
