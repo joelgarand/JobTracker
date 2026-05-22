@@ -8145,7 +8145,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.0.2';
+    const APP_VERSION = '2.0.3';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -11504,22 +11504,30 @@ const JobTracker = (function () {
       // Bind haptic-toggle UI element
       var toggle = document.getElementById('haptic-toggle');
       var unsupportedHint = document.getElementById('haptic-unsupported-hint');
+      var hapticTestBtn = document.getElementById('haptic-test-btn');
+
+      // On unsupported devices (most importantly iOS Safari, where Apple has
+      // intentionally not implemented navigator.vibrate), hide the entire
+      // feature instead of showing a "doesn't work" hint. The internal API
+      // continues to no-op silently so calling code never breaks.
+      if (!_supported) {
+        if (toggle) {
+          // Walk up to the surrounding .toggle-group so the row disappears
+          var group = toggle.closest ? toggle.closest('.toggle-group') : null;
+          if (group) group.style.display = 'none';
+        }
+        if (unsupportedHint) {
+          unsupportedHint.style.display = 'none';
+        }
+        if (hapticTestBtn) {
+          hapticTestBtn.style.display = 'none';
+        }
+        return;
+      }
+
       if (toggle) {
         toggle.checked = _enabled;
-        if (!_supported) {
-          // Don't disable the toggle — preserve preference for the future.
-          // Just surface a hint explaining why nothing happens.
-          if (unsupportedHint) {
-            if (_isIOS()) {
-              unsupportedHint.textContent = 'ℹ️ Haptisches Feedback ist auf iOS leider nicht verfügbar (Apple-Beschränkung).';
-            } else {
-              unsupportedHint.textContent = '⚠️ Haptisches Feedback wird auf diesem Gerät nicht unterstützt.';
-            }
-            unsupportedHint.style.display = '';
-          }
-        } else {
-          if (unsupportedHint) unsupportedHint.style.display = 'none';
-        }
+        if (unsupportedHint) unsupportedHint.style.display = 'none';
         toggle.addEventListener('change', function () {
           setEnabled(toggle.checked);
         });
@@ -12164,6 +12172,12 @@ const JobTracker = (function () {
         _snapBack(_activeEntry);
         _activeEntry = null;
       }
+
+      // If starting a fresh swipe on a non-revealed entry, clear any stale
+      // inline transform so live finger-tracking starts from 0.
+      if (entry && !entry.classList.contains('swipeable-entry--swiped')) {
+        entry.style.transform = '';
+      }
     }
 
     /**
@@ -12186,6 +12200,21 @@ const JobTracker = (function () {
         _swiping = true;
         // Prevent vertical scrolling while a horizontal swipe is locked in.
         e.preventDefault();
+
+        // Live finger-tracking ONLY while opening (left swipe on a non-revealed
+        // entry). When closing (right swipe on a revealed entry), we deliberately
+        // skip the live transform — letting the CSS transition handle the snap
+        // on touchend gives a smooth single animation instead of fighting an
+        // inline transform vs the class-applied one.
+        var entry = _findSwipeableEntry(e.target);
+        if (entry && !entry.classList.contains('swipeable-entry--swiped')) {
+          // Opening (left-swipe). Track only leftward motion.
+          if (deltaX > 0) {
+            // Cap at the delete-button width (-80px) plus a tiny rubber band.
+            var capped = Math.min(deltaX, 88);
+            entry.style.transform = 'translateX(' + (-capped) + 'px)';
+          }
+        }
       }
     }
 
@@ -12251,6 +12280,8 @@ const JobTracker = (function () {
     function _revealDeleteButton(entry, containerId) {
       // If there's already a delete button, don't add another
       if (entry.querySelector('.swipe-delete-btn')) {
+        // Clear any in-flight live-transform so the CSS class governs position
+        entry.style.transform = '';
         entry.classList.add('swipeable-entry--swiped');
         _activeEntry = entry;
         return;
@@ -12269,7 +12300,9 @@ const JobTracker = (function () {
       entry.style.position = 'relative';
       entry.appendChild(deleteBtn);
 
-      // Add swiped class for transform
+      // Clear the live finger-tracking transform first, then apply the class.
+      // The CSS transition handles the snap to translateX(-80px).
+      entry.style.transform = '';
       entry.classList.add('swipeable-entry--swiped');
       _activeEntry = entry;
 
@@ -12294,19 +12327,49 @@ const JobTracker = (function () {
 
     /**
      * Internal: snap an entry back to its original position.
+     *
+     * Critical for smooth animation:
+     *  1. Remove the inline `style.transform` so the CSS transition (defined
+     *     on `.swipeable-entry`) animates from the current position back to 0.
+     *  2. Remove the `--swiped` class. With the inline style cleared, the
+     *     transition runs cleanly without two transforms fighting each other.
+     *  3. Remove the injected `.swipe-delete-btn` AFTER the snap-back animation
+     *     completes so the entry is fully reset. We use a one-shot
+     *     `transitionend` listener with a setTimeout fallback.
      */
     function _snapBack(entry) {
       if (!entry) return;
+
+      var deleteBtn = entry.querySelector('.swipe-delete-btn');
+      var hadSwiped = entry.classList.contains('swipeable-entry--swiped');
+
+      // Clear the inline transform first — without this, the CSS class change
+      // is overridden by the inline style and nothing animates.
+      entry.style.transform = '';
       entry.classList.remove('swipeable-entry--swiped');
 
-      // Remove delete button after transition
-      var deleteBtn = entry.querySelector('.swipe-delete-btn');
-      if (deleteBtn) {
-        setTimeout(function () {
-          if (deleteBtn.parentNode) {
-            deleteBtn.parentNode.removeChild(deleteBtn);
-          }
-        }, 200);
+      var cleanedUp = false;
+      var cleanup = function () {
+        if (cleanedUp) return;
+        cleanedUp = true;
+        entry.removeEventListener('transitionend', onEnd);
+        if (deleteBtn && deleteBtn.parentNode) {
+          deleteBtn.parentNode.removeChild(deleteBtn);
+        }
+      };
+      var onEnd = function (e) {
+        if (e && e.target !== entry) return;
+        if (e && e.propertyName && e.propertyName !== 'transform') return;
+        cleanup();
+      };
+
+      if (hadSwiped) {
+        entry.addEventListener('transitionend', onEnd);
+        // Fallback in case transitionend doesn't fire (matches transition duration)
+        setTimeout(cleanup, 240);
+      } else {
+        // Wasn't actually revealed — just clean up the button if present.
+        cleanup();
       }
     }
 
@@ -13323,6 +13386,16 @@ const JobTracker = (function () {
      * @param {string} message
      */
     function _showWarning(ruleId, message) {
+      // Honor the global rule-warning preference (Settings → Benachrichtigungen)
+      try {
+        if (typeof NotificationScheduler !== 'undefined' && NotificationScheduler.getPreferences) {
+          var prefs = NotificationScheduler.getPreferences();
+          if (prefs && prefs.ruleWarning && prefs.ruleWarning.enabled === false) {
+            return;
+          }
+        }
+      } catch (e) { /* default to allow */ }
+
       var container = document.getElementById('rule-warning-container');
       if (!container) return;
 
@@ -13682,7 +13755,18 @@ const JobTracker = (function () {
 
       // Update warning text
       if (warningEl) {
-        if (forecast.status === 'danger') {
+        // Honor the global minijob-warning preference
+        var minijobAllowed = true;
+        try {
+          if (typeof NotificationScheduler !== 'undefined' && NotificationScheduler.getPreferences) {
+            var p = NotificationScheduler.getPreferences();
+            if (p && p.minijobWarning && p.minijobWarning.enabled === false) {
+              minijobAllowed = false;
+            }
+          }
+        } catch (e) { /* default to allow */ }
+
+        if (forecast.status === 'danger' && minijobAllowed) {
           warningEl.textContent = 'Jahresgrenze wird voraussichtlich überschritten';
           warningEl.style.display = '';
         } else {
@@ -14156,31 +14240,36 @@ const JobTracker = (function () {
   })();
 
   // ─── DashboardOrderManager ─────────────────────────────────────────────────
-  // Manages drag-and-drop reordering of dashboard widgets (#view-daily).
-  // Persists the user-defined order in localStorage under key 'jt_dashboard_order'.
-  // Widgets must be marked with data-reorderable="true" and data-widget-id="..."
-  // to participate. Edit mode is toggled exclusively via the "Anordnen" button.
+  // Manages reordering of dashboard widgets (#view-daily) via an iOS-Home-Screen
+  // style slot system. Persists user-defined order in localStorage under
+  // 'jt_dashboard_order'. Widgets must carry data-reorderable="true" and
+  // data-widget-id="…" to participate. Edit mode is toggled via "Anordnen".
   //
-  // Touch path: pointer-based live drag (works reliably on iOS Safari, where
-  // HTML5 drag-and-drop is flaky). On desktop, native HTML5 drag-and-drop is
-  // still used as a fallback when pointerType is "mouse".
+  // Touch / iOS Safari path (primary): touchstart/move/end with passive:false
+  // on touchmove so we can preventDefault() and own the gesture. The dragged
+  // widget is never detached from the DOM — it stays in place via
+  // position:relative + z-index + transform:translateY() so it can never
+  // "disappear". As the finger crosses an adjacent widget's midpoint, we
+  // swap that widget into the dragged widget's old slot and animate the swap
+  // with FLIP (capture rect → DOM swap → animate from old to new with
+  // transform: translateY + transition).
+  //
+  // Mouse path: pointerdown/move/up that mimic the touch flow exactly. No
+  // HTML5 drag-and-drop — that path was unreliable and is intentionally gone.
   const DashboardOrderManager = (function () {
     var STORAGE_KEY = 'jt_dashboard_order';
+    var SWAP_TRANSITION = 'transform 0.2s ease-out';
     var _editMode = false;
     var _initialized = false;
 
-    // HTML5 drag-and-drop state (desktop)
-    var _draggingEl = null;
-
-    // Pointer-drag state (mobile / touch)
-    var _ptrDragging = false;
-    var _ptrEl = null;          // The widget element being dragged
-    var _ptrPointerId = null;
-    var _ptrStartY = 0;
-    var _ptrStartX = 0;
-    var _ptrCurrentY = 0;
-    var _ptrOffsetY = 0;        // current translateY applied to dragged element
-    var _ptrInitialRectTop = 0; // for hit-testing other widgets
+    // Drag state shared by touch + mouse paths
+    var _dragEl = null;            // The widget element being dragged
+    var _dragging = false;         // Flag flipped on first qualifying move
+    var _startY = 0;               // Initial pointer y (clientY)
+    var _startX = 0;               // Initial pointer x (for axis-lock)
+    var _baselineTop = 0;          // dragEl.getBoundingClientRect().top at drag start (pre-translate)
+    var _activePointerId = null;   // Pointer id (mouse path) — touch path uses single touch
+    var _dragMode = null;          // 'touch' | 'pointer'
 
     /**
      * Initialize: apply saved order, wire edit-mode toggle, attach drag listeners.
@@ -14189,7 +14278,6 @@ const JobTracker = (function () {
       if (_initialized) return;
       _initialized = true;
 
-      // Apply saved order on init and whenever daily view becomes active
       _applySavedOrder();
 
       var toggleBtn = document.getElementById('dashboard-edit-toggle');
@@ -14199,10 +14287,8 @@ const JobTracker = (function () {
         });
       }
 
-      // Wire all current and future reorderable widgets
       _wireWidgets();
 
-      // Re-apply order whenever data is imported or jobs change
       EventBus.on('data:imported', function () {
         _applySavedOrder();
         _wireWidgets();
@@ -14212,14 +14298,13 @@ const JobTracker = (function () {
           _applySavedOrder();
           _wireWidgets();
         } else {
-          // Leaving daily view — exit edit mode if active
           if (_editMode) setEditMode(false);
         }
       });
     }
 
     /**
-     * Toggle drag-and-drop edit mode on the dashboard.
+     * Toggle reorder edit mode on the dashboard.
      * @param {boolean} enabled
      */
     function setEditMode(enabled) {
@@ -14234,17 +14319,16 @@ const JobTracker = (function () {
         document.body.classList.add('dashboard-edit-mode');
       } else {
         document.body.classList.remove('dashboard-edit-mode');
-        // Cancel any in-flight drag on exit
-        _ptrCancel();
+        _cancelDrag();
       }
       _wireWidgets();
       if (typeof showToast === 'function' && _editMode) {
-        showToast('Widgets per Drag&Drop verschieben.', 2500);
+        showToast('Halten und ziehen, um Widgets neu anzuordnen.', 2500);
       }
     }
 
     /**
-     * Wire drag and pointer listeners on all reorderable widgets.
+     * Wire touch + pointer listeners on all reorderable widgets. Idempotent.
      */
     function _wireWidgets() {
       var widgets = _getReorderableWidgets();
@@ -14253,21 +14337,23 @@ const JobTracker = (function () {
         if (w._reorderWired) continue;
         w._reorderWired = true;
 
-        // HTML5 Drag and Drop (desktop / mouse)
-        w.setAttribute('draggable', 'true');
-        w.addEventListener('dragstart', _onDragStart);
-        w.addEventListener('dragover', _onDragOver);
-        w.addEventListener('dragleave', _onDragLeave);
-        w.addEventListener('drop', _onDrop);
-        w.addEventListener('dragend', _onDragEnd);
+        // Make sure no leftover HTML5 DnD sneaks in
+        w.removeAttribute('draggable');
 
-        // Pointer-based drag for touch (iOS Safari path)
+        // Touch path (iOS Safari) — must be passive:false on touchmove so we
+        // can preventDefault() and stop the page from scrolling under us.
+        w.addEventListener('touchstart', _onTouchStart, { passive: true });
+        w.addEventListener('touchmove', _onTouchMove, { passive: false });
+        w.addEventListener('touchend', _onTouchEnd, { passive: true });
+        w.addEventListener('touchcancel', _onTouchEnd, { passive: true });
+
+        // Mouse / pointer path mimics the touch flow exactly
         w.addEventListener('pointerdown', _onPointerDown);
       }
     }
 
     /**
-     * Get all widgets marked as reorderable in DOM order.
+     * Get all widgets marked as reorderable in current DOM order.
      * @returns {HTMLElement[]}
      */
     function _getReorderableWidgets() {
@@ -14287,7 +14373,6 @@ const JobTracker = (function () {
       var widgets = _getReorderableWidgets();
       if (!widgets.length) return;
 
-      // Build map id -> element
       var byId = {};
       for (var i = 0; i < widgets.length; i++) {
         var id = widgets[i].getAttribute('data-widget-id');
@@ -14297,7 +14382,6 @@ const JobTracker = (function () {
       var parent = widgets[0].parentNode;
       if (!parent) return;
 
-      // Append in saved order; widgets not present in saved list keep their relative position at the end
       var seen = {};
       for (var j = 0; j < saved.length; j++) {
         var sid = saved[j];
@@ -14326,9 +14410,7 @@ const JobTracker = (function () {
       }
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
-      } catch (e) {
-        // Silently fail
-      }
+      } catch (e) { /* silent */ }
     }
 
     /**
@@ -14346,213 +14428,266 @@ const JobTracker = (function () {
       }
     }
 
-    // ── HTML5 Drag and Drop event handlers (desktop fallback) ──
+    // ─── Touch handlers (iOS Safari) ────────────────────────────────────────
 
-    function _onDragStart(e) {
-      if (!_editMode) {
+    function _onTouchStart(e) {
+      if (!_editMode) return;
+      if (_dragEl) return; // already dragging another
+      if (!e.touches || e.touches.length !== 1) return;
+
+      var t = e.touches[0];
+      _beginDrag(this, t.clientX, t.clientY, 'touch');
+    }
+
+    function _onTouchMove(e) {
+      if (!_dragEl || _dragMode !== 'touch') return;
+      if (!e.touches || e.touches.length !== 1) return;
+      var t = e.touches[0];
+      // preventDefault must run regardless of axis-lock once a drag has been
+      // committed, otherwise iOS Safari hijacks the gesture for scrolling.
+      if (_handleMove(t.clientX, t.clientY)) {
         e.preventDefault();
-        return;
-      }
-      _draggingEl = this;
-      this.classList.add('widget--dragging');
-      try {
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', this.getAttribute('data-widget-id') || '');
-      } catch (err) {}
-    }
-
-    function _onDragOver(e) {
-      if (!_editMode || !_draggingEl) return;
-      e.preventDefault();
-      try { e.dataTransfer.dropEffect = 'move'; } catch (err) {}
-      if (this !== _draggingEl) {
-        // Compute insertion point based on midpoint to prevent flicker when
-        // the dragged widget is above vs. below the target.
-        var rect = this.getBoundingClientRect();
-        var midY = rect.top + rect.height / 2;
-        this._dragOverHalf = e.clientY < midY ? 'top' : 'bottom';
-        this.classList.add('widget--drag-over');
       }
     }
 
-    function _onDragLeave() {
-      this.classList.remove('widget--drag-over');
-      this._dragOverHalf = null;
+    function _onTouchEnd(e) {
+      if (!_dragEl || _dragMode !== 'touch') return;
+      _endDrag();
     }
 
-    function _onDrop(e) {
-      if (!_editMode || !_draggingEl) return;
-      e.preventDefault();
-      e.stopPropagation();
-      this.classList.remove('widget--drag-over');
-      if (this === _draggingEl) return;
-
-      var parent = this.parentNode;
-      if (!parent) return;
-
-      // Use the cached drop-half from dragover; fall back to position-based
-      // calc using current DOM order if missing.
-      var half = this._dragOverHalf;
-      this._dragOverHalf = null;
-
-      if (half === 'top') {
-        parent.insertBefore(_draggingEl, this);
-      } else if (half === 'bottom') {
-        if (this.nextSibling) {
-          parent.insertBefore(_draggingEl, this.nextSibling);
-        } else {
-          parent.appendChild(_draggingEl);
-        }
-      } else {
-        // Fallback: dragged-was-above → insert after target; otherwise before
-        var siblings = Array.prototype.slice.call(parent.children);
-        var draggedIdx = siblings.indexOf(_draggingEl);
-        var targetIdx = siblings.indexOf(this);
-        if (draggedIdx < targetIdx) {
-          if (this.nextSibling) {
-            parent.insertBefore(_draggingEl, this.nextSibling);
-          } else {
-            parent.appendChild(_draggingEl);
-          }
-        } else {
-          parent.insertBefore(_draggingEl, this);
-        }
-      }
-
-      _saveCurrentOrder();
-      if (typeof HapticFeedbackService !== 'undefined' && HapticFeedbackService.tap) {
-        HapticFeedbackService.tap(20);
-      }
-    }
-
-    function _onDragEnd() {
-      if (this.classList) this.classList.remove('widget--dragging');
-      var widgets = _getReorderableWidgets();
-      for (var i = 0; i < widgets.length; i++) {
-        widgets[i].classList.remove('widget--drag-over');
-        widgets[i]._dragOverHalf = null;
-      }
-      _draggingEl = null;
-    }
-
-    // ── Pointer-based drag (touch / iOS Safari) ──
-    //
-    // HTML5 drag-and-drop is unreliable on mobile Safari. Instead, when the
-    // user is in edit mode and starts a touch on a widget, we follow the
-    // finger using transform: translateY() and live-reorder by hit-testing
-    // which widget the touch position is currently over.
+    // ─── Pointer handlers (mouse path) ──────────────────────────────────────
 
     function _onPointerDown(e) {
-      // Only mobile/touch path. Mouse keeps the HTML5 drag flow above.
-      if (e.pointerType === 'mouse') return;
       if (!_editMode) return;
+      if (e.pointerType === 'touch') return; // touch path owns this
+      if (_dragEl) return;
 
-      _ptrEl = this;
-      _ptrPointerId = e.pointerId;
-      _ptrStartY = e.clientY;
-      _ptrStartX = e.clientX;
-      _ptrCurrentY = e.clientY;
-      _ptrOffsetY = 0;
-      _ptrDragging = false;
+      _beginDrag(this, e.clientX, e.clientY, 'pointer');
+      _activePointerId = e.pointerId;
+      try { this.setPointerCapture(e.pointerId); } catch (err) {}
 
-      var rect = _ptrEl.getBoundingClientRect();
-      _ptrInitialRectTop = rect.top;
-
-      try { _ptrEl.setPointerCapture(e.pointerId); } catch (err) {}
-
-      // Attach move/up listeners on the element itself (capture is set so the
-      // events keep flowing here).
-      _ptrEl.addEventListener('pointermove', _onPointerMove);
-      _ptrEl.addEventListener('pointerup', _onPointerUp);
-      _ptrEl.addEventListener('pointercancel', _onPointerUp);
+      this.addEventListener('pointermove', _onPointerMove);
+      this.addEventListener('pointerup', _onPointerUp);
+      this.addEventListener('pointercancel', _onPointerUp);
     }
 
     function _onPointerMove(e) {
-      if (!_ptrEl || e.pointerId !== _ptrPointerId) return;
-
-      var dy = e.clientY - _ptrStartY;
-      var dx = e.clientX - _ptrStartX;
-
-      if (!_ptrDragging) {
-        // Activate drag once vertical movement clearly dominates and exceeds 6px.
-        if (Math.abs(dy) > 6 && Math.abs(dy) > Math.abs(dx)) {
-          _ptrDragging = true;
-          _ptrEl.classList.add('widget--dragging');
-        } else {
-          return;
-        }
-      }
-
-      e.preventDefault();
-      _ptrCurrentY = e.clientY;
-      _ptrOffsetY = dy;
-      _ptrEl.style.transform = 'translateY(' + dy + 'px)';
-
-      // Hit-test: find the widget whose vertical midpoint the finger is closest
-      // to (ignoring the dragged widget itself), then reorder the DOM live so
-      // the user sees siblings reflow under their finger.
-      var widgets = _getReorderableWidgets();
-      var ptrY = e.clientY;
-      var swapTarget = null;
-      for (var i = 0; i < widgets.length; i++) {
-        var w = widgets[i];
-        if (w === _ptrEl) continue;
-        var r = w.getBoundingClientRect();
-        if (ptrY >= r.top && ptrY <= r.bottom) {
-          swapTarget = w;
-          break;
-        }
-      }
-
-      if (swapTarget) {
-        var parent = _ptrEl.parentNode;
-        if (parent && swapTarget.parentNode === parent) {
-          var siblings = Array.prototype.slice.call(parent.children);
-          var draggedIdx = siblings.indexOf(_ptrEl);
-          var targetIdx = siblings.indexOf(swapTarget);
-          // Reset transform briefly so the recompute is based on natural
-          // positions, then re-apply translateY relative to the new slot.
-          var prevRect = _ptrEl.getBoundingClientRect();
-          _ptrEl.style.transform = '';
-          if (draggedIdx < targetIdx) {
-            // dragged is above target → move dragged after target
-            if (swapTarget.nextSibling) {
-              parent.insertBefore(_ptrEl, swapTarget.nextSibling);
-            } else {
-              parent.appendChild(_ptrEl);
-            }
-          } else {
-            parent.insertBefore(_ptrEl, swapTarget);
-          }
-          // Recompute offset so the widget visually stays under the finger.
-          var newRect = _ptrEl.getBoundingClientRect();
-          var diff = prevRect.top - newRect.top;
-          _ptrOffsetY = dy + diff;
-          _ptrStartY = e.clientY - _ptrOffsetY;
-          _ptrEl.style.transform = 'translateY(' + _ptrOffsetY + 'px)';
-        }
-      }
+      if (!_dragEl || _dragMode !== 'pointer') return;
+      if (e.pointerId !== _activePointerId) return;
+      _handleMove(e.clientX, e.clientY);
     }
 
     function _onPointerUp(e) {
-      if (!_ptrEl) return;
-      if (e && e.pointerId !== undefined && e.pointerId !== _ptrPointerId) return;
+      if (!_dragEl || _dragMode !== 'pointer') return;
+      if (e && e.pointerId !== undefined && e.pointerId !== _activePointerId) return;
 
-      var el = _ptrEl;
+      var el = _dragEl;
+      try { el.releasePointerCapture(_activePointerId); } catch (err) {}
       el.removeEventListener('pointermove', _onPointerMove);
       el.removeEventListener('pointerup', _onPointerUp);
       el.removeEventListener('pointercancel', _onPointerUp);
 
-      try { el.releasePointerCapture(_ptrPointerId); } catch (err) {}
+      _endDrag();
+    }
 
-      el.style.transform = '';
-      el.classList.remove('widget--dragging');
+    // ─── Shared drag logic ──────────────────────────────────────────────────
 
-      var didDrag = _ptrDragging;
-      _ptrEl = null;
-      _ptrPointerId = null;
-      _ptrDragging = false;
-      _ptrOffsetY = 0;
+    /**
+     * Begin a drag on a widget. Captures the baseline rect; does NOT move it
+     * yet (we wait for movement to qualify so taps don't trigger drag).
+     * @param {HTMLElement} el
+     * @param {number} x
+     * @param {number} y
+     * @param {string} mode 'touch' | 'pointer'
+     */
+    function _beginDrag(el, x, y, mode) {
+      _dragEl = el;
+      _dragging = false;
+      _startX = x;
+      _startY = y;
+      _dragMode = mode;
+      var rect = el.getBoundingClientRect();
+      _baselineTop = rect.top;
+    }
+
+    /**
+     * Handle a move during a drag. Returns true if the page should swallow
+     * the event (ie, we're actively dragging).
+     */
+    function _handleMove(x, y) {
+      if (!_dragEl) return false;
+      var dy = y - _startY;
+      var dx = x - _startX;
+
+      if (!_dragging) {
+        // Activate drag once vertical movement clearly dominates and exceeds 6px.
+        if (Math.abs(dy) > 6 && Math.abs(dy) > Math.abs(dx)) {
+          _dragging = true;
+          _dragEl.style.position = 'relative';
+          _dragEl.style.zIndex = '100';
+          _dragEl.style.transition = 'none';
+          _dragEl.classList.add('widget--dragging');
+        } else {
+          return false;
+        }
+      }
+
+      // Move the dragged element with the finger. translate is composed with
+      // the elevated state (scale + slight rotation) so iOS feels lively.
+      _dragEl.style.transform = 'translateY(' + dy + 'px) scale(1.04) rotate(0.5deg)';
+
+      // Slot-based hit test: walk siblings, find the one whose midpoint the
+      // pointer has crossed. Only a single swap per frame to avoid jitter.
+      var widgets = _getReorderableWidgets();
+      var parent = _dragEl.parentNode;
+      if (!parent) return true;
+
+      var draggedIdx = widgets.indexOf(_dragEl);
+
+      for (var i = 0; i < widgets.length; i++) {
+        var w = widgets[i];
+        if (w === _dragEl) continue;
+        if (w.parentNode !== parent) continue;
+        // Skip widgets currently mid-FLIP-animation — their rect is misleading.
+        var r = w.getBoundingClientRect();
+        var mid = r.top + r.height / 2;
+
+        // Dragging downward, neighbor is below us, finger has crossed mid → swap.
+        if (i > draggedIdx && y > mid) {
+          _swapWith(w);
+          return true;
+        }
+        // Dragging upward, neighbor is above us, finger has crossed mid → swap.
+        if (i < draggedIdx && y < mid) {
+          _swapWith(w);
+          return true;
+        }
+      }
+      return true;
+    }
+
+    /**
+     * FLIP-swap the dragged widget with `target`. Captures both rects, performs
+     * the DOM swap, then animates `target` from old to new position via a
+     * transient transform+transition. The dragged widget keeps its
+     * finger-tracked transform (recomputed so it visually stays under the
+     * finger across the slot change).
+     * @param {HTMLElement} target
+     */
+    function _swapWith(target) {
+      if (!_dragEl || !target) return;
+      var parent = _dragEl.parentNode;
+      if (!parent || target.parentNode !== parent) return;
+
+      // FIRST: capture rects pre-swap.
+      var draggedRectBefore = _dragEl.getBoundingClientRect();
+      var targetRectBefore = target.getBoundingClientRect();
+
+      // Briefly clear the dragged element's transform so the layout we sample
+      // after the DOM mutation reflects the natural slot positions.
+      var prevTransform = _dragEl.style.transform;
+      _dragEl.style.transform = '';
+
+      // PLAY: perform DOM swap.
+      var siblings = Array.prototype.slice.call(parent.children);
+      var draggedIdx = siblings.indexOf(_dragEl);
+      var targetIdx = siblings.indexOf(target);
+
+      if (draggedIdx < targetIdx) {
+        // Move dragged after target (downward swap)
+        if (target.nextSibling) {
+          parent.insertBefore(_dragEl, target.nextSibling);
+        } else {
+          parent.appendChild(_dragEl);
+        }
+      } else {
+        // Move dragged before target (upward swap)
+        parent.insertBefore(_dragEl, target);
+      }
+
+      // INVERT: read post-swap rects.
+      var draggedRectAfter = _dragEl.getBoundingClientRect();
+      var targetRectAfter = target.getBoundingClientRect();
+
+      // Animate the displaced (target) widget from its old position to its new
+      // position so it slides into the dragged's old slot.
+      var targetDelta = targetRectBefore.top - targetRectAfter.top;
+      target.style.transition = 'none';
+      target.style.transform = 'translateY(' + targetDelta + 'px)';
+      // force reflow so the browser registers the starting transform
+      target.getBoundingClientRect();
+      target.style.transition = SWAP_TRANSITION;
+      target.style.transform = '';
+
+      // Recompute the dragged element's transform so it stays visually under
+      // the finger after its DOM index moved.
+      //
+      //   visualTopBefore = T_oldSlot + prevDy
+      //   slotTopAfter    = T_newSlot
+      //   newDy           = visualTopBefore - slotTopAfter   (== draggedDelta below)
+      //
+      // For subsequent finger moves to compute the right dy, we adjust _startY:
+      //   prevDy = currentY - _startY_old
+      //   newDy  = currentY - _startY_new
+      //   ⇒ _startY_new = _startY_old + (prevDy - newDy)
+      var draggedDelta = draggedRectBefore.top - draggedRectAfter.top;
+      var match = /translateY\(([-\d.]+)px\)/.exec(prevTransform || '');
+      var prevDy = match ? parseFloat(match[1]) : 0;
+      var newDy = draggedDelta; // keeps visual top constant
+      _startY = _startY + (prevDy - newDy);
+      _dragEl.style.transition = 'none';
+      _dragEl.style.transform = 'translateY(' + newDy + 'px) scale(1.04) rotate(0.5deg)';
+
+      // Clean up the target's inline transform after the animation finishes
+      // so future swaps see a clean slate.
+      var cleanup = function () {
+        target.style.transition = '';
+        target.style.transform = '';
+        target.removeEventListener('transitionend', cleanup);
+      };
+      target.addEventListener('transitionend', cleanup);
+      // Fallback in case transitionend doesn't fire (e.g., element re-rendered)
+      setTimeout(cleanup, 260);
+    }
+
+    /**
+     * End a drag — animate the dragged widget back to translateY(0), persist
+     * the new order, and reset state.
+     */
+    function _endDrag() {
+      if (!_dragEl) return;
+
+      var el = _dragEl;
+      var didDrag = _dragging;
+
+      if (didDrag) {
+        // Animate the dragged widget snapping into its slot via transition.
+        el.style.transition = SWAP_TRANSITION;
+        el.style.transform = '';
+        var done = function () {
+          el.style.transition = '';
+          el.style.transform = '';
+          el.style.position = '';
+          el.style.zIndex = '';
+          el.classList.remove('widget--dragging');
+          el.removeEventListener('transitionend', done);
+        };
+        el.addEventListener('transitionend', done);
+        // Fallback in case transitionend doesn't fire
+        setTimeout(done, 260);
+      } else {
+        // Tap (no drag committed) — clean immediately
+        el.style.transition = '';
+        el.style.transform = '';
+        el.style.position = '';
+        el.style.zIndex = '';
+        el.classList.remove('widget--dragging');
+      }
+
+      _dragEl = null;
+      _dragging = false;
+      _activePointerId = null;
+      _dragMode = null;
 
       if (didDrag) {
         _saveCurrentOrder();
@@ -14562,18 +14697,22 @@ const JobTracker = (function () {
       }
     }
 
-    function _ptrCancel() {
-      if (!_ptrEl) return;
-      _ptrEl.removeEventListener('pointermove', _onPointerMove);
-      _ptrEl.removeEventListener('pointerup', _onPointerUp);
-      _ptrEl.removeEventListener('pointercancel', _onPointerUp);
-      try { _ptrEl.releasePointerCapture(_ptrPointerId); } catch (err) {}
-      _ptrEl.style.transform = '';
-      _ptrEl.classList.remove('widget--dragging');
-      _ptrEl = null;
-      _ptrPointerId = null;
-      _ptrDragging = false;
-      _ptrOffsetY = 0;
+    /**
+     * Cancel an in-flight drag without persisting (e.g., when leaving edit mode).
+     */
+    function _cancelDrag() {
+      if (!_dragEl) return;
+      var el = _dragEl;
+      el.style.transition = '';
+      el.style.transform = '';
+      el.style.position = '';
+      el.style.zIndex = '';
+      el.classList.remove('widget--dragging');
+      try { if (_activePointerId !== null) el.releasePointerCapture(_activePointerId); } catch (err) {}
+      _dragEl = null;
+      _dragging = false;
+      _activePointerId = null;
+      _dragMode = null;
     }
 
     return {
@@ -14864,10 +15003,21 @@ const JobTracker = (function () {
     /**
      * Trigger a notification for a job leaving the geofence.
      * Enforces one notification per job per calendar day.
+     * Globally gated by NotificationScheduler.geoReminder preference.
      * @param {string} jobId
      */
     function _triggerNotification(jobId) {
       var today = _getTodayDateString();
+
+      // Honor global geo-reminder preference (Settings → Benachrichtigungen)
+      try {
+        if (typeof NotificationScheduler !== 'undefined' && NotificationScheduler.getPreferences) {
+          var prefs = NotificationScheduler.getPreferences();
+          if (prefs && prefs.geoReminder && prefs.geoReminder.enabled === false) {
+            return;
+          }
+        }
+      } catch (e) { /* default to allow */ }
 
       // Enforce one notification per job per calendar day
       if (_reminders[jobId].lastNotifiedDate === today) {
@@ -15005,6 +15155,350 @@ const JobTracker = (function () {
     };
   })();
 
+  // ─── NotificationScheduler ─────────────────────────────────────────────────
+  // Manages user-configurable notification preferences and schedules a daily
+  // evening reminder to log hours. Stores preferences in localStorage under
+  // 'jt_notification_prefs'. Other notification types (geo, rule warnings,
+  // minijob warnings) consult getPreferences() to gate themselves.
+  //
+  // iOS PWA caveat: setTimeout() doesn't survive when the PWA is closed
+  // (the JS runtime is suspended). So in addition to scheduling a setTimeout
+  // for the next reminder, we also do a "missed reminder" check on every app
+  // open: if the current time is past the configured hour:minute and we
+  // haven't already logged hours for today, show an in-app banner immediately.
+  const NotificationScheduler = (function () {
+    var STORAGE_KEY = 'jt_notification_prefs';
+    var LAST_TRIGGER_KEY = 'jt_evening_reminder_last';
+    var DEFAULTS = {
+      eveningReminder: { enabled: true, hour: 22, minute: 0 },
+      geoReminder:     { enabled: true },
+      ruleWarning:     { enabled: true },
+      minijobWarning:  { enabled: true }
+    };
+
+    var _prefs = null;
+    var _eveningTimerId = null;
+    var _initialized = false;
+
+    /**
+     * Initialize: load prefs, schedule next reminder, run missed-reminder check.
+     */
+    function init() {
+      if (_initialized) return;
+      _initialized = true;
+
+      _loadPrefs();
+      _bindUI();
+
+      // Run missed-reminder check now (handles iOS PWA reopens after suspension)
+      _checkMissedReminder();
+
+      // Schedule the next evening reminder via setTimeout
+      _scheduleNextEvening();
+
+      // Subscribe so a freshly-saved workday cancels today's pending reminder
+      EventBus.on('workday:saved', function () {
+        // The user just logged hours — record today as "logged" so we don't
+        // ping them again today.
+        _markLoggedToday();
+      });
+    }
+
+    /**
+     * Configure the evening reminder time.
+     * @param {number} hour 0-23
+     * @param {number} minute 0-59
+     */
+    function setReminderTime(hour, minute) {
+      if (typeof hour !== 'number' || typeof minute !== 'number') return;
+      _prefs.eveningReminder.hour = Math.max(0, Math.min(23, hour|0));
+      _prefs.eveningReminder.minute = Math.max(0, Math.min(59, minute|0));
+      _persistPrefs();
+      _scheduleNextEvening();
+    }
+
+    /**
+     * Enable/disable a specific notification type.
+     * @param {string} type 'evening_reminder' | 'geo_reminder' | 'rule_warning' | 'minijob_warning'
+     * @param {boolean} enabled
+     */
+    function enableType(type, enabled) {
+      var key = null;
+      if (type === 'evening_reminder') key = 'eveningReminder';
+      else if (type === 'geo_reminder') key = 'geoReminder';
+      else if (type === 'rule_warning') key = 'ruleWarning';
+      else if (type === 'minijob_warning') key = 'minijobWarning';
+      if (!key || !_prefs[key]) return;
+
+      _prefs[key].enabled = !!enabled;
+      _persistPrefs();
+
+      if (key === 'eveningReminder') {
+        _scheduleNextEvening();
+      }
+    }
+
+    /**
+     * @returns {object} A defensive copy of the current preferences.
+     */
+    function getPreferences() {
+      return JSON.parse(JSON.stringify(_prefs));
+    }
+
+    /**
+     * Cancel all scheduled reminders.
+     */
+    function clearAll() {
+      if (_eveningTimerId !== null) {
+        clearTimeout(_eveningTimerId);
+        _eveningTimerId = null;
+      }
+    }
+
+    // ── Private ────────────────────────────────────────────────────────────
+
+    function _loadPrefs() {
+      try {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          // Merge over defaults so newly-added keys appear with their defaults
+          _prefs = {
+            eveningReminder: Object.assign({}, DEFAULTS.eveningReminder, parsed.eveningReminder || {}),
+            geoReminder:     Object.assign({}, DEFAULTS.geoReminder, parsed.geoReminder || {}),
+            ruleWarning:     Object.assign({}, DEFAULTS.ruleWarning, parsed.ruleWarning || {}),
+            minijobWarning:  Object.assign({}, DEFAULTS.minijobWarning, parsed.minijobWarning || {})
+          };
+          return;
+        }
+      } catch (e) { /* fall through to defaults */ }
+      _prefs = JSON.parse(JSON.stringify(DEFAULTS));
+    }
+
+    function _persistPrefs() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(_prefs));
+      } catch (e) { /* silent */ }
+    }
+
+    function _bindUI() {
+      var eveningToggle = document.getElementById('notif-evening-toggle');
+      var eveningTimeInput = document.getElementById('notif-evening-time');
+      var geoToggle = document.getElementById('notif-geo-toggle');
+      var ruleToggle = document.getElementById('notif-rule-toggle');
+      var minijobToggle = document.getElementById('notif-minijob-toggle');
+      var enableBtn = document.getElementById('notif-enable-btn');
+      var blockedHint = document.getElementById('notif-blocked-hint');
+
+      if (eveningToggle) {
+        eveningToggle.checked = _prefs.eveningReminder.enabled;
+        eveningToggle.addEventListener('change', function () {
+          enableType('evening_reminder', eveningToggle.checked);
+          var grp = document.getElementById('notif-evening-time-group');
+          if (grp) grp.style.display = eveningToggle.checked ? '' : 'none';
+        });
+        // Reflect initial state of the time-group visibility
+        var grp = document.getElementById('notif-evening-time-group');
+        if (grp) grp.style.display = eveningToggle.checked ? '' : 'none';
+      }
+      if (eveningTimeInput) {
+        var hh = String(_prefs.eveningReminder.hour).padStart(2, '0');
+        var mm = String(_prefs.eveningReminder.minute).padStart(2, '0');
+        eveningTimeInput.value = hh + ':' + mm;
+        eveningTimeInput.addEventListener('change', function () {
+          var parts = (eveningTimeInput.value || '22:00').split(':');
+          if (parts.length === 2) {
+            setReminderTime(parseInt(parts[0], 10) || 0, parseInt(parts[1], 10) || 0);
+          }
+        });
+      }
+      if (geoToggle) {
+        geoToggle.checked = _prefs.geoReminder.enabled;
+        geoToggle.addEventListener('change', function () {
+          enableType('geo_reminder', geoToggle.checked);
+        });
+      }
+      if (ruleToggle) {
+        ruleToggle.checked = _prefs.ruleWarning.enabled;
+        ruleToggle.addEventListener('change', function () {
+          enableType('rule_warning', ruleToggle.checked);
+        });
+      }
+      if (minijobToggle) {
+        minijobToggle.checked = _prefs.minijobWarning.enabled;
+        minijobToggle.addEventListener('change', function () {
+          enableType('minijob_warning', minijobToggle.checked);
+        });
+      }
+
+      // Reflect Notification permission state
+      function _refreshPermissionUI() {
+        if (!('Notification' in window)) {
+          if (enableBtn) enableBtn.style.display = 'none';
+          if (blockedHint) {
+            blockedHint.textContent = '⚠️ Benachrichtigungen werden auf diesem Gerät nicht unterstützt.';
+            blockedHint.style.display = '';
+          }
+          return;
+        }
+        if (Notification.permission === 'granted') {
+          if (enableBtn) enableBtn.style.display = 'none';
+          if (blockedHint) blockedHint.style.display = 'none';
+        } else if (Notification.permission === 'denied') {
+          if (enableBtn) enableBtn.style.display = 'none';
+          if (blockedHint) blockedHint.style.display = '';
+        } else {
+          if (enableBtn) enableBtn.style.display = '';
+          if (blockedHint) blockedHint.style.display = 'none';
+        }
+      }
+      _refreshPermissionUI();
+
+      if (enableBtn) {
+        enableBtn.addEventListener('click', function () {
+          if (!('Notification' in window)) return;
+          try {
+            Notification.requestPermission().then(_refreshPermissionUI);
+          } catch (e) {
+            Notification.requestPermission(function () { _refreshPermissionUI(); });
+          }
+        });
+      }
+    }
+
+    /**
+     * Schedule a setTimeout that fires at the next configured hour:minute.
+     */
+    function _scheduleNextEvening() {
+      if (_eveningTimerId !== null) {
+        clearTimeout(_eveningTimerId);
+        _eveningTimerId = null;
+      }
+      if (!_prefs.eveningReminder.enabled) return;
+
+      var now = new Date();
+      var trigger = new Date(now.getFullYear(), now.getMonth(), now.getDate(),
+                             _prefs.eveningReminder.hour, _prefs.eveningReminder.minute, 0, 0);
+      if (trigger.getTime() <= now.getTime()) {
+        // Past today's time — schedule for tomorrow
+        trigger.setDate(trigger.getDate() + 1);
+      }
+      var ms = trigger.getTime() - now.getTime();
+      // Cap at ~24h to avoid setTimeout overflow on edge cases
+      if (ms > 86400000) ms = 86400000;
+      _eveningTimerId = setTimeout(function () {
+        _eveningTimerId = null;
+        _triggerEveningReminder(false);
+        _scheduleNextEvening();
+      }, ms);
+    }
+
+    /**
+     * Check whether we missed today's evening reminder (e.g., the PWA was
+     * closed past the configured time on iOS). If so, fire it inline.
+     */
+    function _checkMissedReminder() {
+      if (!_prefs.eveningReminder.enabled) return;
+      var now = new Date();
+      var todayKey = _todayKey(now);
+      var triggerTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(),
+                                 _prefs.eveningReminder.hour, _prefs.eveningReminder.minute, 0, 0);
+      if (now.getTime() < triggerTime.getTime()) return; // not past time yet
+
+      var lastTrigger = null;
+      try { lastTrigger = localStorage.getItem(LAST_TRIGGER_KEY); } catch (e) {}
+      if (lastTrigger === todayKey) return; // already triggered today
+
+      _triggerEveningReminder(true);
+    }
+
+    /**
+     * Decide whether to send the reminder, then send it.
+     * @param {boolean} viaCatchUp true if this is a catch-up after a missed time
+     */
+    function _triggerEveningReminder(viaCatchUp) {
+      var todayKey = _todayKey(new Date());
+
+      // Skip if user already logged hours today
+      if (_hasLoggedToday(todayKey)) {
+        try { localStorage.setItem(LAST_TRIGGER_KEY, todayKey); } catch (e) {}
+        return;
+      }
+
+      try { localStorage.setItem(LAST_TRIGGER_KEY, todayKey); } catch (e) {}
+
+      var title = 'JobTracker';
+      var body = 'Heute schon Stunden eingetragen?';
+      var options = {
+        body: body,
+        icon: 'icons/icon-192.png',
+        badge: 'icons/icon-192.png',
+        tag: 'jt-evening-reminder-' + todayKey
+      };
+
+      // Prefer service-worker registration (iOS PWA + Android compatible)
+      if ('Notification' in window && Notification.permission === 'granted') {
+        if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
+          navigator.serviceWorker.ready.then(function (registration) {
+            if (registration && typeof registration.showNotification === 'function') {
+              registration.showNotification(title, options);
+            } else {
+              try { new Notification(title, options); } catch (e) {}
+            }
+          }).catch(function () {
+            try { new Notification(title, options); } catch (e) {}
+          });
+        } else {
+          try { new Notification(title, options); } catch (e) {}
+        }
+      }
+
+      // Always also surface an in-app toast — covers the case where the PWA
+      // was just opened and the OS-level notification is suppressed.
+      if (typeof showToast === 'function' && viaCatchUp) {
+        showToast('🕘 Heute schon Stunden eingetragen?', 6000);
+      }
+    }
+
+    /**
+     * Returns true if the user has any workday entry for the given YYYY-MM-DD.
+     */
+    function _hasLoggedToday(dateKey) {
+      try {
+        var workdays = (typeof AppState !== 'undefined' && AppState.getState)
+          ? (AppState.getState().workdays || [])
+          : [];
+        for (var i = 0; i < workdays.length; i++) {
+          if (workdays[i] && workdays[i].date === dateKey) return true;
+        }
+      } catch (e) { /* ignore */ }
+      return false;
+    }
+
+    /**
+     * Record that the user logged hours today so we don't fire the reminder.
+     */
+    function _markLoggedToday() {
+      var todayKey = _todayKey(new Date());
+      try { localStorage.setItem(LAST_TRIGGER_KEY, todayKey); } catch (e) {}
+    }
+
+    function _todayKey(d) {
+      var y = d.getFullYear();
+      var m = String(d.getMonth() + 1).padStart(2, '0');
+      var day = String(d.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + day;
+    }
+
+    return {
+      init: init,
+      setReminderTime: setReminderTime,
+      enableType: enableType,
+      getPreferences: getPreferences,
+      clearAll: clearAll
+    };
+  })();
+
   // ─── Global EventBus Wiring (Req 17.1, 17.2, 17.3, 17.4, 17.5, 19.2) ──────
   // Central cross-module subscriptions that coordinate reactive updates.
   // Individual modules subscribe to events they need internally in their init().
@@ -15084,8 +15578,20 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.0.2';
+  const APP_VERSION = '2.0.3';
   const APP_CHANGELOG = [
+    {
+      version: '2.0.3',
+      date: '2026-05-24',
+      changes: [
+        'v2.0.3 — iOS-Polish & Notifications',
+        '🎨 Dashboard-Anordnen komplett neu: iOS-Home-Screen-Stil mit Slot-Swap, FLIP-Animation und Touch-Tracking — Widgets verschwinden nicht mehr beim Verschieben',
+        '🎨 Punch-Clock im iOS 26 Material-Design: Glas-Karte, Vibrant-Buttons mit Soft-Highlight, springige Press-Animation, größere Tabular-Nums-Uhr',
+        '🐛 Swipe-to-Delete: Zurück-Animation läuft jetzt sauber — Inline-Transform wird vor Klassenwechsel geleert, kein Konflikt mehr; iOS-typisches Easing (cubic-bezier 0.32, 0.72, 0, 1)',
+        '📱 Haptisches Feedback: Auf iOS Safari (und anderen Geräten ohne Vibration-API) komplett ausgeblendet statt mit Hinweis angezeigt',
+        '🔔 Neue Benachrichtigungs-Einstellungen: Tägliche Abend-Erinnerung mit Uhrzeit, globale Toggles für Standort/Regel/Minijob, Berechtigung anfordern direkt aus den Settings'
+      ]
+    },
     {
       version: '2.0.2',
       date: '2026-05-23',
@@ -15358,6 +15864,7 @@ const JobTracker = (function () {
     TaxSimulator.init();
     GeoReminderService.init();
     DashboardOrderManager.init();
+    NotificationScheduler.init();
 
     // ── Header Theme Toggle ──
     var headerThemeToggle = document.getElementById('header-theme-toggle');
@@ -15687,6 +16194,7 @@ const JobTracker = (function () {
     TaxSimulator: TaxSimulator,
     GeoReminderService: GeoReminderService,
     DashboardOrderManager: DashboardOrderManager,
+    NotificationScheduler: NotificationScheduler,
     showToast: showToast
   };
 })();

@@ -76,7 +76,7 @@
 
   /* Swipe-to-delete */
   --swipe-delete-bg: var(--color-danger);
-  --swipe-transition: 200ms ease-out;
+  --swipe-transition: 220ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /* --- Base Reset & Typography --- */
@@ -4215,20 +4215,38 @@ details[open] .dashboard-details-toggle::after {
 }
 
 /* ============================================================
-   Punch Clock — Shift timer and controls
+   Punch Clock — iOS 26 glass-morphism card with vibrant buttons
    ============================================================ */
 .punch-clock {
   width: 100%;
   padding: var(--spacing-lg);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  /* Glass-morphism: translucent surface tint + heavy blur */
+  background: color-mix(in srgb, var(--color-surface) 55%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  /* iOS-thin hairline border via low-alpha rgba */
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--spacing-md);
-  box-shadow: var(--shadow-content);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 8px 24px rgba(0, 0, 0, 0.18);
   position: relative;
+  overflow: hidden;
+}
+
+.punch-clock::before {
+  /* Subtle top highlight to read as a vibrant material */
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 30%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+  border-radius: inherit;
 }
 
 .punch-btn {
@@ -4240,30 +4258,47 @@ details[open] .dashboard-details-toggle::after {
   padding: 18px var(--spacing-lg);
   font-size: 19px;
   font-weight: 700;
-  font-family: var(--font-family);
-  border: none;
-  border-radius: var(--radius-lg);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, 'Segoe UI', Roboto, sans-serif;
+  border: 0.5px solid rgba(255, 255, 255, 0.18);
+  /* iOS 26 continuous corner radius for a button of this size */
+  border-radius: 22px;
   cursor: pointer;
-  min-height: 68px;
-  letter-spacing: 0.3px;
-  transition: transform 0.12s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  min-height: 64px;
+  letter-spacing: -0.2px;
+  /* Springy press animation */
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, filter 0.2s ease;
   -webkit-tap-highlight-color: transparent;
   position: relative;
   overflow: hidden;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.15);
+  /* Glass material: blurred translucent backdrop */
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.12);
 }
 
-.punch-btn::after {
+.punch-btn::before {
+  /* Soft inner highlight on the top 30% — gives the iOS 26 vibrant fill */
   content: '';
   position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 50%);
+  inset: 0 0 auto 0;
+  height: 30%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0) 100%);
   pointer-events: none;
   border-radius: inherit;
 }
 
+.punch-btn::after {
+  /* Subtle hairline highlight on the very top edge */
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.25);
+}
+
 .punch-btn:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 .punch-btn:focus-visible {
@@ -4278,73 +4313,80 @@ details[open] .dashboard-details-toggle::after {
   align-items: center;
   justify-content: center;
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.15));
+  position: relative;
+  z-index: 1;
 }
 
 .punch-btn__label {
   font-size: 19px;
   font-weight: 700;
+  position: relative;
+  z-index: 1;
 }
 
 .punch-btn--start {
-  background: linear-gradient(135deg, var(--color-success) 0%, color-mix(in srgb, var(--color-success) 70%, #000) 100%);
-  background-color: var(--color-success);
+  /* Vibrant green fill at ~75% opacity over the blurred glass */
+  background-color: color-mix(in srgb, var(--color-success) 78%, transparent);
   color: #ffffff;
   box-shadow:
-    0 8px 22px rgba(78, 204, 163, 0.42),
-    0 2px 6px rgba(0, 0, 0, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    0 6px 18px rgba(78, 204, 163, 0.32),
+    0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .punch-btn--start:hover {
-  filter: brightness(1.05);
-  box-shadow:
-    0 10px 28px rgba(78, 204, 163, 0.5),
-    0 2px 6px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  filter: brightness(1.04);
+  background-color: color-mix(in srgb, var(--color-success) 85%, transparent);
 }
 
 .punch-btn--stop {
-  background: linear-gradient(135deg, var(--color-danger) 0%, #b91c1c 100%);
-  background-color: var(--color-danger);
+  background-color: color-mix(in srgb, var(--color-danger) 78%, transparent);
   color: #ffffff;
   box-shadow:
-    0 8px 22px rgba(239, 68, 68, 0.42),
-    0 2px 6px rgba(0, 0, 0, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    0 6px 18px rgba(239, 68, 68, 0.32),
+    0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .punch-btn--stop:hover {
-  filter: brightness(1.05);
-  box-shadow:
-    0 10px 28px rgba(239, 68, 68, 0.5),
-    0 2px 6px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  filter: brightness(1.04);
+  background-color: color-mix(in srgb, var(--color-danger) 85%, transparent);
 }
 
 .punch-timer {
   font-family: var(--punch-timer-font);
-  font-size: 44px;
+  font-size: 48px;
   font-weight: 700;
   color: var(--color-text-primary);
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   text-align: center;
   padding: var(--spacing-md) var(--spacing-lg);
   width: 100%;
-  background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.08) 0%, rgba(var(--accent-rgb), 0.02) 100%);
-  border: 1px solid rgba(var(--accent-rgb), 0.18);
-  border-radius: var(--radius-md);
+  /* Soft accent glow background */
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(var(--accent-rgb), 0.16) 0%, rgba(var(--accent-rgb), 0.04) 60%, rgba(var(--accent-rgb), 0) 100%),
+    rgba(var(--accent-rgb), 0.04);
+  border: 0.5px solid rgba(var(--accent-rgb), 0.22);
+  border-radius: 18px;
   font-variant-numeric: tabular-nums;
+  position: relative;
+  z-index: 1;
 }
 
 .punch-timer--active {
-  animation: punch-pulse 2s ease-in-out infinite;
+  animation: punch-pulse 2.2s ease-in-out infinite;
   color: var(--color-success);
 }
 
 /* Light theme: stronger card surface for the punch clock */
 body.theme-light .punch-clock {
-  background: #ffffff;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.5) inset,
+    0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+body.theme-light .punch-btn {
+  border-color: rgba(255, 255, 255, 0.45);
 }
 
 .punch-warning {
@@ -5013,19 +5055,24 @@ body.dashboard-edit-mode [data-reorderable="true"].widget--dragging {
 }
 
 [data-reorderable="true"].widget--dragging {
-  opacity: 0.92;
-  transform: scale(1.02);
+  /* Elevated state while finger-tracked: slight scale, drop shadow, subtle rotation.
+     position:relative + z-index are applied inline by the JS so the widget
+     never detaches from the layout. */
+  transform: scale(1.04) rotate(0.5deg);
   cursor: grabbing;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28),
-              0 0 0 2px rgba(var(--accent-rgb), 0.55);
-  z-index: 10;
-  transition: box-shadow 0.18s ease;
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.32),
+    0 0 0 0.5px rgba(255, 255, 255, 0.18);
+  /* No transition — the JS owns translateY for finger tracking. */
+  transition: none;
+  opacity: 0.96;
 }
 
-[data-reorderable="true"].widget--drag-over {
-  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.55),
-              0 0 16px rgba(var(--accent-rgb), 0.28);
-  transition: box-shadow 0.15s ease;
+/* During an active drag, the dragged widget overrides its scale/rotation
+   inline via translateY, so we apply scale via a wrapping transform. */
+[data-reorderable="true"].widget--dragging {
+  /* Set via CSS variable so the JS can compose translate without losing scale */
+  will-change: transform;
 }
 
 /* ============================================================

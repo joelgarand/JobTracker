@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=48">
+  <link rel="stylesheet" href="style.css?v=49">
   <title>JobTracker</title>
 </head>
 <body>
@@ -787,6 +787,51 @@
         <div class="settings-test-row">
           <button type="button" id="haptic-test-btn" class="btn btn-secondary">📳 Test Vibration</button>
           <button type="button" id="notification-test-btn" class="btn btn-secondary">🔔 Test-Benachrichtigung senden</button>
+        </div>
+      </div>
+
+      <!-- Notifications -->
+      <div class="glass-surface layer-content settings-card">
+        <h2 class="settings-section-title">🔔 Benachrichtigungen</h2>
+
+        <button type="button" id="notif-enable-btn" class="btn btn-primary" style="display:none;">Benachrichtigungen aktivieren</button>
+        <p id="notif-blocked-hint" class="form-hint" style="display:none;">⚠️ Benachrichtigungen sind blockiert. Bitte in den Browser-Einstellungen erlauben.</p>
+
+        <div class="toggle-group">
+          <label class="toggle-label" for="notif-evening-toggle">
+            <input type="checkbox" id="notif-evening-toggle" class="toggle-input" checked>
+            <span class="toggle-switch"></span>
+            <span class="toggle-text">Tägliche Erinnerung am Abend</span>
+          </label>
+        </div>
+        <div class="form-group" id="notif-evening-time-group">
+          <label class="form-label" for="notif-evening-time">Uhrzeit</label>
+          <input type="time" id="notif-evening-time" class="form-input" value="22:00">
+          <span class="form-hint">Wenn du um diese Zeit noch keine Stunden für heute eingetragen hast, erinnert dich JobTracker.</span>
+        </div>
+
+        <div class="toggle-group">
+          <label class="toggle-label" for="notif-geo-toggle">
+            <input type="checkbox" id="notif-geo-toggle" class="toggle-input" checked>
+            <span class="toggle-switch"></span>
+            <span class="toggle-text">Standort-Erinnerungen</span>
+          </label>
+        </div>
+
+        <div class="toggle-group">
+          <label class="toggle-label" for="notif-rule-toggle">
+            <input type="checkbox" id="notif-rule-toggle" class="toggle-input" checked>
+            <span class="toggle-switch"></span>
+            <span class="toggle-text">Regel-Warnungen (Werkstudent / Minijob)</span>
+          </label>
+        </div>
+
+        <div class="toggle-group">
+          <label class="toggle-label" for="notif-minijob-toggle">
+            <input type="checkbox" id="notif-minijob-toggle" class="toggle-input" checked>
+            <span class="toggle-switch"></span>
+            <span class="toggle-text">Minijob-Jahresprognose-Warnung</span>
+          </label>
         </div>
       </div>
 
