@@ -1882,6 +1882,21 @@ const JobTracker = (function () {
     }
 
     /**
+     * Internal: sync GeoReminderService with a job's geo-reminder configuration.
+     * If hasGeoReminder is true and coords are valid, set the location.
+     * Otherwise, remove any existing reminder.
+     * @param {object} job
+     */
+    function _syncGeoReminder(job) {
+      if (typeof GeoReminderService === 'undefined') return;
+      if (job.hasGeoReminder && typeof job.geoLat === 'number' && typeof job.geoLng === 'number') {
+        GeoReminderService.setLocation(job.id, job.geoLat, job.geoLng);
+      } else {
+        GeoReminderService.removeLocation(job.id);
+      }
+    }
+
+    /**
      * Creates a new job from the provided data.
      * Validates, generates ID, adds timestamps, persists, and emits job:created.
      * @param {object} jobData - Job input data
@@ -1912,6 +1927,9 @@ const JobTracker = (function () {
         vacationEntitlement: jobData.vacationEntitlement != null ? Number(jobData.vacationEntitlement) : null,
         billingDay: jobData.billingDay != null ? Number(jobData.billingDay) : null,
         sickDayTracking: !!jobData.sickDayTracking,
+        hasGeoReminder: !!jobData.hasGeoReminder,
+        geoLat: (jobData.hasGeoReminder && typeof jobData.geoLat === 'number') ? jobData.geoLat : null,
+        geoLng: (jobData.hasGeoReminder && typeof jobData.geoLng === 'number') ? jobData.geoLng : null,
         createdAt: now,
         updatedAt: now
       };
@@ -1923,6 +1941,9 @@ const JobTracker = (function () {
         _jobs.pop();
         return { success: false, error: result.error || 'persist_failed' };
       }
+
+      // Sync GeoReminderService with this job's reminder
+      _syncGeoReminder(job);
 
       EventBus.emit('job:created', { job: job });
       return { success: true, job: job };
@@ -1983,6 +2004,9 @@ const JobTracker = (function () {
       if (updates.vacationEntitlement !== undefined) updatedJob.vacationEntitlement = updates.vacationEntitlement != null ? Number(updates.vacationEntitlement) : null;
       if (updates.billingDay !== undefined) updatedJob.billingDay = updates.billingDay != null ? Number(updates.billingDay) : null;
       if (updates.sickDayTracking !== undefined) updatedJob.sickDayTracking = !!updates.sickDayTracking;
+      if (updates.hasGeoReminder !== undefined) updatedJob.hasGeoReminder = !!updates.hasGeoReminder;
+      if (updates.geoLat !== undefined) updatedJob.geoLat = (typeof updates.geoLat === 'number') ? updates.geoLat : null;
+      if (updates.geoLng !== undefined) updatedJob.geoLng = (typeof updates.geoLng === 'number') ? updates.geoLng : null;
       updatedJob.updatedAt = now;
 
       _jobs[index] = updatedJob;
@@ -1992,6 +2016,9 @@ const JobTracker = (function () {
         _jobs[index] = existing;
         return { success: false, error: result.error || 'persist_failed' };
       }
+
+      // Sync GeoReminderService with the updated job's reminder
+      _syncGeoReminder(updatedJob);
 
       EventBus.emit('job:updated', { job: updatedJob });
       return { success: true };
@@ -2250,6 +2277,18 @@ const JobTracker = (function () {
       document.getElementById('settings-job-tips').checked = false;
       document.getElementById('settings-job-sick').checked = false;
 
+      // Reset geo-reminder fields
+      var geoToggle = document.getElementById('settings-job-geo-reminder');
+      var geoFields = document.getElementById('settings-job-geo-fields');
+      var geoLatField = document.getElementById('settings-job-geo-lat');
+      var geoLngField = document.getElementById('settings-job-geo-lng');
+      var geoStatusEl = document.getElementById('settings-job-geo-status');
+      if (geoToggle) geoToggle.checked = false;
+      if (geoFields) geoFields.style.display = 'none';
+      if (geoLatField) geoLatField.value = '';
+      if (geoLngField) geoLngField.value = '';
+      if (geoStatusEl) { geoStatusEl.textContent = ''; geoStatusEl.className = 'geo-status-text'; }
+
       // Reset salary type to hourly
       var hourlyRadio = document.querySelector('input[name="settings-salary-type"][value="hourly"]');
       if (hourlyRadio) hourlyRadio.checked = true;
@@ -2320,6 +2359,26 @@ const JobTracker = (function () {
       document.getElementById('settings-job-provision').checked = !!job.hasProvision;
       document.getElementById('settings-job-tips').checked = !!job.hasTipTracking;
       document.getElementById('settings-job-sick').checked = !!job.sickDayTracking;
+
+      // Geo-Reminder fields
+      var geoToggle = document.getElementById('settings-job-geo-reminder');
+      var geoFields = document.getElementById('settings-job-geo-fields');
+      var geoLatField = document.getElementById('settings-job-geo-lat');
+      var geoLngField = document.getElementById('settings-job-geo-lng');
+      var geoStatusEl = document.getElementById('settings-job-geo-status');
+      if (geoToggle) geoToggle.checked = !!job.hasGeoReminder;
+      if (geoFields) geoFields.style.display = job.hasGeoReminder ? '' : 'none';
+      if (geoLatField) geoLatField.value = (job.geoLat != null) ? String(job.geoLat) : '';
+      if (geoLngField) geoLngField.value = (job.geoLng != null) ? String(job.geoLng) : '';
+      if (geoStatusEl) {
+        if (job.hasGeoReminder && job.geoLat != null && job.geoLng != null) {
+          geoStatusEl.textContent = 'Gespeichert: ' + job.geoLat.toFixed(6) + ', ' + job.geoLng.toFixed(6);
+          geoStatusEl.className = 'geo-status-text geo-status--ok';
+        } else {
+          geoStatusEl.textContent = '';
+          geoStatusEl.className = 'geo-status-text';
+        }
+      }
 
       // Update form title and show delete button
       document.getElementById('settings-job-form-title').textContent = 'Job bearbeiten';
@@ -2552,7 +2611,10 @@ const JobTracker = (function () {
         hasTipTracking: document.getElementById('settings-job-tips').checked,
         vacationEntitlement: vacation,
         billingDay: (function() { var bd = document.getElementById('settings-job-billing-day'); return bd && bd.value ? parseInt(bd.value, 10) : null; })(),
-        sickDayTracking: document.getElementById('settings-job-sick').checked
+        sickDayTracking: document.getElementById('settings-job-sick').checked,
+        hasGeoReminder: (function() { var g = document.getElementById('settings-job-geo-reminder'); return g ? !!g.checked : false; })(),
+        geoLat: (function() { var g = document.getElementById('settings-job-geo-lat'); return (g && g.value) ? parseFloat(g.value) : null; })(),
+        geoLng: (function() { var g = document.getElementById('settings-job-geo-lng'); return (g && g.value) ? parseFloat(g.value) : null; })()
       };
     }
 
@@ -2636,6 +2698,72 @@ const JobTracker = (function () {
     }
 
     /**
+     * Binds the geo-reminder toggle and "use current location" button.
+     */
+    function _bindGeoReminderControls() {
+      var geoToggle = document.getElementById('settings-job-geo-reminder');
+      var geoFields = document.getElementById('settings-job-geo-fields');
+      var geoBtn = document.getElementById('settings-job-geo-use-current');
+      var geoStatusEl = document.getElementById('settings-job-geo-status');
+
+      if (geoToggle && !geoToggle._bound) {
+        geoToggle._bound = true;
+        geoToggle.addEventListener('change', function () {
+          if (geoFields) geoFields.style.display = geoToggle.checked ? '' : 'none';
+
+          // When user enables geo-reminder for the first time, request notification permission
+          if (geoToggle.checked && 'Notification' in window) {
+            if (Notification.permission === 'default') {
+              try {
+                Notification.requestPermission().then(function (permission) {
+                  if (permission !== 'granted' && geoStatusEl) {
+                    geoStatusEl.textContent = '⚠️ Benachrichtigungen sind deaktiviert. Geo-Erinnerungen funktionieren nicht ohne diese Berechtigung.';
+                    geoStatusEl.className = 'geo-status-text geo-status--error';
+                  }
+                });
+              } catch (e) {
+                // Some browsers don't support promise-based requestPermission
+                Notification.requestPermission(function () {});
+              }
+            }
+          }
+        });
+      }
+
+      if (geoBtn && !geoBtn._bound) {
+        geoBtn._bound = true;
+        geoBtn.addEventListener('click', function () {
+          if (geoStatusEl) {
+            geoStatusEl.textContent = 'Standort wird ermittelt…';
+            geoStatusEl.className = 'geo-status-text';
+          }
+          if (typeof GeoReminderService === 'undefined' || !GeoReminderService.getCurrentPosition) {
+            if (geoStatusEl) {
+              geoStatusEl.textContent = 'Geolocation nicht verfügbar.';
+              geoStatusEl.className = 'geo-status-text geo-status--error';
+            }
+            return;
+          }
+          GeoReminderService.getCurrentPosition(function (result) {
+            if (result && typeof result.lat === 'number' && typeof result.lng === 'number') {
+              var latField = document.getElementById('settings-job-geo-lat');
+              var lngField = document.getElementById('settings-job-geo-lng');
+              if (latField) latField.value = String(result.lat);
+              if (lngField) lngField.value = String(result.lng);
+              if (geoStatusEl) {
+                geoStatusEl.textContent = 'Gespeichert: ' + result.lat.toFixed(6) + ', ' + result.lng.toFixed(6);
+                geoStatusEl.className = 'geo-status-text geo-status--ok';
+              }
+            } else if (geoStatusEl) {
+              geoStatusEl.textContent = (result && result.error) ? 'Fehler: ' + result.error : 'Position konnte nicht ermittelt werden.';
+              geoStatusEl.className = 'geo-status-text geo-status--error';
+            }
+          });
+        });
+      }
+    }
+
+    /**
      * Initializes the JobManager module — loads jobs from storage and binds UI event handlers.
      */
     function init() {
@@ -2689,6 +2817,9 @@ const JobTracker = (function () {
 
       // Bind salary type toggle
       _bindSalaryTypeToggle();
+
+      // Bind geo-reminder toggle and "use current location" button
+      _bindGeoReminderControls();
 
       // Render the job list
       renderJobList();
@@ -7963,7 +8094,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.0.0';
+    const APP_VERSION = '2.0.1';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -9587,29 +9718,27 @@ const JobTracker = (function () {
         var statusLabel = statusLabels[entry.status] || entry.status;
         var hoursText = (entry.status === 'worked' && entry.hours) ? entry.hours + ' Std.' : statusLabel;
 
-        html += '<div class="entry-recent-item" data-entry-id="' + entry.id + '">';
+        html += '<div class="entry-recent-item swipeable-entry" data-entry-id="' + entry.id + '">';
         html += '<div class="entry-recent-info">';
         html += '<span class="entry-recent-date">' + _formatDate(entry.date) + '</span>';
         html += '<span class="entry-recent-meta">' + jobName + ' · ' + statusLabel + '</span>';
         html += '</div>';
         html += '<div class="entry-recent-actions">';
         html += '<span class="entry-recent-hours">' + hoursText + '</span>';
-        html += '<button type="button" class="btn btn-danger entry-recent-delete-btn" data-entry-id="' + entry.id + '" aria-label="Eintrag löschen">🗑️</button>';
         html += '</div>';
         html += '</div>';
       }
 
       listEl.innerHTML = html;
 
-      // Bind delete buttons
-      var deleteBtns = listEl.querySelectorAll('.entry-recent-delete-btn');
-      for (var d = 0; d < deleteBtns.length; d++) {
-        deleteBtns[d].addEventListener('click', function () {
-          var entryId = this.getAttribute('data-entry-id');
-          if (entryId && confirm('Eintrag wirklich löschen?')) {
-            TimeTrackerModule.deleteEntry(entryId);
-            _renderRecentEntries();
-          }
+      // Attach swipe-to-delete handler (idempotent: SwipeHandler.attach replaces handlers)
+      if (typeof SwipeHandler !== 'undefined' && SwipeHandler.attach) {
+        SwipeHandler.attach('entry-recent-list', function (entryId) {
+          if (!entryId) return { success: false };
+          var result = TimeTrackerModule.deleteEntry(entryId);
+          // Re-render after delete
+          setTimeout(function () { _renderRecentEntries(); }, 220);
+          return result || { success: true };
         });
       }
     }
@@ -11026,6 +11155,10 @@ const JobTracker = (function () {
   })();
 
   // ─── App Initialization ─────────────────────────────────────────────────────
+  // Module-level flags used by lazy-init view registrations below.
+  var _dailyViewLoaded = false;
+  var _pullRefreshAttached = false;
+
   // Register onboarding view initialization with NavigationController
   NavigationController.registerView('view-onboarding', function () {
     OnboardingNavigation.init();
@@ -11041,8 +11174,52 @@ const JobTracker = (function () {
     IncomeEngine.init();
     LimitMonitor.init();
     LimitMonitorUI.init();
+
+    // Show skeleton briefly while data loads (improves perceived performance)
+    if (typeof SkeletonLoader !== 'undefined' && SkeletonLoader.show && !_dailyViewLoaded) {
+      SkeletonLoader.show('daily-dashboard', 'dashboard-stats');
+    }
+
     GesamtübersichtModule.init();
     JobCardRenderer.init();
+
+    if (typeof SkeletonLoader !== 'undefined' && SkeletonLoader.hide && !_dailyViewLoaded) {
+      SkeletonLoader.hide('daily-dashboard');
+      _dailyViewLoaded = true;
+    }
+
+    // Apply persisted dashboard widget order
+    if (typeof DashboardOrderManager !== 'undefined' && DashboardOrderManager.init) {
+      DashboardOrderManager.init();
+    }
+
+    // Attach pull-to-refresh to the scrollable content area
+    if (typeof PullRefreshHandler !== 'undefined' && PullRefreshHandler.attach && !_pullRefreshAttached) {
+      var scrollEl = document.querySelector('#view-daily .scroll-content');
+      if (scrollEl) {
+        if (!scrollEl.id) scrollEl.id = 'view-daily-scroll';
+        PullRefreshHandler.attach(scrollEl.id, function () {
+          // Re-render all dashboard data
+          return new Promise(function (resolve) {
+            try {
+              GesamtübersichtModule.init();
+              if (JobCardRenderer.render) JobCardRenderer.render();
+              if (typeof MinijobForecastWidget !== 'undefined' && MinijobForecastWidget.update) {
+                MinijobForecastWidget.update();
+              }
+              if (typeof SparklineRenderer !== 'undefined' && SparklineRenderer.render) {
+                SparklineRenderer.render('tip', 'sparkline-tip-container', 14);
+                SparklineRenderer.render('provision', 'sparkline-provision-container', 14);
+              }
+              setTimeout(resolve, 350);
+            } catch (e) {
+              resolve();
+            }
+          });
+        });
+        _pullRefreshAttached = true;
+      }
+    }
   });
 
   // Register settings view initialization with NavigationController (lazy-init)
@@ -11526,6 +11703,11 @@ const JobTracker = (function () {
       var container = document.getElementById(containerId);
       if (!container) return;
 
+      // Idempotent: detach existing handlers first
+      if (_containers[containerId]) {
+        detach(containerId);
+      }
+
       // Get or create indicator and error elements
       var indicator = document.getElementById('pull-refresh-indicator');
       var errorEl = document.getElementById('pull-refresh-error');
@@ -11840,6 +12022,11 @@ const JobTracker = (function () {
     function attach(containerId, onDelete) {
       var container = document.getElementById(containerId);
       if (!container) return;
+
+      // Idempotent: detach existing handlers first
+      if (_containers[containerId]) {
+        detach(containerId);
+      }
 
       var handlers = {
         touchstart: function (e) { _onTouchStart(e, containerId); },
@@ -12182,9 +12369,23 @@ const JobTracker = (function () {
       EventBus.on('income:updated', function () {
         _renderAll();
       });
+      EventBus.on('workday:saved', function () {
+        _renderAll();
+      });
+      EventBus.on('workday:deleted', function () {
+        _renderAll();
+      });
+      EventBus.on('navigation:change', function (data) {
+        if (data && (data.viewId === 'view-daily' || data.view === 'view-daily')) {
+          _renderAll();
+        }
+      });
+      EventBus.on('data:imported', function () {
+        _renderAll();
+      });
 
-      // Initial render
-      _renderAll();
+      // Initial render — defer one tick so containers exist
+      setTimeout(function () { _renderAll(); }, 0);
     }
 
     /**
@@ -13179,7 +13380,7 @@ const JobTracker = (function () {
 
       // Activate/deactivate when entry view shown/hidden
       EventBus.on('navigation:change', function (data) {
-        if (data && data.view === 'view-entry') {
+        if (data && (data.viewId === 'view-entry' || data.view === 'view-entry')) {
           _active = true;
         } else {
           _active = false;
@@ -13519,11 +13720,23 @@ const JobTracker = (function () {
       }
 
       var job = JobManager.getJob(jobId);
-      if (!job || !job.hourlyRate) {
+      // Job hourly-rate property is `defaultHourlyRate` (not `hourlyRate`).
+      // For fixed-salary jobs we approximate an hourly equivalent (40 h/week × 4.33).
+      var rate = null;
+      if (job) {
+        if (typeof job.defaultHourlyRate === 'number' && job.defaultHourlyRate > 0) {
+          rate = job.defaultHourlyRate;
+        } else if (typeof job.fixedMonthlySalary === 'number' && job.fixedMonthlySalary > 0) {
+          rate = job.fixedMonthlySalary / (40 * 4.33);
+        } else if (typeof job.defaultDailyRate === 'number' && job.defaultDailyRate > 0) {
+          rate = job.defaultDailyRate / 8;
+        }
+      }
+      if (!job || !rate) {
         return { grossAdd: 0, netAdd: 0, effectiveRate: 0 };
       }
 
-      var additionalGross = additionalHours * job.hourlyRate;
+      var additionalGross = additionalHours * rate;
 
       // Get current month's gross for this job
       var now = new Date();
@@ -13918,6 +14131,295 @@ const JobTracker = (function () {
     };
   })();
 
+  // ─── DashboardOrderManager ─────────────────────────────────────────────────
+  // Manages drag-and-drop reordering of dashboard widgets (#view-daily).
+  // Persists the user-defined order in localStorage under key 'jt_dashboard_order'.
+  // Widgets must be marked with data-reorderable="true" and data-widget-id="..."
+  // to participate in the reorder mechanism. An "Anordnen" button in the
+  // dashboard toggles edit mode; widgets can also be reordered via long-press.
+  const DashboardOrderManager = (function () {
+    var STORAGE_KEY = 'jt_dashboard_order';
+    var LONG_PRESS_MS = 500;
+    var _editMode = false;
+    var _initialized = false;
+    var _draggingEl = null;
+    var _longPressTimer = null;
+    var _longPressStartY = 0;
+
+    /**
+     * Initialize: apply saved order, wire edit-mode toggle, attach drag listeners.
+     */
+    function init() {
+      if (_initialized) return;
+      _initialized = true;
+
+      // Apply saved order on init and whenever daily view becomes active
+      _applySavedOrder();
+
+      var toggleBtn = document.getElementById('dashboard-edit-toggle');
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', function () {
+          setEditMode(!_editMode);
+        });
+      }
+
+      // Wire all current and future reorderable widgets
+      _wireWidgets();
+
+      // Re-apply order whenever data is imported or jobs change
+      EventBus.on('data:imported', function () {
+        _applySavedOrder();
+        _wireWidgets();
+      });
+      EventBus.on('navigation:change', function (data) {
+        if (data && (data.viewId === 'view-daily' || data.view === 'view-daily')) {
+          _applySavedOrder();
+          _wireWidgets();
+        }
+      });
+    }
+
+    /**
+     * Toggle drag-and-drop edit mode on the dashboard.
+     * @param {boolean} enabled
+     */
+    function setEditMode(enabled) {
+      _editMode = !!enabled;
+      var btn = document.getElementById('dashboard-edit-toggle');
+      if (btn) {
+        btn.setAttribute('aria-pressed', String(_editMode));
+        var label = btn.querySelector('.dashboard-edit-label');
+        if (label) label.textContent = _editMode ? 'Fertig' : 'Anordnen';
+      }
+      if (_editMode) {
+        document.body.classList.add('dashboard-edit-mode');
+      } else {
+        document.body.classList.remove('dashboard-edit-mode');
+      }
+      _wireWidgets();
+      if (typeof showToast === 'function' && _editMode) {
+        showToast('Widgets per Drag&Drop verschieben.', 2500);
+      }
+    }
+
+    /**
+     * Wire drag and long-press listeners on all reorderable widgets.
+     */
+    function _wireWidgets() {
+      var widgets = _getReorderableWidgets();
+      for (var i = 0; i < widgets.length; i++) {
+        var w = widgets[i];
+        if (w._reorderWired) continue;
+        w._reorderWired = true;
+
+        // HTML5 Drag and Drop API
+        w.setAttribute('draggable', 'true');
+        w.addEventListener('dragstart', _onDragStart);
+        w.addEventListener('dragover', _onDragOver);
+        w.addEventListener('dragleave', _onDragLeave);
+        w.addEventListener('drop', _onDrop);
+        w.addEventListener('dragend', _onDragEnd);
+
+        // Long-press (touch) to reveal handle
+        w.addEventListener('touchstart', _onTouchStart, { passive: true });
+        w.addEventListener('touchmove', _onTouchMove, { passive: true });
+        w.addEventListener('touchend', _onTouchEnd, { passive: true });
+        w.addEventListener('touchcancel', _onTouchEnd, { passive: true });
+      }
+    }
+
+    /**
+     * Get all widgets marked as reorderable in DOM order.
+     * @returns {HTMLElement[]}
+     */
+    function _getReorderableWidgets() {
+      var view = document.getElementById('view-daily');
+      if (!view) return [];
+      var nodes = view.querySelectorAll('[data-reorderable="true"][data-widget-id]');
+      return Array.prototype.slice.call(nodes);
+    }
+
+    /**
+     * Apply the saved order from localStorage by reordering widgets in the DOM.
+     */
+    function _applySavedOrder() {
+      var saved = _loadOrder();
+      if (!saved || !saved.length) return;
+
+      var widgets = _getReorderableWidgets();
+      if (!widgets.length) return;
+
+      // Build map id -> element
+      var byId = {};
+      for (var i = 0; i < widgets.length; i++) {
+        var id = widgets[i].getAttribute('data-widget-id');
+        if (id) byId[id] = widgets[i];
+      }
+
+      // Determine common parent (assume all reorderable widgets share the same parent)
+      var parent = widgets[0].parentNode;
+      if (!parent) return;
+
+      // Append in saved order; widgets not present in saved list keep their relative position at the end
+      var seen = {};
+      for (var j = 0; j < saved.length; j++) {
+        var sid = saved[j];
+        if (byId[sid] && byId[sid].parentNode === parent) {
+          parent.appendChild(byId[sid]);
+          seen[sid] = true;
+        }
+      }
+      // Append any unseen widgets at the end (preserve original order)
+      for (var k = 0; k < widgets.length; k++) {
+        var wid = widgets[k].getAttribute('data-widget-id');
+        if (wid && !seen[wid] && widgets[k].parentNode === parent) {
+          parent.appendChild(widgets[k]);
+        }
+      }
+    }
+
+    /**
+     * Persist the current widget order to localStorage.
+     */
+    function _saveCurrentOrder() {
+      var widgets = _getReorderableWidgets();
+      var ids = [];
+      for (var i = 0; i < widgets.length; i++) {
+        var id = widgets[i].getAttribute('data-widget-id');
+        if (id) ids.push(id);
+      }
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+      } catch (e) {
+        // Silently fail
+      }
+    }
+
+    /**
+     * Load saved order from localStorage.
+     * @returns {string[]|null}
+     */
+    function _loadOrder() {
+      try {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        var parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // ── Drag and Drop event handlers ──
+
+    function _onDragStart(e) {
+      if (!_editMode) {
+        e.preventDefault();
+        return;
+      }
+      _draggingEl = this;
+      this.classList.add('widget--dragging');
+      try {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', this.getAttribute('data-widget-id') || '');
+      } catch (err) {}
+    }
+
+    function _onDragOver(e) {
+      if (!_editMode || !_draggingEl) return;
+      e.preventDefault();
+      try { e.dataTransfer.dropEffect = 'move'; } catch (err) {}
+      if (this !== _draggingEl) {
+        this.classList.add('widget--drag-over');
+      }
+    }
+
+    function _onDragLeave() {
+      this.classList.remove('widget--drag-over');
+    }
+
+    function _onDrop(e) {
+      if (!_editMode || !_draggingEl) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.classList.remove('widget--drag-over');
+      if (this === _draggingEl) return;
+
+      // Insert _draggingEl before this if it's positioned after, otherwise after
+      var parent = this.parentNode;
+      if (!parent) return;
+      var siblings = Array.prototype.slice.call(parent.children);
+      var draggedIdx = siblings.indexOf(_draggingEl);
+      var targetIdx = siblings.indexOf(this);
+      if (draggedIdx < targetIdx) {
+        // dragged was above target → insert after target
+        if (this.nextSibling) {
+          parent.insertBefore(_draggingEl, this.nextSibling);
+        } else {
+          parent.appendChild(_draggingEl);
+        }
+      } else {
+        parent.insertBefore(_draggingEl, this);
+      }
+
+      _saveCurrentOrder();
+      if (typeof HapticFeedbackService !== 'undefined' && HapticFeedbackService.tap) {
+        HapticFeedbackService.tap(30);
+      }
+    }
+
+    function _onDragEnd() {
+      if (this.classList) this.classList.remove('widget--dragging');
+      var widgets = _getReorderableWidgets();
+      for (var i = 0; i < widgets.length; i++) {
+        widgets[i].classList.remove('widget--drag-over');
+      }
+      _draggingEl = null;
+    }
+
+    // ── Touch / long-press handlers ──
+
+    function _onTouchStart(e) {
+      if (_editMode) return; // already in edit mode, no need for long-press
+      if (!e.touches || e.touches.length === 0) return;
+      _longPressStartY = e.touches[0].clientY;
+      var widget = this;
+      _longPressTimer = setTimeout(function () {
+        widget.classList.add('widget--show-handle');
+        if (typeof HapticFeedbackService !== 'undefined' && HapticFeedbackService.tap) {
+          HapticFeedbackService.tap(30);
+        }
+        // Auto-hide handle after 4 seconds
+        setTimeout(function () {
+          widget.classList.remove('widget--show-handle');
+        }, 4000);
+      }, LONG_PRESS_MS);
+    }
+
+    function _onTouchMove(e) {
+      if (_longPressTimer && e.touches && e.touches.length > 0) {
+        var dy = Math.abs(e.touches[0].clientY - _longPressStartY);
+        if (dy > 10) {
+          clearTimeout(_longPressTimer);
+          _longPressTimer = null;
+        }
+      }
+    }
+
+    function _onTouchEnd() {
+      if (_longPressTimer) {
+        clearTimeout(_longPressTimer);
+        _longPressTimer = null;
+      }
+    }
+
+    return {
+      init: init,
+      setEditMode: setEditMode,
+      isEditMode: function () { return _editMode; }
+    };
+  })();
+
   // ─── GeoReminderService ────────────────────────────────────────────────────────
   // Monitors device location relative to configured workplace coordinates and
   // triggers push notifications when the user leaves the geofence (200m radius).
@@ -14255,15 +14757,32 @@ const JobTracker = (function () {
         ? 'Du hast den Arbeitsplatz (' + jobName + ') verlassen. Stunden eintragen?'
         : 'Du hast den Arbeitsplatz verlassen. Stunden eintragen?';
 
-      try {
-        new Notification('Schicht beendet?', {
-          body: body,
-          icon: 'icons/icon-192.png',
-          tag: 'geo-reminder-' + jobId
+      var options = {
+        body: body,
+        icon: 'icons/icon-192.png',
+        badge: 'icons/icon-192.png',
+        tag: 'geo-reminder-' + jobId
+      };
+
+      // Prefer the service-worker registration for PWA compatibility on Android.
+      // Falls back to the Notification constructor on platforms where SW is unavailable.
+      if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
+        navigator.serviceWorker.ready.then(function (registration) {
+          if (registration && typeof registration.showNotification === 'function') {
+            registration.showNotification('Schicht beendet?', options);
+          } else {
+            try { new Notification('Schicht beendet?', options); } catch (e) { /* ignore */ }
+          }
+        }).catch(function () {
+          try { new Notification('Schicht beendet?', options); } catch (e) { /* ignore */ }
         });
-      } catch (e) {
-        // Notification constructor may fail in some contexts; ignore
-        return;
+      } else {
+        try {
+          new Notification('Schicht beendet?', options);
+        } catch (e) {
+          // Notification constructor may fail in some contexts; ignore
+          return;
+        }
       }
 
       // Update lastNotifiedDate
@@ -14402,8 +14921,21 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.0.0';
+  const APP_VERSION = '2.0.1';
   const APP_CHANGELOG = [
+    {
+      version: '2.0.1',
+      date: '2026-05-22',
+      changes: [
+        'v2.0.1 — Bugfixes & Polish',
+        '🐛 Tax-Simulator: Slider liest jetzt korrekt den Stundenlohn (defaultHourlyRate) und reagiert wieder auf Eingaben',
+        '🐛 Sparklines: Re-Render bei Navigation auf "Übersicht" wieder funktionsfähig (viewId-Payload)',
+        '🐛 Dashboard-Reorder: Anwendung der gespeicherten Reihenfolge bei Navigation gefixt',
+        '🐛 RuleChecker: Aktiviert sich nun auch über das navigation:change-Event mit viewId',
+        '🔔 Push-Notifications: Geo-Erinnerungen & Test-Benachrichtigung nutzen registration.showNotification() (Android-PWA)',
+        '🎨 Punch-Clock: Größerer Timer mit Tabular-Nums, Schicht-Karte mit radius-lg + Schatten'
+      ]
+    },
     {
       version: '2.0.0',
       date: '2026-05-22',
@@ -14650,6 +15182,7 @@ const JobTracker = (function () {
     MinijobForecastWidget.init();
     TaxSimulator.init();
     GeoReminderService.init();
+    DashboardOrderManager.init();
 
     // ── Header Theme Toggle ──
     var headerThemeToggle = document.getElementById('header-theme-toggle');
@@ -14665,6 +15198,85 @@ const JobTracker = (function () {
         updateIcon();
       });
       updateIcon();
+    }
+
+    // ── Settings: Test Vibration & Test Notification buttons ──
+    var hapticTestBtn = document.getElementById('haptic-test-btn');
+    if (hapticTestBtn) {
+      hapticTestBtn.addEventListener('click', function () {
+        if (typeof HapticFeedbackService !== 'undefined') {
+          if (!HapticFeedbackService.isSupported()) {
+            showToast('Vibration wird auf diesem Gerät nicht unterstützt.', 4000);
+            return;
+          }
+          if (!HapticFeedbackService.isEnabled()) {
+            showToast('Haptisches Feedback ist deaktiviert. Bitte aktivieren.', 4000);
+            return;
+          }
+          HapticFeedbackService.tap(80);
+          setTimeout(function () { HapticFeedbackService.doublePulse(); }, 250);
+          showToast('Vibration ausgelöst. Hat es funktioniert?', 3000);
+        }
+      });
+    }
+
+    var notificationTestBtn = document.getElementById('notification-test-btn');
+    if (notificationTestBtn) {
+      notificationTestBtn.addEventListener('click', function () {
+        if (!('Notification' in window)) {
+          showToast('Benachrichtigungen werden auf diesem Gerät nicht unterstützt.', 4000);
+          return;
+        }
+        var sendTestNotification = function () {
+          var options = {
+            body: 'Test-Benachrichtigung. Wenn du das siehst, funktionieren Push-Nachrichten ✅',
+            icon: 'icons/icon-192.png',
+            badge: 'icons/icon-192.png',
+            tag: 'jt-test-notification'
+          };
+          // Prefer service-worker registration (Android PWA compatibility)
+          if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
+            navigator.serviceWorker.ready.then(function (registration) {
+              if (registration && typeof registration.showNotification === 'function') {
+                registration.showNotification('JobTracker', options);
+              } else {
+                try { new Notification('JobTracker', options); }
+                catch (e) { showToast('Test-Benachrichtigung fehlgeschlagen: ' + e.message, 4000); }
+              }
+            }).catch(function () {
+              try { new Notification('JobTracker', options); }
+              catch (e) { showToast('Test-Benachrichtigung fehlgeschlagen: ' + e.message, 4000); }
+            });
+          } else {
+            try {
+              new Notification('JobTracker', options);
+            } catch (e) {
+              showToast('Test-Benachrichtigung fehlgeschlagen: ' + e.message, 4000);
+            }
+          }
+        };
+        if (Notification.permission === 'granted') {
+          sendTestNotification();
+        } else if (Notification.permission === 'denied') {
+          showToast('Benachrichtigungen sind blockiert. Bitte in den Browser-Einstellungen erlauben.', 5000);
+        } else {
+          try {
+            Notification.requestPermission().then(function (permission) {
+              if (permission === 'granted') {
+                sendTestNotification();
+              } else {
+                showToast('Berechtigung verweigert.', 4000);
+              }
+            });
+          } catch (e) {
+            // Older browsers
+            Notification.requestPermission(function (permission) {
+              if (permission === 'granted') sendTestNotification();
+              else showToast('Berechtigung verweigert.', 4000);
+            });
+          }
+        }
+      });
     }
 
     // ── Header Rules Info Button ──
@@ -14899,6 +15511,7 @@ const JobTracker = (function () {
     MinijobForecastWidget: MinijobForecastWidget,
     TaxSimulator: TaxSimulator,
     GeoReminderService: GeoReminderService,
+    DashboardOrderManager: DashboardOrderManager,
     showToast: showToast
   };
 })();

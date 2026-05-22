@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=45">
+  <link rel="stylesheet" href="style.css?v=47">
   <title>JobTracker</title>
 </head>
 <body>
@@ -359,7 +359,7 @@
 
   <!-- View: Daily Tracking (Übersicht) -->
   <section id="view-daily" class="view-section">
-    <div class="scroll-content">
+    <div class="scroll-content" id="view-daily-scroll">
       <!-- Pull-to-Refresh Indicator -->
       <div id="pull-refresh-indicator" class="pull-indicator" aria-hidden="true">
         <span class="pull-indicator__spinner"></span>
@@ -375,11 +375,26 @@
         <button class="sub-nav-btn" data-target="view-yearly" type="button">Jahr</button>
       </div>
 
+      <!-- Dashboard Edit Mode Toggle -->
+      <div class="dashboard-edit-row">
+        <button type="button" id="dashboard-edit-toggle" class="dashboard-edit-btn" aria-pressed="false" aria-label="Widgets neu anordnen">
+          <span class="dashboard-edit-icon" aria-hidden="true">⋮⋮</span>
+          <span class="dashboard-edit-label">Anordnen</span>
+        </button>
+      </div>
+
       <!-- Punch Clock -->
-      <div id="punch-clock-container" class="glass-surface layer-content punch-clock">
-        <button type="button" id="punch-start-btn" class="punch-btn punch-btn--start">Schicht starten</button>
+      <div id="punch-clock-container" class="glass-surface layer-content punch-clock" data-reorderable="true" data-widget-id="punch-clock">
+        <span class="widget-drag-handle" aria-hidden="true">≡</span>
+        <button type="button" id="punch-start-btn" class="punch-btn punch-btn--start">
+          <span class="punch-btn__icon" aria-hidden="true">▶</span>
+          <span class="punch-btn__label">Schicht starten</span>
+        </button>
         <div id="punch-timer-display" class="punch-timer" aria-live="polite" style="display:none;">00:00:00</div>
-        <button type="button" id="punch-stop-btn" class="punch-btn punch-btn--stop" style="display:none;">Schicht beenden</button>
+        <button type="button" id="punch-stop-btn" class="punch-btn punch-btn--stop" style="display:none;">
+          <span class="punch-btn__icon" aria-hidden="true">⏹</span>
+          <span class="punch-btn__label">Schicht beenden</span>
+        </button>
         <!-- 16-hour warning banner -->
         <div id="punch-warning-banner" class="punch-warning" style="display:none;" role="alert">
           <p>⚠️ Schicht läuft seit über 16 Stunden. Vergessen zu beenden?</p>
@@ -391,7 +406,8 @@
       </div>
 
       <!-- Gesamtübersicht Card -->
-      <div id="daily-dashboard" class="glass-surface layer-content daily-dashboard-card">
+      <div id="daily-dashboard" class="glass-surface layer-content daily-dashboard-card" data-reorderable="true" data-widget-id="gesamtuebersicht">
+        <span class="widget-drag-handle" aria-hidden="true">≡</span>
         <div class="dashboard-header-row">
           <h2 class="daily-section-title">Gesamtübersicht</h2>
           <button type="button" id="dashboard-period-toggle" class="dashboard-period-btn" aria-label="Zeitraum wechseln">
@@ -450,7 +466,8 @@
       </div>
 
       <!-- Tax Simulator Widget (collapsed by default) -->
-      <div id="tax-simulator-widget" class="glass-surface layer-content tax-simulator tax-simulator--collapsed">
+      <div id="tax-simulator-widget" class="glass-surface layer-content tax-simulator tax-simulator--collapsed" data-reorderable="true" data-widget-id="tax-simulator">
+        <span class="widget-drag-handle" aria-hidden="true">≡</span>
         <button type="button" id="tax-simulator-toggle" class="tax-simulator__header" aria-expanded="false" aria-controls="tax-simulator-body">
           <span class="tax-simulator__title">💶 Steuer-Simulator</span>
           <span class="tax-simulator__chevron" aria-hidden="true">▼</span>
@@ -494,7 +511,8 @@
       </div>
 
       <!-- Minijob Forecast Widget -->
-      <div id="minijob-forecast-widget" class="glass-surface layer-content forecast-widget forecast-widget--hidden">
+      <div id="minijob-forecast-widget" class="glass-surface layer-content forecast-widget forecast-widget--hidden" data-reorderable="true" data-widget-id="minijob-forecast">
+        <span class="widget-drag-handle" aria-hidden="true">≡</span>
         <h3 class="forecast-widget__title">📊 Minijob-Jahresprognose</h3>
         <div class="forecast-widget__stats">
           <div class="forecast-widget__stat">
@@ -520,7 +538,8 @@
       </div>
 
       <!-- Job Cards Container -->
-      <div id="job-cards-container">
+      <div id="job-cards-container" data-reorderable="true" data-widget-id="job-cards">
+        <span class="widget-drag-handle" aria-hidden="true">≡</span>
         <!-- Dynamically populated by job card rendering modules -->
         <div class="glass-surface layer-content daily-no-jobs-card" id="daily-no-jobs">
           <div class="daily-no-jobs-content">
@@ -764,6 +783,10 @@
             <span class="toggle-text">Haptisches Feedback</span>
           </label>
         </div>
+        <div class="settings-test-row">
+          <button type="button" id="haptic-test-btn" class="btn btn-secondary">📳 Test Vibration</button>
+          <button type="button" id="notification-test-btn" class="btn btn-secondary">🔔 Test-Benachrichtigung senden</button>
+        </div>
       </div>
 
       <!-- Theme Toggle -->
@@ -928,6 +951,20 @@
               <label class="form-label" for="settings-job-billing-day">Abrechnungstag (Tag im Monat)</label>
               <input type="number" id="settings-job-billing-day" class="form-input" min="1" max="31" step="1" placeholder="z.B. 20">
               <span class="form-hint">Ab diesem Tag zählt der nächste Monat. Leer = Monatsende.</span>
+            </div>
+
+            <div class="toggle-group">
+              <label class="toggle-label" for="settings-job-geo-reminder">
+                <input type="checkbox" id="settings-job-geo-reminder" class="toggle-input">
+                <span class="toggle-switch"></span>
+                <span class="toggle-text">📍 Geo-Erinnerung beim Verlassen</span>
+              </label>
+            </div>
+            <div id="settings-job-geo-fields" class="geo-fields" style="display:none;">
+              <button type="button" id="settings-job-geo-use-current" class="btn btn-secondary">📍 Aktuellen Standort verwenden</button>
+              <p id="settings-job-geo-status" class="geo-status-text"></p>
+              <input type="hidden" id="settings-job-geo-lat" value="">
+              <input type="hidden" id="settings-job-geo-lng" value="">
             </div>
           </div>
 
@@ -1211,6 +1248,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=37" defer></script>
+  <script src="app.js?v=38" defer></script>
 </body>
 </html>
