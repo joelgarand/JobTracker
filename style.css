@@ -247,7 +247,7 @@ a {
   right: 0;
   z-index: var(--z-glass-overlay);
   background: var(--nav-bg);
-  border-top: 1px solid var(--nav-border);
+  border-top: none;
   display: flex;
   align-items: stretch;
   gap: 6px;
@@ -4387,6 +4387,21 @@ details[open] .dashboard-details-toggle::after {
   font-family: var(--punch-timer-font, var(--font-family));
 }
 
+/* Active state: icon smaller, timer larger, both visible stacked */
+.punch-clock--active .punch-center-icon {
+  font-size: 16px;
+}
+
+.punch-clock--active .punch-center-timer {
+  font-size: 14px;
+  display: block;
+}
+
+.punch-clock--active .punch-center-btn {
+  overflow: hidden;
+  text-overflow: clip;
+}
+
 /* Label below the ring */
 .punch-label {
   position: relative;
@@ -4873,6 +4888,23 @@ body.theme-light .tax-tile {
   text-align: center;
   z-index: 2;
   margin: 0;
+}
+
+.tax-tile__info {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  text-align: center;
+  opacity: 0.8;
+  letter-spacing: 0.1px;
+  margin-top: 2px;
+}
+
+/* Notification time picker — constrained size */
+#notif-evening-time {
+  max-width: 120px;
+  height: 40px;
+  font-size: var(--font-size-base);
+  padding: 8px 12px;
 }
 
 /* Visually-hidden helper (used for legacy compatibility nodes) */

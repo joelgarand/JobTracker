@@ -8236,7 +8236,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.0.5';
+    const APP_VERSION = '2.0.6';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -9961,6 +9961,11 @@ const JobTracker = (function () {
       });
       EventBus.on('workday:deleted', function () {
         if (NavigationController.getActiveView() === 'view-entry') {
+          _renderRecentEntries();
+        }
+      });
+      EventBus.on('navigation:change', function (data) {
+        if (data && (data.viewId === 'view-entry' || data.view === 'view-entry')) {
           _renderRecentEntries();
         }
       });
@@ -13939,6 +13944,8 @@ const JobTracker = (function () {
 
     /**
      * Bind the slider input event handler. Idempotent — safe to call repeatedly.
+     * Also adds document-level touch tracking so the user can slide their finger
+     * anywhere on screen after starting on the thumb (iOS pattern).
      */
     function _bindSliderEvents() {
       var slider = document.getElementById('tax-simulator-slider');
@@ -13954,6 +13961,38 @@ const JobTracker = (function () {
 
       slider.addEventListener('input', onChange);
       slider.addEventListener('change', onChange);
+
+      // ── iOS full-screen slider tracking ──
+      var _sliderActive = false;
+      var _sliderRect = null;
+
+      slider.addEventListener('touchstart', function (e) {
+        _sliderActive = true;
+        _sliderRect = slider.getBoundingClientRect();
+      }, { passive: true });
+
+      document.addEventListener('touchmove', function (e) {
+        if (!_sliderActive || !_sliderRect) return;
+        e.preventDefault();
+        var touch = e.touches[0];
+        var relX = touch.clientX - _sliderRect.left;
+        var ratio = relX / _sliderRect.width;
+        if (ratio < 0) ratio = 0;
+        if (ratio > 1) ratio = 1;
+        var min = parseInt(slider.min, 10) || 0;
+        var max = parseInt(slider.max, 10) || 80;
+        var newVal = Math.round(min + ratio * (max - min));
+        slider.value = newVal;
+        var inputEvt = new Event('input', { bubbles: true });
+        slider.dispatchEvent(inputEvt);
+      }, { passive: false });
+
+      document.addEventListener('touchend', function () {
+        if (_sliderActive) {
+          _sliderActive = false;
+          _sliderRect = null;
+        }
+      }, { passive: true });
     }
 
     /**
@@ -14129,6 +14168,52 @@ const JobTracker = (function () {
       if (netEl) netEl.textContent = '+' + _formatCurrency(result.netAdd);
       if (rateEl) rateEl.textContent = result.effectiveRate.toFixed(1).replace('.', ',') + ' %';
       if (grossEl) grossEl.textContent = _formatCurrency(result.grossAdd);
+
+      // Show job-type info label so user understands the deduction basis
+      _updateInfoLabel();
+    }
+
+    /**
+     * Show a small info label below the tax detail indicating the job type
+     * and deduction basis (e.g. "Werkstudent · nur RV").
+     */
+    function _updateInfoLabel() {
+      var infoEl = document.getElementById('tax-simulator-info');
+      if (!infoEl) {
+        // Create the element if it doesn't exist yet
+        var detailEl = document.querySelector('.tax-tile__detail');
+        if (!detailEl) return;
+        infoEl = document.createElement('span');
+        infoEl.id = 'tax-simulator-info';
+        infoEl.className = 'tax-tile__info';
+        detailEl.parentNode.insertBefore(infoEl, detailEl.nextSibling);
+      }
+
+      var job = _selectedJobId ? JobManager.getJob(_selectedJobId) : null;
+      if (!job) {
+        infoEl.textContent = '';
+        return;
+      }
+
+      var label = '';
+      switch (job.type) {
+        case 'Werkstudent':
+          label = 'Werkstudent · nur RV 9,3%';
+          break;
+        case 'Minijob':
+          label = 'Minijob · 3,6% RV';
+          break;
+        case 'KFB':
+          label = 'KFB · 25% pauschal';
+          break;
+        case 'Teilzeit':
+        case 'Vollzeit':
+          label = 'Stkl. ' + (AppState.getState().userProfile ? AppState.getState().userProfile.steuerklasse || '1' : '1') + ' · Gesetzl. SV';
+          break;
+        default:
+          label = '';
+      }
+      infoEl.textContent = label;
     }
 
     /**
@@ -15674,8 +15759,21 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.0.5';
+  const APP_VERSION = '2.0.6';
   const APP_CHANGELOG = [
+    {
+      version: '2.0.6',
+      date: '2026-05-27',
+      changes: [
+        'v2.0.6 — Punch-Layout, Steuer-Info, Grauer Balken, History, Zeitpicker',
+        '⏱️ Punch-Clock: Timer + Stop-Icon sauber gestapelt (Icon kleiner, Timer größer)',
+        '💶 Steuer-Simulator: Info-Label zeigt Berechnungsbasis (Werkstudent/Minijob/Stkl.)',
+        '🎚️ Steuer-Simulator: Slider funktioniert beim Wischen über den ganzen Bildschirm',
+        '🐛 Grauer Balken über Navigation entfernt (border-top)',
+        '📋 Punch-Einträge erscheinen jetzt in "Letzte Einträge" beim Tab-Wechsel',
+        '🎨 Benachrichtigungs-Zeitpicker auf normale Größe angepasst'
+      ]
+    },
     {
       version: '2.0.5',
       date: '2026-05-26',
