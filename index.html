@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=50">
+  <link rel="stylesheet" href="style.css?v=51">
   <title>JobTracker</title>
 </head>
 <body>
@@ -360,13 +360,11 @@
   <!-- View: Daily Tracking (Übersicht) -->
   <section id="view-daily" class="view-section">
     <div class="scroll-content" id="view-daily-scroll">
-      <!-- Pull-to-Refresh Indicator -->
-      <div id="pull-refresh-indicator" class="pull-indicator" aria-hidden="true">
-        <span class="pull-indicator__spinner"></span>
-        <span class="pull-indicator__text">Aktualisieren…</span>
-      </div>
-      <div id="pull-refresh-error" class="pull-indicator pull-indicator--error" style="display:none;" role="alert">
-        <span class="pull-indicator__text">Aktualisierung fehlgeschlagen.</span>
+      <!-- Pull-to-Refresh Spinner (iOS-style) -->
+      <div id="pull-refresh-indicator" class="pull-spinner" aria-hidden="true">
+        <svg class="pull-spinner__svg" viewBox="0 0 24 24" width="24" height="24">
+          <circle class="pull-spinner__circle" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="50" stroke-dashoffset="20"/>
+        </svg>
       </div>
       <!-- Sub-navigation for Tracking views -->
       <div class="sub-nav">
@@ -389,15 +387,20 @@
       <!-- Punch Clock (small 1×1 tile) -->
       <div id="punch-clock-container" class="punch-clock" data-reorderable="true" data-widget-id="punch-clock" data-widget-size="small">
         <div class="punch-clock-tile">
-          <svg class="punch-ring" viewBox="0 0 100 100" aria-hidden="true">
-            <circle class="punch-ring__bg" cx="50" cy="50" r="44"></circle>
-            <circle class="punch-ring__progress" id="punch-ring-progress" cx="50" cy="50" r="44"></circle>
-          </svg>
-          <button type="button" id="punch-center-btn" class="punch-center-btn" aria-label="Schicht starten">
-            <span class="punch-center-icon" id="punch-center-icon" aria-hidden="true">▶</span>
-            <span class="punch-center-timer" id="punch-center-timer" style="display:none;">00:00:00</span>
-          </button>
+          <div class="punch-ring-container">
+            <svg class="punch-ring" viewBox="0 0 100 100" aria-hidden="true">
+              <circle class="punch-ring__bg-depth" cx="50" cy="50" r="44"></circle>
+              <circle class="punch-ring__bg" cx="50" cy="50" r="44"></circle>
+              <circle class="punch-ring__progress" id="punch-ring-progress" cx="50" cy="50" r="44"></circle>
+            </svg>
+            <button type="button" id="punch-center-btn" class="punch-center-btn" aria-label="Schicht starten">
+              <span class="punch-center-icon" id="punch-center-icon" aria-hidden="true">▶</span>
+              <span class="punch-center-timer" id="punch-center-timer" style="display:none;">00:00:00</span>
+            </button>
+          </div>
           <div class="punch-label" id="punch-label">Schicht starten</div>
+          <!-- Inline extras form (shown after shift end if tip/provision enabled) -->
+          <div id="punch-extras-form" class="punch-extras-form" style="display:none;"></div>
           <!-- 16-hour warning banner overlay -->
           <div id="punch-warning-banner" class="punch-warning" style="display:none;" role="alert">
             <p>⚠️ Schicht läuft seit über 16 Stunden. Vergessen zu beenden?</p>

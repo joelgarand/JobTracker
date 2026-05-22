@@ -4260,23 +4260,37 @@ details[open] .dashboard-details-toggle::after {
   border-radius: inherit;
 }
 
+/* Ring container — holds the SVG ring + center button in relative flow */
+.punch-ring-container {
+  position: relative;
+  width: 70%;
+  aspect-ratio: 1;
+  flex-shrink: 0;
+}
+
 /* Progress ring — the SVG itself is rotated -90deg so 0% starts at 12 o'clock */
 .punch-ring {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 80%;
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%) rotate(-90deg);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
   pointer-events: none;
   /* iOS Safari: ensure stroke renders crisply */
-  -webkit-transform: translate(-50%, -50%) rotate(-90deg);
+  -webkit-transform: rotate(-90deg);
 }
 
 .punch-ring__bg {
   fill: none;
   stroke: rgba(255, 255, 255, 0.12);
-  stroke-width: 4;
+  stroke-width: 5;
+}
+
+.punch-ring__bg-depth {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 6;
 }
 
 .punch-ring__progress {
@@ -4288,6 +4302,7 @@ details[open] .dashboard-details-toggle::after {
   stroke-dasharray: 276.46;
   stroke-dashoffset: 276.46;
   transition: stroke-dashoffset 1s linear, stroke 0.4s ease;
+  filter: drop-shadow(0 0 4px rgba(var(--accent-rgb), 0.5));
 }
 
 /* Overtime state (>8h): warm orange tint */
@@ -4325,10 +4340,23 @@ details[open] .dashboard-details-toggle::after {
   padding: 0;
   min-width: 44px;
   min-height: 44px;
+  animation: punch-idle-pulse 2.5s ease-in-out infinite;
 }
 
 .punch-center-btn:active {
   transform: translate(-50%, -50%) scale(0.94);
+  animation: none;
+}
+
+/* Idle pulse animation — only when NOT active */
+@keyframes punch-idle-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.03); }
+}
+
+/* Disable pulse when shift is active */
+.punch-clock--active .punch-center-btn {
+  animation: none;
 }
 
 .punch-center-btn:focus-visible {
@@ -4361,10 +4389,7 @@ details[open] .dashboard-details-toggle::after {
 
 /* Label below the ring */
 .punch-label {
-  position: absolute;
-  bottom: 10%;
-  left: 0;
-  right: 0;
+  position: relative;
   text-align: center;
   font-size: 12px;
   font-weight: 600;
@@ -4372,6 +4397,8 @@ details[open] .dashboard-details-toggle::after {
   color: var(--color-text-secondary);
   -webkit-tap-highlight-color: transparent;
   pointer-events: none;
+  margin-top: 6px;
+  flex-shrink: 0;
 }
 
 .punch-clock--active .punch-label {
@@ -4385,6 +4412,90 @@ body.theme-light .punch-clock-tile {
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.5) inset,
     0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+/* Punch clock inline extras form (tip/provision after shift end) */
+.punch-extras-form {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: var(--spacing-md);
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--color-surface) 80%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+}
+
+.punch-extras-form__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.punch-extras-form__input {
+  width: 80%;
+  max-width: 140px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-family: var(--font-family);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-primary);
+  text-align: center;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.punch-extras-form__input:focus {
+  border-color: rgba(var(--accent-rgb), 0.5);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.15);
+}
+
+.punch-extras-form__confirm {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-family);
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--color-accent);
+  color: #fff;
+  cursor: pointer;
+  min-height: 36px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.punch-extras-form__confirm:active {
+  transform: scale(0.96);
+}
+
+.punch-extras-form__skip {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-family: var(--font-family);
+  text-decoration: underline;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body.theme-light .punch-extras-form {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+body.theme-light .punch-extras-form__input {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: var(--color-text-primary);
 }
 
 /* 16-hour warning: overlays on top of the tile so the user can act */
@@ -4656,6 +4767,7 @@ body.theme-light .tax-tile {
   align-items: center;
   gap: 8px;
   width: 100%;
+  touch-action: none;
 }
 
 .tax-tile-slider {
@@ -4663,48 +4775,52 @@ body.theme-light .tax-tile {
   appearance: none;
   flex: 1;
   width: 100%;
-  height: 4px;
+  height: 8px;
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+  border-radius: 4px;
   outline: none;
   cursor: pointer;
   margin: 0;
+  touch-action: pan-x;
+  -webkit-touch-callout: none;
 }
 
 .tax-tile-slider::-webkit-slider-runnable-track {
-  height: 4px;
-  border-radius: 2px;
+  height: 8px;
+  border-radius: 4px;
   background: rgba(255, 255, 255, 0.1);
 }
 
 .tax-tile-slider::-moz-range-track {
-  height: 4px;
-  border-radius: 2px;
+  height: 8px;
+  border-radius: 4px;
   background: rgba(255, 255, 255, 0.1);
 }
 
 .tax-tile-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 18px;
-  height: 18px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: var(--color-accent);
   border: 2px solid rgba(255, 255, 255, 0.95);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   cursor: pointer;
-  margin-top: -7px;
+  margin-top: -10px;
 }
 
 .tax-tile-slider::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: var(--color-accent);
   border: 2px solid rgba(255, 255, 255, 0.95);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   cursor: pointer;
 }
+
+/* Slider container touch handling for iOS is handled by the existing .tax-tile__slider-row rule */
 
 .tax-tile__hours {
   font-size: 11px;
@@ -4945,39 +5061,32 @@ body.theme-light .tax-tile {
    v2.0 PullRefreshHandler — Pull-to-Refresh Styles
    ============================================================ */
 
-/* Pull indicator — circular spinner at top of scrollable list */
-.pull-indicator {
+/* Pull spinner — iOS-style circular indicator at top of scrollable list */
+.pull-spinner {
   position: absolute;
-  top: -40px;
+  top: 0;
   left: 50%;
-  transform: translateX(-50%);
-  width: 32px;
-  height: 32px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-accent);
-  border-radius: 50%;
+  transform: translateX(-50%) translateY(-40px) scale(0.5);
   opacity: 0;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  color: var(--color-accent);
+  z-index: 10;
   pointer-events: none;
 }
 
-/* Pulling state — scales opacity with pull distance */
-.pull-indicator--pulling {
+.pull-spinner--pulling {
   opacity: 1;
+  /* JS sets transform dynamically based on pull distance */
 }
 
-/* Refreshing state — spinning animation */
-.pull-indicator--refreshing {
-  opacity: 1;
+.pull-spinner--refreshing .pull-spinner__svg {
   animation: pull-spin 0.8s linear infinite;
 }
 
-/* Error state — red indicator */
-.pull-indicator--error {
-  border-color: var(--color-danger);
-  border-top-color: var(--color-danger);
-  opacity: 1;
-  animation: none;
+.pull-spinner--done {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-40px) scale(0.5);
+  transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
 /* Content shift during refresh */

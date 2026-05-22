@@ -8236,7 +8236,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.0.4';
+    const APP_VERSION = '2.0.5';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -11849,18 +11849,18 @@ const JobTracker = (function () {
   })();
 
   // ─── PullRefreshHandler ──────────────────────────────────────────────────────
-  // Detects pull-down gesture on scrollable lists and triggers data reload
-  // with visual feedback. Integrates with SkeletonLoader for loading states.
+  // iOS-style pull-to-refresh with circular spinner. Detects pull-down gesture
+  // on scrollable lists and triggers data reload with visual feedback.
+  // Disabled during DashboardOrderManager edit mode.
   // Requirements: 9.4, 9.5, 9.6, 9.7, 9.8
   const PullRefreshHandler = (function () {
     var _pulling = false;
     var _startY = 0;
     var _pullDistance = 0;
     var _threshold = 80;       // px to trigger refresh
-    var _maxPull = 160;        // px for full opacity
-    var _timeout = 10000;      // 10s timeout
-    var _containers = {};      // { containerId: { onRefresh, indicator, error, listeners } }
+    var _containers = {};      // { containerId: { onRefresh, indicator, listeners } }
     var _refreshing = false;   // Whether a refresh is currently in progress
+    var _rafId = null;         // requestAnimationFrame ID for throttling
 
     /**
      * Initialize the PullRefreshHandler module.
@@ -11883,9 +11883,8 @@ const JobTracker = (function () {
         detach(containerId);
       }
 
-      // Get or create indicator and error elements
+      // Get or create indicator
       var indicator = document.getElementById('pull-refresh-indicator');
-      var errorEl = document.getElementById('pull-refresh-error');
 
       var listeners = {
         touchstart: function (e) { _onTouchStart(e, containerId); },
@@ -11900,7 +11899,6 @@ const JobTracker = (function () {
       _containers[containerId] = {
         onRefresh: onRefresh,
         indicator: indicator,
-        error: errorEl,
         listeners: listeners,
         container: container
       };
@@ -11924,11 +11922,12 @@ const JobTracker = (function () {
 
     /**
      * Handle touch start event.
-     * @param {TouchEvent} e
-     * @param {string} containerId
      */
     function _onTouchStart(e, containerId) {
       if (_refreshing) return;
+
+      // Disable during edit mode
+      if (typeof DashboardOrderManager !== 'undefined' && DashboardOrderManager.isEditMode && DashboardOrderManager.isEditMode()) return;
 
       var config = _containers[containerId];
       if (!config) return;
@@ -11941,21 +11940,19 @@ const JobTracker = (function () {
       _startY = e.touches[0].clientY;
       _pulling = true;
       _pullDistance = 0;
-
-      // Hide any previous error message
-      if (config.error) {
-        config.error.textContent = '';
-        config.error.style.display = 'none';
-      }
     }
 
     /**
-     * Handle touch move event.
-     * @param {TouchEvent} e
-     * @param {string} containerId
+     * Handle touch move event — iOS-style progressive spinner reveal.
      */
     function _onTouchMove(e, containerId) {
       if (!_pulling || _refreshing) return;
+
+      // Disable during edit mode
+      if (typeof DashboardOrderManager !== 'undefined' && DashboardOrderManager.isEditMode && DashboardOrderManager.isEditMode()) {
+        _pulling = false;
+        return;
+      }
 
       var config = _containers[containerId];
       if (!config) return;
@@ -11965,7 +11962,7 @@ const JobTracker = (function () {
       // Only continue if still at top
       if (container.scrollTop !== 0) {
         _pulling = false;
-        _resetIndicator(config);
+        _resetSpinner(config);
         return;
       }
 
@@ -11975,23 +11972,41 @@ const JobTracker = (function () {
       if (_pullDistance > 0) {
         e.preventDefault();
 
-        // Scale indicator opacity linearly from 0 to 1 over 0–160px
-        var opacity = Math.min(_pullDistance / _maxPull, 1);
+        // Update spinner position/scale/opacity proportional to pull distance
+        if (_rafId) cancelAnimationFrame(_rafId);
+        _rafId = requestAnimationFrame(function () {
+          _updateSpinner(config, _pullDistance);
+        });
+      }
+    }
 
-        if (config.indicator) {
-          config.indicator.style.opacity = opacity;
-          config.indicator.style.display = 'flex';
-          config.indicator.classList.add('pull-indicator--pulling');
-          config.indicator.classList.remove('pull-indicator--refreshing');
-          config.indicator.classList.remove('pull-indicator--error');
-        }
+    /**
+     * Update spinner visual state based on pull distance.
+     */
+    function _updateSpinner(config, distance) {
+      var indicator = config.indicator;
+      if (!indicator) return;
+
+      var progress = Math.min(distance / _threshold, 1); // 0 to 1
+      var scale = 0.5 + progress * 0.5; // 0.5 to 1.0
+      var translateY = Math.min(distance * 0.5, 50) - 40; // slides down from -40px
+      var rotation = progress * 270; // rotate proportional to pull
+
+      indicator.style.opacity = progress;
+      indicator.style.transform = 'translateX(-50%) translateY(' + translateY + 'px) scale(' + scale + ')';
+      indicator.classList.add('pull-spinner--pulling');
+      indicator.classList.remove('pull-spinner--refreshing');
+      indicator.classList.remove('pull-spinner--done');
+
+      // Rotate the SVG circle proportional to pull
+      var svg = indicator.querySelector('.pull-spinner__svg');
+      if (svg) {
+        svg.style.transform = 'rotate(' + rotation + 'deg)';
       }
     }
 
     /**
      * Handle touch end event.
-     * @param {TouchEvent} e
-     * @param {string} containerId
      */
     function _onTouchEnd(e, containerId) {
       if (!_pulling || _refreshing) return;
@@ -12002,35 +12017,32 @@ const JobTracker = (function () {
       _pulling = false;
 
       if (_pullDistance >= _threshold) {
-        // Trigger refresh
+        // Trigger refresh — spinner stays visible and spins
         _triggerRefresh(containerId, config);
       } else {
-        // Snap back - not enough pull distance
-        _resetIndicator(config);
+        // Snap back — not enough pull distance
+        _resetSpinner(config);
       }
 
       _pullDistance = 0;
     }
 
     /**
-     * Trigger the refresh process.
-     * @param {string} containerId
-     * @param {Object} config
+     * Trigger the refresh process with spinning indicator.
      */
     function _triggerRefresh(containerId, config) {
       _refreshing = true;
 
-      // Show spinning indicator
-      if (config.indicator) {
-        config.indicator.style.opacity = 1;
-        config.indicator.classList.remove('pull-indicator--pulling');
-        config.indicator.classList.add('pull-indicator--refreshing');
-        config.indicator.classList.remove('pull-indicator--error');
-      }
+      // Show spinning state
+      var indicator = config.indicator;
+      if (indicator) {
+        indicator.style.opacity = 1;
+        indicator.style.transform = 'translateX(-50%) translateY(10px) scale(1)';
+        indicator.classList.remove('pull-spinner--pulling');
+        indicator.classList.add('pull-spinner--refreshing');
 
-      // Add refreshing class to content
-      if (config.container) {
-        config.container.classList.add('pull-content--refreshing');
+        var svg = indicator.querySelector('.pull-spinner__svg');
+        if (svg) svg.style.transform = '';
       }
 
       // Emit refresh:started event
@@ -12043,41 +12055,35 @@ const JobTracker = (function () {
 
       // Set up timeout
       var timeoutId = setTimeout(function () {
-        _onRefreshFailed(containerId, config, 'Aktualisierung fehlgeschlagen: Zeitüberschreitung (10s)');
-      }, _timeout);
+        _onRefreshComplete(containerId, config);
+      }, 10000);
 
       // Call the onRefresh callback
       try {
         var result = config.onRefresh();
 
-        // Handle both promise-based and callback-based refresh
         if (result && typeof result.then === 'function') {
           result.then(function () {
             clearTimeout(timeoutId);
-            _onRefreshCompleted(containerId, config);
-          }).catch(function (err) {
+            _onRefreshComplete(containerId, config);
+          }).catch(function () {
             clearTimeout(timeoutId);
-            var message = (err && err.message) ? err.message : 'Aktualisierung fehlgeschlagen';
-            _onRefreshFailed(containerId, config, message);
+            _onRefreshComplete(containerId, config);
           });
         } else {
-          // If onRefresh doesn't return a promise, complete immediately
           clearTimeout(timeoutId);
-          _onRefreshCompleted(containerId, config);
+          _onRefreshComplete(containerId, config);
         }
       } catch (err) {
         clearTimeout(timeoutId);
-        var message = (err && err.message) ? err.message : 'Aktualisierung fehlgeschlagen';
-        _onRefreshFailed(containerId, config, message);
+        _onRefreshComplete(containerId, config);
       }
     }
 
     /**
-     * Handle successful refresh completion.
-     * @param {string} containerId
-     * @param {Object} config
+     * Handle refresh completion — fade spinner out upward.
      */
-    function _onRefreshCompleted(containerId, config) {
+    function _onRefreshComplete(containerId, config) {
       _refreshing = false;
 
       // Hide skeletons
@@ -12085,80 +12091,38 @@ const JobTracker = (function () {
         SkeletonLoader.hide(containerId);
       }
 
-      // Hide indicator with brief delay for visual feedback
-      setTimeout(function () {
-        _resetIndicator(config);
-        if (config.container) {
-          config.container.classList.remove('pull-content--refreshing');
-        }
-      }, 300);
+      var indicator = config.indicator;
+      if (indicator) {
+        indicator.classList.remove('pull-spinner--refreshing');
+        indicator.classList.add('pull-spinner--done');
+        indicator.style.opacity = 0;
+        indicator.style.transform = 'translateX(-50%) translateY(-40px) scale(0.5)';
+
+        setTimeout(function () {
+          indicator.classList.remove('pull-spinner--done');
+          indicator.classList.remove('pull-spinner--pulling');
+        }, 300);
+      }
 
       // Emit refresh:completed event
       EventBus.emit('refresh:completed');
     }
 
     /**
-     * Handle refresh failure (timeout or error).
-     * @param {string} containerId
-     * @param {Object} config
-     * @param {string} errorMessage
+     * Reset the spinner to its default hidden state.
      */
-    function _onRefreshFailed(containerId, config, errorMessage) {
-      _refreshing = false;
+    function _resetSpinner(config) {
+      var indicator = config.indicator;
+      if (!indicator) return;
 
-      // Hide skeletons - preserve existing content
-      if (typeof SkeletonLoader !== 'undefined' && SkeletonLoader.hide) {
-        SkeletonLoader.hide(containerId);
-      }
+      indicator.style.opacity = 0;
+      indicator.style.transform = 'translateX(-50%) translateY(-40px) scale(0.5)';
+      indicator.classList.remove('pull-spinner--pulling');
+      indicator.classList.remove('pull-spinner--refreshing');
+      indicator.classList.remove('pull-spinner--done');
 
-      // Hide spinning indicator
-      if (config.indicator) {
-        config.indicator.classList.remove('pull-indicator--refreshing');
-        config.indicator.classList.remove('pull-indicator--pulling');
-        config.indicator.classList.add('pull-indicator--error');
-        // Hide indicator after showing error state briefly
-        setTimeout(function () {
-          config.indicator.style.display = 'none';
-          config.indicator.style.opacity = 0;
-          config.indicator.classList.remove('pull-indicator--error');
-        }, 1000);
-      }
-
-      // Remove refreshing class from content
-      if (config.container) {
-        config.container.classList.remove('pull-content--refreshing');
-      }
-
-      // Show error message
-      if (config.error) {
-        config.error.textContent = errorMessage;
-        config.error.style.display = 'block';
-
-        // Auto-hide error after 5 seconds
-        setTimeout(function () {
-          if (config.error) {
-            config.error.style.display = 'none';
-            config.error.textContent = '';
-          }
-        }, 5000);
-      }
-
-      // Emit refresh:failed event
-      EventBus.emit('refresh:failed', { message: errorMessage });
-    }
-
-    /**
-     * Reset the pull indicator to its default hidden state.
-     * @param {Object} config
-     */
-    function _resetIndicator(config) {
-      if (config.indicator) {
-        config.indicator.style.opacity = 0;
-        config.indicator.style.display = 'none';
-        config.indicator.classList.remove('pull-indicator--pulling');
-        config.indicator.classList.remove('pull-indicator--refreshing');
-        config.indicator.classList.remove('pull-indicator--error');
-      }
+      var svg = indicator.querySelector('.pull-spinner__svg');
+      if (svg) svg.style.transform = '';
     }
 
     return {
@@ -12945,6 +12909,7 @@ const JobTracker = (function () {
 
     /**
      * End the active shift. Rounds duration up to the next 0.25h.
+     * If the job has tip/provision tracking enabled, shows inline extras form.
      */
     function endShift() {
       if (!_shiftData) return { success: false };
@@ -12974,7 +12939,16 @@ const JobTracker = (function () {
         HapticFeedbackService.tap(50);
       }
 
-      _navigateToEntryForm(dateStr, duration, jobId);
+      // Check if job has tip/provision tracking enabled
+      var job = jobId ? JobManager.getJob(jobId) : null;
+      var hasTip = job && job.hasTipTracking;
+      var hasProvision = job && job.hasProvision;
+
+      if (hasTip || hasProvision) {
+        _showExtrasForm(dateStr, duration, jobId, hasTip, hasProvision);
+      } else {
+        _navigateToEntryForm(dateStr, duration, jobId);
+      }
 
       return { success: true, duration: duration, date: dateStr };
     }
@@ -13141,6 +13115,106 @@ const JobTracker = (function () {
       if (btn) btn.setAttribute('aria-label', 'Schicht starten');
       if (warningBanner) warningBanner.style.display = 'none';
       _setRingProgress(0, false);
+    }
+
+    /**
+     * Show inline extras form (tip/provision) inside the punch clock tile.
+     * @param {string} date
+     * @param {number} hours
+     * @param {string} jobId
+     * @param {boolean} hasTip
+     * @param {boolean} hasProvision
+     */
+    function _showExtrasForm(date, hours, jobId, hasTip, hasProvision) {
+      var formEl = document.getElementById('punch-extras-form');
+      if (!formEl) {
+        // Fallback: navigate to entry form
+        _navigateToEntryForm(date, hours, jobId);
+        return;
+      }
+
+      var html = '<p class="punch-extras-form__title">Schicht: ' + hours + 'h ✓</p>';
+      if (hasTip) {
+        html += '<input type="number" class="punch-extras-form__input" id="punch-tip-input" placeholder="Trinkgeld €" step="0.01" min="0" inputmode="decimal">';
+      }
+      if (hasProvision) {
+        html += '<input type="number" class="punch-extras-form__input" id="punch-provision-input" placeholder="Provision €" step="0.01" min="0" inputmode="decimal">';
+      }
+      html += '<button type="button" class="punch-extras-form__confirm" id="punch-extras-confirm">✓ Bestätigen</button>';
+      html += '<button type="button" class="punch-extras-form__skip" id="punch-extras-skip">Überspringen</button>';
+
+      formEl.innerHTML = html;
+      formEl.style.display = '';
+
+      // Bind confirm
+      var confirmBtn = document.getElementById('punch-extras-confirm');
+      var skipBtn = document.getElementById('punch-extras-skip');
+
+      var onConfirm = function () {
+        var tipVal = 0;
+        var provVal = 0;
+        var tipInput = document.getElementById('punch-tip-input');
+        var provInput = document.getElementById('punch-provision-input');
+        if (tipInput && tipInput.value) tipVal = parseFloat(tipInput.value) || 0;
+        if (provInput && provInput.value) provVal = parseFloat(provInput.value) || 0;
+
+        // Save workday entry
+        var entryResult = TimeTrackerModule.createEntry({
+          jobId: jobId,
+          date: date,
+          hours: hours,
+          status: 'worked'
+        });
+
+        // Save extras
+        if (tipVal > 0 && hasTip) {
+          EarningsExtraModule.addEarning({
+            jobId: jobId,
+            date: date,
+            type: 'tip',
+            amount: tipVal
+          });
+        }
+        if (provVal > 0 && hasProvision) {
+          EarningsExtraModule.addEarning({
+            jobId: jobId,
+            date: date,
+            type: 'provision',
+            amount: provVal
+          });
+        }
+
+        // Hide form, reset
+        formEl.style.display = 'none';
+        formEl.innerHTML = '';
+
+        showToast('Schicht + Extras eingetragen ✓');
+      };
+
+      var onSkip = function () {
+        // Save workday entry without extras
+        TimeTrackerModule.createEntry({
+          jobId: jobId,
+          date: date,
+          hours: hours,
+          status: 'worked'
+        });
+
+        // Hide form, reset
+        formEl.style.display = 'none';
+        formEl.innerHTML = '';
+
+        showToast('Schicht eingetragen ✓');
+      };
+
+      if (confirmBtn) confirmBtn.addEventListener('click', onConfirm);
+      if (skipBtn) skipBtn.addEventListener('click', onSkip);
+
+      // Focus first input
+      setTimeout(function () {
+        var firstInput = formEl.querySelector('input');
+        if (firstInput) firstInput.focus();
+      }, 100);
     }
 
     /**
@@ -14109,6 +14183,8 @@ const JobTracker = (function () {
     var _displacedTransforms = {};// widget-id → applied translate string (for cleanup)
     var _previewTargetIdx = -1;   // index in _siblings of the widget the dragged item would swap with
     var _previewInsertBefore = null; // 'true'/'false' boolean indicating insertion side relative to target
+    var _cachedClone = null;      // off-screen grid clone for FLIP predictions (cached at drag start)
+    var _moveRafId = null;        // rAF ID for debouncing touchmove hit-test
 
     /**
      * Initialize: apply saved order, wire edit-mode toggle, attach drag listeners.
@@ -14153,10 +14229,29 @@ const JobTracker = (function () {
         var label = btn.querySelector('.dashboard-edit-label');
         if (label) label.textContent = _editMode ? 'Fertig' : 'Anordnen';
       }
+
+      var grid = document.querySelector('.dashboard-grid');
+
       if (_editMode) {
         document.body.classList.add('dashboard-edit-mode');
+        // Performance: GPU hints during edit mode
+        if (grid) {
+          grid.style.contain = 'layout style';
+        }
+        var widgets = _getReorderableWidgets();
+        for (var i = 0; i < widgets.length; i++) {
+          widgets[i].style.willChange = 'transform';
+        }
       } else {
         document.body.classList.remove('dashboard-edit-mode');
+        // Remove GPU hints
+        if (grid) {
+          grid.style.contain = '';
+        }
+        var widgetsOff = _getReorderableWidgets();
+        for (var j = 0; j < widgetsOff.length; j++) {
+          widgetsOff[j].style.willChange = '';
+        }
         _cancelDrag();
       }
       _wireWidgets();
@@ -14347,6 +14442,9 @@ const JobTracker = (function () {
         _siblings.push(widgets[i]);
         _siblingStartRects.push(widgets[i].getBoundingClientRect());
       }
+
+      // Cache the off-screen clone for FLIP predictions (Issue 2 optimization)
+      _cachedClone = _buildPredictionClone();
     }
 
     /**
@@ -14365,17 +14463,18 @@ const JobTracker = (function () {
         _dragEl.style.transition = 'none';
       }
 
-      // Compose translate + elevated state on the dragged widget. We never
-      // detach it from the DOM; iOS shadow + scale + rotation come from CSS
-      // .widget--dragging plus our inline transform.
-      _dragEl.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(1.05) rotate(0.6deg)';
+      // GPU-accelerated transform with translate3d
+      _dragEl.style.transform = 'translate3d(' + dx + 'px, ' + dy + 'px, 0) scale(1.05) rotate(0.6deg)';
 
-      // Hit-test: where in the grid is the pointer? We use the dragged
-      // widget's CURRENT visual center to find which sibling slot it's over.
+      // Debounce hit-test to max once per frame via requestAnimationFrame
       var draggedCenterX = _startRect.left + _startRect.width / 2 + dx;
       var draggedCenterY = _startRect.top + _startRect.height / 2 + dy;
 
-      _updatePreview(draggedCenterX, draggedCenterY);
+      if (_moveRafId) cancelAnimationFrame(_moveRafId);
+      _moveRafId = requestAnimationFrame(function () {
+        _updatePreview(draggedCenterX, draggedCenterY);
+        _moveRafId = null;
+      });
 
       return true;
     }
@@ -14503,33 +14602,70 @@ const JobTracker = (function () {
       // If for any reason dragId wasn't placed, append it
       if (newOrder.indexOf(dragId) < 0) newOrder.push(dragId);
 
-      // Use the rendered grid layout to compute predicted rects: build a
-      // detached clone of the grid container, populate it with cloned
-      // widgets in the predicted order, then read offsetTop/offsetLeft of
-      // each placeholder to derive the layout. Cheaper alternative: clone
-      // off-screen using the actual grid.
+      // Use cached clone for FLIP prediction (optimized: clone built once at drag start)
+      var predictedRects = _getPredictedRects(newOrder, dragId, siblingIds);
+      if (!predictedRects) return;
+
+      // Apply translate3d transforms to each displaced sibling
+      for (var m = 0; m < _siblings.length; m++) {
+        var sib = _siblings[m];
+        var sid = siblingIds[m];
+        var startR = _siblingStartRects[m];
+        var pr = predictedRects[sid];
+        if (!pr) continue;
+        var dx = pr.left - startR.left;
+        var dy = pr.top - startR.top;
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+          continue;
+        }
+        sib.classList.add('widget--displaced');
+        var transformStr = 'translate3d(' + dx + 'px, ' + dy + 'px, 0)';
+        sib.style.transform = transformStr;
+        _displacedTransforms[sid] = transformStr;
+      }
+    }
+
+    /**
+     * Build an off-screen grid clone once at drag start for FLIP predictions.
+     */
+    function _buildPredictionClone() {
       var grid = _dragEl.parentNode;
-      if (!grid) return;
+      if (!grid) return null;
 
       var clone = grid.cloneNode(false);
-      // Match dimensions: use actual grid width
       var gridRect = grid.getBoundingClientRect();
       clone.style.position = 'absolute';
       clone.style.visibility = 'hidden';
       clone.style.left = '-99999px';
       clone.style.top = '0';
       clone.style.width = gridRect.width + 'px';
-      // Copy computed grid-template-columns + gap to ensure same layout
       var gridStyle = window.getComputedStyle(grid);
       clone.style.gridTemplateColumns = gridStyle.gridTemplateColumns;
       clone.style.gap = gridStyle.gap;
       clone.style.display = 'grid';
+      clone.style.contain = 'layout style';
 
-      // Map id → predicted rect via a lightweight placeholder element per widget
-      var placeholders = {}; // id → placeholder element
-      var allIds = newOrder.slice();
-      for (var k = 0; k < allIds.length; k++) {
-        var id = allIds[k];
+      document.body.appendChild(clone);
+      return clone;
+    }
+
+    /**
+     * Get predicted rects using the cached clone.
+     */
+    function _getPredictedRects(newOrder, dragId, siblingIds) {
+      var clone = _cachedClone;
+      if (!clone) return null;
+
+      var grid = _dragEl.parentNode;
+      if (!grid) return null;
+      var gridRect = grid.getBoundingClientRect();
+
+      // Clear previous placeholders
+      clone.innerHTML = '';
+
+      var placeholders = {};
+      for (var k = 0; k < newOrder.length; k++) {
+        var id = newOrder[k];
         var origEl = (id === dragId) ? _dragEl : _siblings[siblingIds.indexOf(id)];
         if (!origEl) continue;
         var ph = document.createElement('div');
@@ -14546,15 +14682,11 @@ const JobTracker = (function () {
         placeholders[id] = ph;
       }
 
-      document.body.appendChild(clone);
-
-      // Read predicted positions (relative to the document)
       var cloneRect = clone.getBoundingClientRect();
       var predictedRects = {};
       for (var pid in placeholders) {
         if (Object.prototype.hasOwnProperty.call(placeholders, pid)) {
           var phRect = placeholders[pid].getBoundingClientRect();
-          // Translate the clone's offset so we compare to the real grid coordinates
           predictedRects[pid] = {
             left: gridRect.left + (phRect.left - cloneRect.left),
             top: gridRect.top + (phRect.top - cloneRect.top),
@@ -14564,28 +14696,7 @@ const JobTracker = (function () {
         }
       }
 
-      document.body.removeChild(clone);
-
-      // Apply translate transforms to each displaced sibling so it appears
-      // at its predicted slot. Skip the dragged widget — it follows the
-      // finger via its own transform.
-      for (var m = 0; m < _siblings.length; m++) {
-        var sib = _siblings[m];
-        var sid = siblingIds[m];
-        var startR = _siblingStartRects[m];
-        var pr = predictedRects[sid];
-        if (!pr) continue;
-        var dx = pr.left - startR.left;
-        var dy = pr.top - startR.top;
-        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
-          // No movement
-          continue;
-        }
-        sib.classList.add('widget--displaced');
-        var transformStr = 'translate(' + dx + 'px, ' + dy + 'px)';
-        sib.style.transform = transformStr;
-        _displacedTransforms[sid] = transformStr;
-      }
+      return predictedRects;
     }
 
     /**
@@ -14600,6 +14711,15 @@ const JobTracker = (function () {
       var didDrag = _dragging;
       var commitTargetIdx = _previewTargetIdx;
       var commitInsertBefore = _previewInsertBefore;
+
+      // Cancel any pending rAF
+      if (_moveRafId) { cancelAnimationFrame(_moveRafId); _moveRafId = null; }
+
+      // Remove cached clone
+      if (_cachedClone && _cachedClone.parentNode) {
+        _cachedClone.parentNode.removeChild(_cachedClone);
+      }
+      _cachedClone = null;
 
       if (didDrag && commitTargetIdx >= 0) {
         var grid = el.parentNode;
@@ -14658,6 +14778,16 @@ const JobTracker = (function () {
     function _cancelDrag() {
       if (!_dragEl) return;
       var el = _dragEl;
+
+      // Cancel any pending rAF
+      if (_moveRafId) { cancelAnimationFrame(_moveRafId); _moveRafId = null; }
+
+      // Remove cached clone
+      if (_cachedClone && _cachedClone.parentNode) {
+        _cachedClone.parentNode.removeChild(_cachedClone);
+      }
+      _cachedClone = null;
+
       for (var i = 0; i < _siblings.length; i++) {
         var s = _siblings[i];
         s.classList.remove('widget--displaced');
@@ -15544,8 +15674,21 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.0.4';
+  const APP_VERSION = '2.0.5';
   const APP_CHANGELOG = [
+    {
+      version: '2.0.5',
+      date: '2026-05-26',
+      changes: [
+        'v2.0.5 — Punch UX, smoother reorder, iOS pull-refresh, tax accuracy',
+        '⏱️ Punch-Clock: Label unter dem Ring (kein Überlappen mehr), dezenter Glow + Tiefeneffekt am Ring, Idle-Pulse-Animation am Button',
+        '⏱️ Punch-Clock: Inline Trinkgeld/Provision-Eingabe nach Schichtende (wenn für den Job aktiviert)',
+        '👆 Dashboard-Reorder: GPU-beschleunigt (translate3d), Clone nur einmal bei Drag-Start, rAF-Debounce für flüssigere Vorschau',
+        '🔄 Pull-to-Refresh: iOS-Style Spinner statt Text, progressives Erscheinen beim Ziehen, deaktiviert im Edit-Modus',
+        '🎚️ Steuer-Simulator: Größerer Slider-Thumb (28px) für bessere iOS-Touch-Bedienung',
+        '✅ Steuer-Berechnung verifiziert: Netto-Delta korrekt mit progressiver Besteuerung, glatte Kurve ohne Sprünge'
+      ]
+    },
     {
       version: '2.0.4',
       date: '2026-05-25',
