@@ -89,21 +89,94 @@ const JobTracker = (function () {
   // ─── Global Utilities (Req 2.7, 13.6) ────────────────────────────────────────
 
   /**
+   * Update the --app-header-height CSS variable to match the actual rendered
+   * height of the fixed app header. Called on init, resize, and orientation
+   * change so .view-section padding-top stays in sync.
+   */
+  function _setHeaderHeightVar() {
+    var header = document.querySelector('.app-header');
+    if (!header) return;
+    var h = header.offsetHeight;
+    if (h > 0) {
+      document.documentElement.style.setProperty('--app-header-height', h + 'px');
+    }
+  }
+
+  /**
    * Shows a toast notification with the given message.
    * Used globally for save failures, import errors, and other transient messages.
+   *
+   * Modern stacked toasts: each call creates a new toast element inside
+   * #toast-container. Multiple toasts stack vertically with a small gap.
+   * Individual toasts auto-dismiss after `duration` ms with an exit animation.
+   *
    * @param {string} message - The message to display
-   * @param {number} [duration=4000] - Duration in ms before auto-hide
+   * @param {number} [duration=2500] - Duration in ms before auto-hide
+   * @param {string} [type] - 'success' | 'error' | 'info' (auto-detected if omitted)
    */
-  function showToast(message, duration) {
-    var toast = document.getElementById('toast');
-    if (!toast) return;
-    duration = duration || 4000;
-    toast.textContent = message;
-    toast.classList.add('visible');
-    clearTimeout(toast._hideTimer);
-    toast._hideTimer = setTimeout(function () {
-      toast.classList.remove('visible');
+  function showToast(message, duration, type) {
+    if (typeof message !== 'string') message = String(message == null ? '' : message);
+    if (typeof duration !== 'number' || !isFinite(duration) || duration <= 0) {
+      duration = 2500;
+    }
+
+    // Auto-detect type from common emoji prefixes / keywords if not provided
+    if (!type) {
+      if (/^✓|✅|gespeichert|erfolgreich|eingetragen|erfolgr/i.test(message)) {
+        type = 'success';
+      } else if (/^✕|❌|⚠️|fehlgeschlagen|fehler|verweigert|blockiert|nicht unterstützt/i.test(message)) {
+        type = 'error';
+      } else {
+        type = 'info';
+      }
+    }
+
+    // Map type to icon
+    var icon = '';
+    switch (type) {
+      case 'success': icon = '✓'; break;
+      case 'error':   icon = '✕'; break;
+      default:        icon = 'ℹ'; break;
+    }
+
+    // Get or create the container
+    var container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      container.className = 'toast-container';
+      container.setAttribute('role', 'status');
+      container.setAttribute('aria-live', 'polite');
+      document.body.appendChild(container);
+    }
+
+    // Build the toast element
+    var toast = document.createElement('div');
+    toast.className = 'toast toast--' + type;
+    toast.setAttribute('role', 'status');
+
+    var iconEl = document.createElement('span');
+    iconEl.className = 'toast__icon';
+    iconEl.setAttribute('aria-hidden', 'true');
+    iconEl.textContent = icon;
+
+    var msgEl = document.createElement('span');
+    msgEl.className = 'toast__message';
+    msgEl.textContent = message;
+
+    toast.appendChild(iconEl);
+    toast.appendChild(msgEl);
+    container.appendChild(toast);
+
+    // Auto-dismiss with exit animation
+    var dismissTimer = setTimeout(function () {
+      toast.classList.add('toast--exit');
+      var removeTimer = setTimeout(function () {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 280);
+      toast._removeTimer = removeTimer;
     }, duration);
+    toast._dismissTimer = dismissTimer;
   }
 
   /**
@@ -8244,7 +8317,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.1.0';
+    const APP_VERSION = '2.1.1';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -11868,12 +11941,27 @@ const JobTracker = (function () {
   // Requirements: 9.4, 9.5, 9.6, 9.7, 9.8
   const PullRefreshHandler = (function () {
     var _pulling = false;
+    var _atTop = false;        // Whether the touch started while scroll was at top
     var _startY = 0;
     var _pullDistance = 0;
     var _threshold = 80;       // px to trigger refresh
     var _containers = {};      // { containerId: { onRefresh, indicator, listeners } }
     var _refreshing = false;   // Whether a refresh is currently in progress
     var _rafId = null;         // requestAnimationFrame ID for throttling
+
+    /**
+     * Returns true if the page (or its scroll container) is at the very top.
+     * Checks both the supplied container and the document/body scroll
+     * (because some views rely on body scroll rather than container scroll).
+     */
+    function _isAtTop(container) {
+      if (container && container.scrollTop > 0) return false;
+      var docScroll = window.pageYOffset
+        || document.documentElement.scrollTop
+        || document.body.scrollTop
+        || 0;
+      return docScroll <= 0;
+    }
 
     /**
      * Initialize the PullRefreshHandler module.
@@ -11935,6 +12023,11 @@ const JobTracker = (function () {
 
     /**
      * Handle touch start event.
+     *
+     * Pull-to-refresh ONLY activates when the user is at the very top of the
+     * scroll context AND continues pulling DOWN. If the touch starts while
+     * the user is mid-scroll (scrollTop > 0 OR window scroll > 0), we
+     * completely ignore this touch — native scroll handles it.
      */
     function _onTouchStart(e, containerId) {
       if (_refreshing) return;
@@ -11947,22 +12040,34 @@ const JobTracker = (function () {
 
       var container = config.container;
 
-      // Only activate when scrolled to top
-      if (container.scrollTop !== 0) return;
+      // Only activate when scrolled to top of BOTH the container AND the page.
+      if (!_isAtTop(container)) {
+        _atTop = false;
+        _pulling = false;
+        return;
+      }
 
+      _atTop = true;
       _startY = e.touches[0].clientY;
-      _pulling = true;
+      _pulling = false; // becomes true only after a downward delta in touchmove
       _pullDistance = 0;
     }
 
     /**
      * Handle touch move event — iOS-style progressive spinner reveal.
+     *
+     * If the touch started mid-scroll, do nothing (let the native scroll
+     * handle it). If the touch started at the top, only activate the pull
+     * indicator once the user pulls DOWN. Upward movement (deltaY <= 0) is
+     * a no-op so users can still scroll up the page normally.
      */
     function _onTouchMove(e, containerId) {
-      if (!_pulling || _refreshing) return;
+      if (_refreshing) return;
+      if (!_atTop) return;
 
       // Disable during edit mode
       if (typeof DashboardOrderManager !== 'undefined' && DashboardOrderManager.isEditMode && DashboardOrderManager.isEditMode()) {
+        _atTop = false;
         _pulling = false;
         return;
       }
@@ -11972,25 +12077,38 @@ const JobTracker = (function () {
 
       var container = config.container;
 
-      // Only continue if still at top
-      if (container.scrollTop !== 0) {
+      // If the user managed to scroll while the touch is active (e.g. an
+      // ancestor container scrolled), bail out so we don't fight native scroll.
+      if (!_isAtTop(container)) {
+        _atTop = false;
         _pulling = false;
         _resetSpinner(config);
         return;
       }
 
       var currentY = e.touches[0].clientY;
-      _pullDistance = Math.max(0, currentY - _startY);
+      var deltaY = currentY - _startY;
 
-      if (_pullDistance > 0) {
-        e.preventDefault();
-
-        // Update spinner position/scale/opacity proportional to pull distance
-        if (_rafId) cancelAnimationFrame(_rafId);
-        _rafId = requestAnimationFrame(function () {
-          _updateSpinner(config, _pullDistance);
-        });
+      // Upward movement: not a pull. Let native scroll handle it.
+      if (deltaY <= 0) {
+        // If we had previously activated, reset.
+        if (_pulling) {
+          _pulling = false;
+          _resetSpinner(config);
+        }
+        return;
       }
+
+      // Downward pull from the top — this is our gesture.
+      _pulling = true;
+      _pullDistance = deltaY;
+      e.preventDefault();
+
+      // Update spinner position/scale/opacity proportional to pull distance
+      if (_rafId) cancelAnimationFrame(_rafId);
+      _rafId = requestAnimationFrame(function () {
+        _updateSpinner(config, _pullDistance);
+      });
     }
 
     /**
@@ -12022,12 +12140,16 @@ const JobTracker = (function () {
      * Handle touch end event.
      */
     function _onTouchEnd(e, containerId) {
-      if (!_pulling || _refreshing) return;
+      if (_refreshing) return;
+
+      var wasPulling = _pulling;
+      _pulling = false;
+      _atTop = false;
+
+      if (!wasPulling) return;
 
       var config = _containers[containerId];
       if (!config) return;
-
-      _pulling = false;
 
       if (_pullDistance >= _threshold) {
         // Trigger refresh — spinner stays visible and spins
@@ -15741,8 +15863,20 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.1.0';
+  const APP_VERSION = '2.1.1';
   const APP_CHANGELOG = [
+    {
+      version: '2.1.1',
+      date: '2026-05-30',
+      changes: [
+        'v2.1.1 — Header, Pull-Refresh, Toasts, Punch & History Polish',
+        '🧭 Header: Logo zentriert, Header bleibt beim Scrollen IMMER sichtbar (fixed statt sticky)',
+        '👆 Pull-to-Refresh: Aktiviert nur noch beim Pullen NACH UNTEN VOM TOP — Scrollen nach oben funktioniert wieder normal',
+        '🎯 Toasts: Neues iOS-Design mit Icon, Glas-Hintergrund, dezentem Schatten — mehrere Toasts stapeln sich sauber',
+        '⏱️ Punch-Clock: Ring + Label sind jetzt sauber zentriert — keine fette Lücke mehr im Idle-Zustand',
+        '📋 Letzte Einträge: Maximal 5 Einträge sichtbar, der Rest scrollt innerhalb der Liste'
+      ]
+    },
     {
       version: '2.1.0',
       date: '2026-05-29',
@@ -16077,6 +16211,15 @@ const JobTracker = (function () {
 
     NavigationController.init();
     ThemeManager.init();
+
+    // ── Header height CSS variable (kept in sync with the fixed header) ──
+    _setHeaderHeightVar();
+    window.addEventListener('resize', _setHeaderHeightVar);
+    window.addEventListener('orientationchange', function () {
+      // Defer one tick so the layout settles
+      setTimeout(_setHeaderHeightVar, 50);
+      setTimeout(_setHeaderHeightVar, 250);
+    });
 
     // ── Phase 2.5: v2.0 Utility Modules ──
     HapticFeedbackService.init();

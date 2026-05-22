@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=54">
+  <link rel="stylesheet" href="style.css?v=55">
   <title>JobTracker</title>
 </head>
 <body>
@@ -16,11 +16,9 @@
   <!-- Header Bar -->
   <header class="app-header">
     <div class="app-header__top">
+      <button type="button" id="header-rules-info-btn" class="app-header__icon-btn" aria-label="Arbeitsrecht-Info">ℹ️</button>
       <span class="app-header__logo">JobTracker</span>
-      <div class="app-header__actions">
-        <button type="button" id="header-theme-toggle" class="app-header__icon-btn" aria-label="Theme wechseln">🌙</button>
-        <button type="button" id="header-rules-info-btn" class="app-header__icon-btn" aria-label="Arbeitsrecht-Info">ℹ️</button>
-      </div>
+      <button type="button" id="header-theme-toggle" class="app-header__icon-btn" aria-label="Theme wechseln">🌙</button>
     </div>
     <nav class="app-header__tabs" aria-label="Hauptnavigation">
       <button class="header-tab active" data-view="view-daily" aria-current="page" type="button">📊 Übersicht</button>
@@ -34,8 +32,10 @@
     <span id="error-banner-message">Speicher nicht verfügbar. Änderungen sind blockiert.</span>
   </div>
 
-  <!-- Toast notification -->
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <!-- Toast notification (legacy element, kept for backward compatibility) -->
+  <div id="toast" class="toast-legacy" role="status" aria-live="polite" style="display:none;"></div>
+  <!-- Toast container (modern stacked toasts) -->
+  <div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
 
   <!-- Rule Warning Container (fixed-position for live rule-check toasts) -->
   <div id="rule-warning-container" class="rule-warning-container" aria-live="assertive"></div>
