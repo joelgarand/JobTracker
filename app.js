@@ -8478,7 +8478,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '3.1.2';
+    const APP_VERSION = '3.1.3';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -11645,6 +11645,16 @@ const JobTracker = (function () {
         }
       }
 
+      // V3.1.3: Sync compact bar value
+      var compactValEl = document.getElementById('compact-balance-val');
+      var compactLabelEl = document.getElementById('compact-balance-label');
+      if (compactValEl) {
+        compactValEl.textContent = _showHeaderBrutto ? _formatCurrency(aggregated.brutto) : _formatCurrency(aggregated.nettoCashflow);
+      }
+      if (compactLabelEl) {
+        compactLabelEl.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
+      }
+
       if (tipsEl) {
         var jobs = AppState.getState().jobs;
         var hasTipTracking = false;
@@ -11967,6 +11977,15 @@ const JobTracker = (function () {
         if (nettoEl) nettoEl.textContent = _formatCurrency(_showHeaderBrutto ? aggregated.brutto : aggregated.nettoCashflow);
         var balanceLabelEl = document.getElementById('dashboard-header-balance-label');
         if (balanceLabelEl) balanceLabelEl.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
+        // V3.1.3: Sync compact bar value
+        var compactValEl = document.getElementById('compact-balance-val');
+        var compactLabelEl = document.getElementById('compact-balance-label');
+        if (compactValEl) {
+          compactValEl.textContent = nettoEl.textContent;
+        }
+        if (compactLabelEl) {
+          compactLabelEl.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
+        }
         return;
       }
 
@@ -12030,6 +12049,15 @@ const JobTracker = (function () {
         if (nettoEl) nettoEl.textContent = _formatCurrency(_showHeaderBrutto ? aggregated.brutto : aggregated.nettoCashflow);
         var balanceLabelElZero = document.getElementById('dashboard-header-balance-label');
         if (balanceLabelElZero) balanceLabelElZero.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
+        // V3.1.3: Sync compact bar value
+        var compactValElZero = document.getElementById('compact-balance-val');
+        var compactLabelElZero = document.getElementById('compact-balance-label');
+        if (compactValElZero) {
+          compactValElZero.textContent = nettoEl.textContent;
+        }
+        if (compactLabelElZero) {
+          compactLabelElZero.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
+        }
         
         _renderSimulatorExpandedState();
         return;
@@ -12069,6 +12097,15 @@ const JobTracker = (function () {
       if (nettoEl) nettoEl.textContent = _formatCurrency(_showHeaderBrutto ? simulatedBrutto : simulatedNettoCashflow);
       var balanceLabelElSim = document.getElementById('dashboard-header-balance-label');
       if (balanceLabelElSim) balanceLabelElSim.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
+      // V3.1.3: Sync compact bar value
+      var compactValElSim = document.getElementById('compact-balance-val');
+      var compactLabelElSim = document.getElementById('compact-balance-label');
+      if (compactValElSim) {
+        compactValElSim.textContent = nettoEl.textContent;
+      }
+      if (compactLabelElSim) {
+        compactLabelElSim.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
+      }
 
       // Calculate Netto delta
       var deltaNetto = simulatedNettoCashflow - aggregated.nettoCashflow;
@@ -12339,6 +12376,18 @@ const JobTracker = (function () {
       if (balanceCard && !balanceCard._balanceBound) {
         balanceCard._balanceBound = true;
         balanceCard.addEventListener('click', function () {
+          _showHeaderBrutto = !_showHeaderBrutto;
+          _update();
+          _triggerMicroHaptic();
+        });
+      }
+
+      // V3.1.3: Compact bar balance button — same toggle as the big card
+      var compactBalanceBtn = document.getElementById('compact-balance-btn');
+      if (compactBalanceBtn && !compactBalanceBtn._balanceBound) {
+        compactBalanceBtn._balanceBound = true;
+        compactBalanceBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
           _showHeaderBrutto = !_showHeaderBrutto;
           _update();
           _triggerMicroHaptic();
@@ -17595,8 +17644,18 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '3.1.2';
+  const APP_VERSION = '3.1.3';
   const APP_CHANGELOG = [
+    {
+      version: '3.1.3',
+      date: '2026-05-24',
+      changes: [
+        'v3.1.3 — Quick-Info-Header zeigt Cashflow auch beim Scrollen',
+        '💰 Beim Scrollen schrumpft der Gradient-Header zu einer kompakten Leiste, die den aktuellen Netto-/Brutto-Cashflow weiter anzeigt',
+        '👆 Tippe in der kompakten Leiste auf den Betrag, um zwischen Netto und Brutto zu wechseln (synchron mit dem großen Header)',
+        '🎨 Bessere Lesbarkeit der runden Buttons auf dem Gradient'
+      ]
+    },
     {
       version: '3.1.2',
       date: '2026-05-24',
