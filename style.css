@@ -3640,6 +3640,40 @@ input[type="number"]::-webkit-outer-spin-button {
   margin-bottom: var(--spacing-md);
 }
 
+.entry-recent-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.entry-recent-header .entry-section-title {
+  margin: 0;
+}
+
+.entry-history-filter {
+  padding: 6px 28px 6px 10px;
+  font-size: 13px;
+  font-family: var(--font-family);
+  background: rgba(255,255,255,0.06);
+  border: 0.5px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-primary);
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a0a0b0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  cursor: pointer;
+  flex-shrink: 0;
+  max-width: 50%;
+}
+
+body.theme-light .entry-history-filter {
+  background-color: rgba(0,0,0,0.04);
+}
+
 .entry-recent-list {
   display: flex;
   flex-direction: column;

@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=62">
+  <link rel="stylesheet" href="style.css?v=63">
   <title>JobTracker</title>
 </head>
 <body>
@@ -556,7 +556,7 @@
 
       <!-- Day-by-day list -->
       <div class="glass-surface layer-content monthly-card">
-        <h2 class="monthly-section-title">Tag für Tag</h2>
+        <h2 class="monthly-section-title" id="monthly-day-list-title">Tag für Tag</h2>
         <div id="monthly-day-list" class="monthly-day-list">
           <p class="monthly-empty-state">Keine Einträge für diesen Monat.</p>
         </div>
@@ -727,7 +727,15 @@
 
       <!-- Recent Entries -->
       <div class="glass-surface layer-content entry-recent-card">
-        <h2 class="entry-section-title">Letzte Einträge</h2>
+        <div class="entry-recent-header">
+          <h2 class="entry-section-title">Letzte Einträge</h2>
+          <select id="entry-history-filter" class="entry-history-filter" aria-label="Zeitraum filtern">
+            <option value="all">Alle</option>
+            <option value="current_month" selected>Aktueller Monat</option>
+            <option value="last_month">Letzter Monat</option>
+            <!-- Other months are populated dynamically -->
+          </select>
+        </div>
         <div id="entry-recent-list" class="entry-recent-list">
           <p class="entry-empty-state">Noch keine Einträge vorhanden.</p>
         </div>

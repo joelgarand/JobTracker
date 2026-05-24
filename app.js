@@ -8452,7 +8452,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.3.0';
+    const APP_VERSION = '2.4.0';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -9464,27 +9464,69 @@ const JobTracker = (function () {
     }
 
     /**
-     * Renders the day-by-day chronological list.
+     * Renders the day-by-day chronological list. Entries are gathered per-job
+     * using each job's billing period (so an entry on May 25 with billingDay=20
+     * shows up in June, the next billing period). Entries belonging to deleted
+     * jobs fall back to calendar-month filtering so they aren't lost.
      */
     function _renderDayList() {
       var container = document.getElementById('monthly-day-list');
       if (!container) return;
 
-      var entries = TimeTrackerModule.getEntriesForMonth(_selectedYear, _selectedMonth);
+      // Gather entries from ALL jobs, each according to its billing period.
+      var jobs = AppState.getState().jobs || [];
+      var allEntries = [];
+      var collectedIds = {};
+      for (var j = 0; j < jobs.length; j++) {
+        var jobEntries = TimeTrackerModule.getEntriesForMonth(_selectedYear, _selectedMonth, jobs[j].id);
+        for (var e = 0; e < jobEntries.length; e++) {
+          if (!collectedIds[jobEntries[e].id]) {
+            allEntries.push(jobEntries[e]);
+            collectedIds[jobEntries[e].id] = true;
+          }
+        }
+      }
 
-      if (!entries || entries.length === 0) {
-        container.innerHTML = '<p class="monthly-empty-state">Keine Einträge für diesen Monat.</p>';
+      // Include orphaned entries (job no longer exists) using calendar-month filtering.
+      var workdays = AppState.getState().workdays || [];
+      var prefix = _selectedYear + '-' + String(_selectedMonth).padStart(2, '0');
+      for (var w = 0; w < workdays.length; w++) {
+        if (collectedIds[workdays[w].id]) continue;
+        if (!workdays[w].date || workdays[w].date.indexOf(prefix) !== 0) continue;
+        var jobExists = false;
+        for (var jj = 0; jj < jobs.length; jj++) {
+          if (jobs[jj].id === workdays[w].jobId) { jobExists = true; break; }
+        }
+        if (!jobExists) {
+          allEntries.push(workdays[w]);
+          collectedIds[workdays[w].id] = true;
+        }
+      }
+
+      // Update the section header to indicate billing-period awareness when at
+      // least one job has a custom billing day configured.
+      var titleEl = document.getElementById('monthly-day-list-title');
+      if (titleEl) {
+        var hasBillingDay = false;
+        for (var bj = 0; bj < jobs.length; bj++) {
+          if (jobs[bj].billingDay && jobs[bj].billingDay > 0) { hasBillingDay = true; break; }
+        }
+        titleEl.textContent = hasBillingDay ? 'Tag für Tag (Abrechnungszeitraum)' : 'Tag für Tag';
+      }
+
+      if (!allEntries || allEntries.length === 0) {
+        container.innerHTML = '<p class="monthly-empty-state">Keine Einträge für diesen Abrechnungszeitraum.</p>';
         return;
       }
 
       // Sort entries by date descending (most recent first)
-      entries.sort(function (a, b) {
+      allEntries.sort(function (a, b) {
         return b.date.localeCompare(a.date);
       });
 
       var html = '<div class="monthly-day-entries">';
-      for (var i = 0; i < entries.length; i++) {
-        var entry = entries[i];
+      for (var i = 0; i < allEntries.length; i++) {
+        var entry = allEntries[i];
         var job = _findJob(entry.jobId);
         var jobName = job ? job.employerName : 'Unbekannt';
         // German status labels per requirement 10.5
@@ -10326,6 +10368,7 @@ const JobTracker = (function () {
     let _initialized = false;
     let _editingEntryId = null; // null = create new entry, otherwise editing existing entry
     let _recentListClickBound = false; // ensure tap-to-edit delegation is bound only once
+    var _historyFilter = 'current_month'; // 'all', 'current_month', 'last_month', 'YYYY-MM'
 
     /**
      * Formats a date string (YYYY-MM-DD) to German format (DD.MM.YYYY).
@@ -10749,7 +10792,60 @@ const JobTracker = (function () {
     }
 
     /**
-     * Renders the recent entries list (last 10 entries across all jobs).
+     * Populates the history filter dropdown with the available month options
+     * (Alle / Aktueller Monat / Letzter Monat plus the last 12 months that
+     * actually contain entries). Preserves the current selection where possible.
+     */
+    function _populateHistoryFilter() {
+      var filter = document.getElementById('entry-history-filter');
+      if (!filter) return;
+
+      // Preserve current selection
+      var currentValue = filter.value || _historyFilter || 'current_month';
+
+      // Get all unique YYYY-MM from existing workdays
+      var workdays = AppState.getState().workdays || [];
+      var months = {};
+      for (var i = 0; i < workdays.length; i++) {
+        if (workdays[i].date && workdays[i].date.length >= 7) {
+          months[workdays[i].date.substring(0, 7)] = true;
+        }
+      }
+      var sortedMonths = Object.keys(months).sort().reverse();
+
+      var monthNames = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+      var now = new Date();
+      var currentYM = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+      var lastDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      var lastYM = lastDate.getFullYear() + '-' + String(lastDate.getMonth() + 1).padStart(2, '0');
+
+      var html = '<option value="all">Alle</option>';
+      html += '<option value="current_month">Aktueller Monat</option>';
+      html += '<option value="last_month">Letzter Monat</option>';
+
+      for (var m = 0; m < sortedMonths.length; m++) {
+        var ym = sortedMonths[m];
+        if (ym === currentYM || ym === lastYM) continue; // already covered
+        var year = parseInt(ym.substring(0, 4), 10);
+        var month = parseInt(ym.substring(5, 7), 10);
+        html += '<option value="' + ym + '">' + monthNames[month - 1] + ' ' + year + '</option>';
+      }
+
+      filter.innerHTML = html;
+
+      // Restore selection
+      if (filter.querySelector('option[value="' + currentValue + '"]')) {
+        filter.value = currentValue;
+      } else {
+        filter.value = 'current_month';
+      }
+      _historyFilter = filter.value;
+    }
+
+    /**
+     * Renders the recent entries list, filtered by `_historyFilter`. Shows ALL
+     * entries matching the filter (no slice limit) — the list itself is
+     * scrollable via CSS max-height so only ~5 rows are visible at once.
      */
     function _renderRecentEntries() {
       var listEl = document.getElementById('entry-recent-list');
@@ -10761,15 +10857,32 @@ const JobTracker = (function () {
         return;
       }
 
+      var now = new Date();
+      var currentYM = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+      var lastDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      var lastYM = lastDate.getFullYear() + '-' + String(lastDate.getMonth() + 1).padStart(2, '0');
+
+      var filtered = workdays.filter(function (w) {
+        if (!w.date) return false;
+        var ym = w.date.substring(0, 7);
+        if (_historyFilter === 'all') return true;
+        if (_historyFilter === 'current_month') return ym === currentYM;
+        if (_historyFilter === 'last_month') return ym === lastYM;
+        return ym === _historyFilter; // specific YYYY-MM
+      });
+
+      if (filtered.length === 0) {
+        listEl.innerHTML = '<p class="entry-empty-state">Keine Einträge in diesem Zeitraum.</p>';
+        return;
+      }
+
       // Sort by date descending, then by createdAt descending
-      var sorted = workdays.slice().sort(function (a, b) {
+      var sorted = filtered.slice().sort(function (a, b) {
         if (a.date !== b.date) return b.date.localeCompare(a.date);
         return (b.createdAt || '').localeCompare(a.createdAt || '');
       });
 
-      // Take last 10
-      var recent = sorted.slice(0, 10);
-
+      // NO slice — show ALL filtered entries (the list scrolls via CSS)
       var jobs = JobManager.getActiveJobs();
       var jobMap = {};
       for (var j = 0; j < jobs.length; j++) {
@@ -10784,8 +10897,8 @@ const JobTracker = (function () {
       };
 
       var html = '';
-      for (var i = 0; i < recent.length; i++) {
-        var entry = recent[i];
+      for (var i = 0; i < sorted.length; i++) {
+        var entry = sorted[i];
         var job = jobMap[entry.jobId];
         var jobName = job ? job.employerName : 'Unbekannt';
         var statusLabel = statusLabels[entry.status] || entry.status;
@@ -10881,6 +10994,16 @@ const JobTracker = (function () {
       // lifetime of the app so list re-renders don't accumulate listeners).
       _bindRecentListClickHandler();
 
+      // Bind history filter change
+      var historyFilter = document.getElementById('entry-history-filter');
+      if (historyFilter) {
+        historyFilter.addEventListener('change', function () {
+          _historyFilter = historyFilter.value;
+          _renderRecentEntries();
+        });
+      }
+      _populateHistoryFilter();
+
       // Initialize shift templates
       _renderTemplates();
       _bindAddTemplate();
@@ -10891,6 +11014,7 @@ const JobTracker = (function () {
       // Subscribe to events for reactive updates
       EventBus.on('workday:saved', function () {
         if (NavigationController.getActiveView() === 'view-entry') {
+          _populateHistoryFilter();
           _renderRecentEntries();
         }
       });
@@ -10900,11 +11024,13 @@ const JobTracker = (function () {
           _exitEditMode();
         }
         if (NavigationController.getActiveView() === 'view-entry') {
+          _populateHistoryFilter();
           _renderRecentEntries();
         }
       });
       EventBus.on('navigation:change', function (data) {
         if (data && (data.viewId === 'view-entry' || data.view === 'view-entry')) {
+          _populateHistoryFilter();
           _renderRecentEntries();
         } else {
           // Leaving the Eintragen tab while in edit mode? Drop edit mode so the
@@ -10923,6 +11049,7 @@ const JobTracker = (function () {
       });
       EventBus.on('data:imported', function () {
         _populateJobSelect();
+        _populateHistoryFilter();
         _renderRecentEntries();
       });
     }
@@ -16853,8 +16980,19 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.3.0';
+  const APP_VERSION = '2.4.0';
   const APP_CHANGELOG = [
+    {
+      version: '2.4.0',
+      date: '2026-06-07',
+      changes: [
+        'v2.4.0 — Historie-Filter & Abrechnungszeitraum',
+        '🔍 „Letzte Einträge": Neuer Filter — Alle, Aktueller Monat (Standard), Letzter Monat oder ein konkreter Monat aus den letzten 12 Monaten',
+        '📋 Liste zeigt jetzt ALLE Einträge des gewählten Zeitraums (kein 10er-Limit mehr) und scrollt innerhalb derselben Karten-Höhe',
+        '📅 Monat-Tab „Tag für Tag": Einträge werden pro Job nach Abrechnungszeitraum gefiltert — bei Abrechnungstag = 20 erscheint ein Eintrag vom 25. Mai jetzt im Juni',
+        '🏷️ Titel zeigt „Tag für Tag (Abrechnungszeitraum)" wenn mindestens ein Job einen Abrechnungstag konfiguriert hat'
+      ]
+    },
     {
       version: '2.3.0',
       date: '2026-06-06',
