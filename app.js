@@ -8408,7 +8408,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.1.5';
+    const APP_VERSION = '2.2.0';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -8690,6 +8690,477 @@ const JobTracker = (function () {
       validateImportFile: validateImportFile,
       importFromJSON: importFromJSON,
       init: init
+    };
+  })();
+
+  // ─── ICSImportModule ─────────────────────────────────────────────────────────
+  // v2.2.0 — Imports shifts from a standard iCalendar (.ics) file.
+  //
+  // Behavior:
+  //   • Parses .ics text into VEVENT entries (handles RFC 5545 line folding).
+  //   • Converts each VEVENT into a workday entry on the chosen job.
+  //   • Append-mode: existing manual entries are preserved.
+  //   • Same date + start time on the same job → existing entry is UPDATED
+  //     (hours overwritten) rather than duplicated.
+  //   • Re-importing the same .ics is idempotent.
+  //
+  // Persistence: writes directly to AppState.workdays so we can preserve
+  // ICS-specific fields (icsUid, startTime) for future round-trips and the
+  // duplicate-detection key. Entries integrate seamlessly with existing
+  // calculations (IncomeEngine, LimitMonitor, dashboard) because they live
+  // in the same workdays array under the same shape.
+  const ICSImportModule = (function () {
+    let _initialized = false;
+
+    // ── Helpers ──
+
+    /**
+     * Generates a UUID using crypto.randomUUID() with a fallback.
+     * @returns {string}
+     */
+    function _generateUUID() {
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+      }
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        var r = (Math.random() * 16) | 0;
+        var v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      });
+    }
+
+    /**
+     * Formats a Date as YYYY-MM-DD using local time components.
+     * @param {Date} d
+     * @returns {string}
+     */
+    function _formatDate(d) {
+      var mm = String(d.getMonth() + 1).padStart(2, '0');
+      var dd = String(d.getDate()).padStart(2, '0');
+      return d.getFullYear() + '-' + mm + '-' + dd;
+    }
+
+    /**
+     * Formats a Date as HH:MM using local time components.
+     * @param {Date} d
+     * @returns {string}
+     */
+    function _formatTime(d) {
+      var hh = String(d.getHours()).padStart(2, '0');
+      var mi = String(d.getMinutes()).padStart(2, '0');
+      return hh + ':' + mi;
+    }
+
+    /**
+     * Unescapes iCalendar text values per RFC 5545 section 3.3.11.
+     * @param {string} s
+     * @returns {string}
+     */
+    function _unescape(s) {
+      if (s == null) return '';
+      return String(s)
+        .replace(/\\n/gi, '\n')
+        .replace(/\\,/g, ',')
+        .replace(/\\;/g, ';')
+        .replace(/\\\\/g, '\\');
+    }
+
+    /**
+     * Parses a single DTSTART/DTEND value. Handles:
+     *   • 20260525T090000Z         (UTC)
+     *   • 20260525T090000          (local / floating)
+     *   • 20260525                 (date-only)
+     *   • TZID=Europe/Berlin:20260525T090000  (TZID prefix gets stripped)
+     * @param {string} s
+     * @returns {Date|null}
+     */
+    function _parseICSDate(s) {
+      if (!s) return null;
+      s = String(s).trim();
+      // Strip leading TZID=...: prefix if it slipped through
+      s = s.replace(/^TZID=[^:]+:/i, '');
+      var m = s.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z?))?$/);
+      if (!m) return null;
+      var year = parseInt(m[1], 10);
+      var month = parseInt(m[2], 10) - 1;
+      var day = parseInt(m[3], 10);
+      var hour = m[4] ? parseInt(m[4], 10) : 0;
+      var minute = m[5] ? parseInt(m[5], 10) : 0;
+      var second = m[6] ? parseInt(m[6], 10) : 0;
+      if (m[7] === 'Z') {
+        return new Date(Date.UTC(year, month, day, hour, minute, second));
+      }
+      return new Date(year, month, day, hour, minute, second);
+    }
+
+    // ── ICS Parsing ──
+
+    /**
+     * Parses an iCalendar (.ics) text body into an array of events.
+     * @param {string} text
+     * @returns {Array<{ uid:string|null, dtStart:Date|null, dtEnd:Date|null, summary:string, location:string }>}
+     */
+    function parseICS(text) {
+      if (typeof text !== 'string' || !text) return [];
+      // Normalize line endings, then unfold continuation lines
+      // (RFC 5545: a line beginning with whitespace is a continuation of the previous one).
+      var normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n[ \t]/g, '');
+      var lines = normalized.split('\n');
+
+      var events = [];
+      var current = null;
+
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+        if (!line) continue;
+
+        if (line === 'BEGIN:VEVENT') {
+          current = { uid: null, dtStart: null, dtEnd: null, summary: '', location: '' };
+        } else if (line === 'END:VEVENT') {
+          if (current) {
+            events.push(current);
+            current = null;
+          }
+        } else if (current) {
+          var colonIdx = line.indexOf(':');
+          if (colonIdx < 0) continue;
+          var keyPart = line.substring(0, colonIdx);
+          var value = line.substring(colonIdx + 1);
+          var key = keyPart.split(';')[0].toUpperCase();
+
+          switch (key) {
+            case 'UID':
+              current.uid = value;
+              break;
+            case 'DTSTART':
+              current.dtStart = _parseICSDate(value);
+              break;
+            case 'DTEND':
+              current.dtEnd = _parseICSDate(value);
+              break;
+            case 'SUMMARY':
+              current.summary = _unescape(value);
+              break;
+            case 'LOCATION':
+              current.location = _unescape(value);
+              break;
+            default:
+              break;
+          }
+        }
+      }
+
+      return events;
+    }
+
+    // ── Workday lookup / persistence ──
+
+    /**
+     * Finds an existing workday entry on (jobId, date, startTime).
+     * The startTime match is what makes re-import idempotent: the same shift
+     * imported twice will resolve to the same row.
+     * @param {string} jobId
+     * @param {string} date - YYYY-MM-DD
+     * @param {string} startTime - HH:MM
+     * @returns {object|null}
+     */
+    function _findExistingEntry(jobId, date, startTime) {
+      var workdays = AppState.getState().workdays || [];
+      for (var i = 0; i < workdays.length; i++) {
+        var w = workdays[i];
+        if (w.jobId === jobId && w.date === date && w.startTime === startTime) {
+          return w;
+        }
+      }
+      return null;
+    }
+
+    /**
+     * Persists the workdays array via AppState.
+     * @param {Array} workdays
+     * @returns {{ success:boolean, error?:string }}
+     */
+    function _saveWorkdays(workdays) {
+      return AppState.setState('workdays', workdays);
+    }
+
+    /**
+     * Converts a parsed VEVENT into a workday entry skeleton.
+     * Returns null if the event is missing dates or has non-positive duration.
+     * @param {object} ev
+     * @param {object} job
+     * @returns {{ hours:number, date:string, startTime:string }|null}
+     */
+    function _eventToEntry(ev, job) {
+      if (!ev || !ev.dtStart || !ev.dtEnd) return null;
+      var ms = ev.dtEnd.getTime() - ev.dtStart.getTime();
+      if (!isFinite(ms) || ms <= 0) return null;
+      var hours = ms / (1000 * 60 * 60);
+      // Round to nearest 0.25h to match TimeTrackerModule validation
+      hours = Math.round(hours * 4) / 4;
+      // Clamp to allowed range (TimeTrackerModule rejects > 24h)
+      if (hours <= 0 || hours > 24) return null;
+      return {
+        hours: hours,
+        date: _formatDate(ev.dtStart),
+        startTime: _formatTime(ev.dtStart),
+        // Job is intentionally accepted even if not used here; reserved for
+        // future per-job rate snapshotting.
+        _job: job || null
+      };
+    }
+
+    // ── Import ──
+
+    /**
+     * Imports a list of parsed VEVENTs as workday entries on the chosen job.
+     * Append-mode: existing manual entries are preserved. Existing entries
+     * with a matching (jobId, date, startTime) get their hours updated.
+     *
+     * @param {Array} events - From parseICS()
+     * @param {string} jobId - Target job
+     * @returns {{ added:number, updated:number, skipped:number, error?:string }}
+     */
+    function importEvents(events, jobId) {
+      var result = { added: 0, updated: 0, skipped: 0 };
+      if (!events || !events.length) return result;
+      if (!jobId) {
+        result.error = 'Job nicht gefunden';
+        return result;
+      }
+      var job = JobManager.getJob(jobId);
+      if (!job) {
+        result.error = 'Job nicht gefunden';
+        return result;
+      }
+
+      // Snapshot the workdays array so we mutate locally and persist once.
+      var workdays = (AppState.getState().workdays || []).slice();
+
+      // Build a quick lookup index by jobId|date|startTime to avoid O(n²) on big imports.
+      var index = {};
+      for (var k = 0; k < workdays.length; k++) {
+        var w = workdays[k];
+        if (!w || !w.date) continue;
+        if (w.jobId !== jobId) continue;
+        if (!w.startTime) continue;
+        index[w.date + '|' + w.startTime] = k;
+      }
+
+      for (var i = 0; i < events.length; i++) {
+        var ev = events[i];
+        var built = _eventToEntry(ev, job);
+        if (!built) {
+          result.skipped++;
+          continue;
+        }
+
+        var key = built.date + '|' + built.startTime;
+        var existingIdx = index[key];
+        var nowIso = new Date().toISOString();
+
+        if (typeof existingIdx === 'number' && workdays[existingIdx]) {
+          // Update hours (and refresh ICS metadata) in place.
+          var prev = workdays[existingIdx];
+          var updated = Object.assign({}, prev, {
+            hours: built.hours,
+            status: prev.status === 'vacation' || prev.status === 'sick' ? prev.status : 'worked',
+            startTime: built.startTime,
+            icsUid: ev.uid || prev.icsUid || null,
+            updatedAt: nowIso
+          });
+          // Preserve note unless the existing one is empty
+          if (!prev.note && ev.summary) {
+            updated.note = ev.summary;
+          }
+          workdays[existingIdx] = updated;
+          result.updated++;
+        } else {
+          // New entry — full WorkDay shape so existing modules consume it.
+          var newEntry = {
+            id: _generateUUID(),
+            jobId: jobId,
+            date: built.date,
+            status: 'worked',
+            hours: built.hours,
+            hourlyRateOverride: null,
+            dailyRateOverride: null,
+            note: ev.summary || null,
+            paidSickLeave: false,
+            // ICS-specific metadata (kept on the entry for idempotent re-import)
+            startTime: built.startTime,
+            icsUid: ev.uid || null,
+            location: ev.location || null,
+            source: 'ics',
+            createdAt: nowIso,
+            updatedAt: nowIso
+          };
+          workdays.push(newEntry);
+          // Index the freshly added entry so a subsequent VEVENT with the
+          // same date+startTime updates rather than duplicates it.
+          index[key] = workdays.length - 1;
+          result.added++;
+        }
+      }
+
+      var save = _saveWorkdays(workdays);
+      if (!save.success) {
+        result.error = 'Speichern fehlgeschlagen';
+        return result;
+      }
+
+      // Notify the rest of the app so dashboards / forecasts refresh.
+      if (typeof EventBus !== 'undefined') {
+        EventBus.emit('workday:saved', {});
+        EventBus.emit('income:updated', {});
+      }
+
+      return result;
+    }
+
+    // ── UI ──
+
+    /**
+     * Populates the job picker from JobManager.
+     */
+    function _populateJobDropdown() {
+      var sel = document.getElementById('ics-import-job');
+      if (!sel) return;
+      var prev = sel.value;
+      var jobs = (typeof JobManager !== 'undefined' && JobManager.getAllJobs)
+        ? JobManager.getAllJobs() || []
+        : [];
+      var html = '';
+      if (!jobs.length) {
+        html = '<option value="">— Keine Jobs konfiguriert —</option>';
+      } else {
+        for (var i = 0; i < jobs.length; i++) {
+          var j = jobs[i];
+          var label = (j.employerName || j.name || 'Job') + (j.jobType ? ' (' + j.jobType + ')' : '');
+          html += '<option value="' + j.id + '">' + _escapeForAttr(label) + '</option>';
+        }
+      }
+      sel.innerHTML = html;
+      // Restore previous selection if still present
+      if (prev) {
+        for (var k = 0; k < sel.options.length; k++) {
+          if (sel.options[k].value === prev) { sel.value = prev; break; }
+        }
+      }
+    }
+
+    function _escapeForAttr(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    /**
+     * Renders the import status block under the picker.
+     * @param {{added:number, updated:number, skipped:number, error?:string}} res
+     */
+    function _showStatus(res) {
+      var el = document.getElementById('ics-import-status');
+      if (!el) return;
+      el.classList.remove('ics-import-status--error', 'ics-import-status--warn');
+
+      if (!res || res.error) {
+        el.classList.add('ics-import-status--error');
+        el.textContent = '⚠️ ' + ((res && res.error) || 'Import fehlgeschlagen.');
+        el.style.display = '';
+        return;
+      }
+
+      var lines = [];
+      if (res.added > 0) {
+        lines.push('✓ ' + res.added + (res.added === 1 ? ' Schicht importiert' : ' Schichten importiert'));
+      }
+      if (res.updated > 0) {
+        lines.push('↻ ' + res.updated + (res.updated === 1 ? ' Schicht aktualisiert' : ' Schichten aktualisiert'));
+      }
+      if (res.skipped > 0) {
+        lines.push('⊘ ' + res.skipped + (res.skipped === 1 ? ' Schicht übersprungen' : ' Schichten übersprungen'));
+      }
+      if (!lines.length) {
+        el.classList.add('ics-import-status--warn');
+        el.textContent = 'Keine importierbaren Termine in der Datei gefunden.';
+      } else {
+        el.textContent = lines.join('\n');
+      }
+      el.style.display = '';
+    }
+
+    function _onFileChosen(file) {
+      if (!file) return;
+      var sel = document.getElementById('ics-import-job');
+      var jobId = sel ? sel.value : '';
+      if (!jobId) {
+        _showStatus({ added: 0, updated: 0, skipped: 0, error: 'Bitte zuerst einen Job auswählen.' });
+        return;
+      }
+
+      var reader = new FileReader();
+      reader.onload = function () {
+        try {
+          var text = String(reader.result || '');
+          var events = parseICS(text);
+          var result = importEvents(events, jobId);
+          _showStatus(result);
+        } catch (e) {
+          _showStatus({ added: 0, updated: 0, skipped: 0, error: 'Datei konnte nicht gelesen werden.' });
+        }
+      };
+      reader.onerror = function () {
+        _showStatus({ added: 0, updated: 0, skipped: 0, error: 'Datei konnte nicht gelesen werden.' });
+      };
+      reader.readAsText(file);
+    }
+
+    /**
+     * Initializes the ICSImportModule. Idempotent.
+     */
+    function init() {
+      if (_initialized) {
+        // Refresh dropdown in case jobs changed since last init
+        _populateJobDropdown();
+        return;
+      }
+      _initialized = true;
+
+      _populateJobDropdown();
+
+      var btn = document.getElementById('ics-import-btn');
+      var fileInput = document.getElementById('ics-file-input');
+
+      if (btn && fileInput) {
+        btn.addEventListener('click', function () {
+          // Reset so picking the same file twice still triggers `change`
+          fileInput.value = '';
+          fileInput.click();
+        });
+
+        fileInput.addEventListener('change', function (e) {
+          var file = e.target.files && e.target.files[0];
+          _onFileChosen(file);
+        });
+      }
+
+      // Keep the dropdown fresh when jobs change.
+      if (typeof EventBus !== 'undefined' && EventBus.on) {
+        EventBus.on('job:created', _populateJobDropdown);
+        EventBus.on('job:updated', _populateJobDropdown);
+        EventBus.on('job:deleted', _populateJobDropdown);
+      }
+    }
+
+    return {
+      init: init,
+      parseICS: parseICS,
+      importEvents: importEvents
     };
   })();
 
@@ -11553,6 +12024,7 @@ const JobTracker = (function () {
   NavigationController.registerView('view-settings', function () {
     JobManager.initUI();
     ExportImportModule.init();
+    ICSImportModule.init();
     PersonalDataModule.init();
   });
 
@@ -16081,8 +16553,19 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.1.5';
+  const APP_VERSION = '2.2.0';
   const APP_CHANGELOG = [
+    {
+      version: '2.2.0',
+      date: '2026-06-04',
+      changes: [
+        'v2.2.0 — Sub-Tab Fix, Kalender-Import (.ics)',
+        '🧭 Sub-Tabs (Übersicht/Monat/Jahr): Bleiben jetzt sichtbar unter dem Header beim Scrollen — auch in KFB- und anderen Job-Ansichten',
+        '📅 Kalender-Import: Schichten aus .ics-Dateien (iCloud, Google Calendar, Outlook) übernehmen',
+        '🔄 ICS-Reimport: Bestehende Einträge mit gleichem Datum + Startzeit werden aktualisiert statt dupliziert',
+        '🛡️ Append-Modus: Manuell erfasste Einträge bleiben beim Import erhalten'
+      ]
+    },
     {
       version: '2.1.5',
       date: '2026-06-03',
@@ -16818,6 +17301,7 @@ const JobTracker = (function () {
     GesamtübersichtModule: GesamtübersichtModule,
     EntryViewModule: EntryViewModule,
     ExportImportModule: ExportImportModule,
+    ICSImportModule: ICSImportModule,
     PersonalDataModule: PersonalDataModule,
     YearChangePrompt: YearChangePrompt,
     HapticFeedbackService: HapticFeedbackService,

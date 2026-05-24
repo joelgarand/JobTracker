@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=59">
+  <link rel="stylesheet" href="style.css?v=60">
   <title>JobTracker</title>
 </head>
 <body>
@@ -1130,6 +1130,21 @@
           <p class="settings-danger-description">Alle Daten unwiderruflich löschen und von vorne beginnen (Onboarding wird erneut gestartet).</p>
           <button id="settings-reset-all-btn" class="btn btn-danger" type="button">🗑️ Alle Daten löschen</button>
         </div>
+      </div>
+
+      <!-- ICS Calendar Import Section -->
+      <div class="glass-surface layer-content settings-card">
+        <h2 class="settings-section-title">📅 Kalender-Import</h2>
+        <p class="settings-description">Importiere Schichten aus einer .ics-Datei (iCloud, Google Calendar, Outlook). Bestehende Einträge mit gleichem Datum + Startzeit werden aktualisiert.</p>
+        <div class="form-group">
+          <label class="form-label" for="ics-import-job">Job auswählen</label>
+          <select id="ics-import-job" class="form-select" aria-label="Job für Kalender-Import"></select>
+        </div>
+        <div class="settings-data-actions">
+          <button id="ics-import-btn" class="btn btn-primary" type="button">📂 ICS-Datei wählen</button>
+          <input type="file" id="ics-file-input" accept=".ics,text/calendar" style="display:none;" aria-hidden="true">
+        </div>
+        <p id="ics-import-status" class="ics-import-status" style="display:none;" role="status" aria-live="polite"></p>
       </div>
 
     </div>

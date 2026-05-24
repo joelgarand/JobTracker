@@ -264,15 +264,24 @@ a {
 
 /* ============================================================
    Sub-Navigation — Segmented control within Tracking view
+   Sticky-positioned so it remains visible just below the fixed
+   .app-header while the view scrolls. The parent .view-section
+   provides the padding-top for the header, so top:0 here lines
+   the sub-nav up directly under the header tabs.
    ============================================================ */
 .sub-nav,
 .tracking-sub-nav {
   display: flex;
   gap: var(--spacing-xs);
   margin-bottom: var(--spacing-md);
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--color-bg) 92%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
   border-radius: var(--radius-sm);
   padding: 3px;
+  position: sticky;
+  top: calc(var(--app-header-height, 108px) + 4px);
+  z-index: 50; /* below .app-header (z-glass-overlay = 100), above content */
 }
 
 .sub-nav-btn,
@@ -3460,10 +3469,14 @@ html, body {
   width: 100%;
 }
 
-/* Smooth scrolling for scroll containers */
+/* Smooth scrolling for scroll containers.
+   NOTE: We intentionally do NOT set `overflow-y: auto` here — the body
+   is the actual scroll container. Putting overflow:auto on .scroll-content
+   would create a nested scroll context that breaks position:sticky on
+   children like .sub-nav (the sticky element would reference an inner
+   scroller that never moves, so it would scroll away with content). */
 .scroll-content {
   -webkit-overflow-scrolling: touch;
-  overflow-y: auto;
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
 }
 
@@ -5378,4 +5391,31 @@ body.widget-dragging .view-section {
 
 .settings-test-row .btn {
   width: 100%;
+}
+
+/* ============================================================
+   v2.2.0 — ICS Calendar Import Status
+   ============================================================ */
+.ics-import-status {
+  margin: var(--spacing-sm) 0 0 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  white-space: pre-line; /* honor \n inside the status text */
+  background: rgba(78, 204, 163, 0.12);
+  border: 1px solid rgba(78, 204, 163, 0.32);
+  color: var(--color-success);
+}
+
+.ics-import-status--error {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.32);
+  color: var(--color-danger);
+}
+
+.ics-import-status--warn {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.32);
+  color: var(--color-warning);
 }
