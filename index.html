@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=65">
+  <link rel="stylesheet" href="style.css?v=2.6.0">
   <title>JobTracker</title>
 </head>
 <body>
@@ -389,11 +389,20 @@
           <button type="button" id="dashboard-period-toggle" class="dashboard-period-btn" aria-label="Zeitraum wechseln">
             <span id="dashboard-period-label">Aktueller Monat</span>
           </button>
+          <button type="button" id="dashboard-source-toggle" class="dashboard-period-btn dashboard-source-btn" aria-label="Datenquelle wechseln" hidden>
+            <span id="dashboard-source-label">Tatsächlich</span>
+          </button>
         </div>
         <div class="dashboard-stats">
-          <div class="dashboard-stat">
-            <span class="dashboard-stat-value" id="dashboard-total-hours">0</span>
+          <div class="dashboard-stat dashboard-stat--stepper">
+            <div class="dashboard-stat-value-row">
+              <button type="button" class="dashboard-stepper-btn dashboard-stepper-btn--down" id="dashboard-hours-down" aria-label="Stunden runter">▼</button>
+              <span class="dashboard-stat-value" id="dashboard-total-hours">0</span>
+              <button type="button" class="dashboard-stepper-btn dashboard-stepper-btn--up" id="dashboard-hours-up" aria-label="Stunden hoch">▲</button>
+            </div>
             <span class="dashboard-stat-label">Stunden</span>
+            <button type="button" id="dashboard-hours-reset" class="dashboard-hours-reset" hidden aria-label="Stunden zurücksetzen">↺ Zurücksetzen</button>
+            <span id="dashboard-hours-sim-info" class="dashboard-hours-sim-info" hidden></span>
           </div>
           <div class="dashboard-stat">
             <span class="dashboard-stat-value" id="dashboard-total-brutto">0,00 €</span>
@@ -439,39 +448,6 @@
           <span class="dashboard-prognose-icon">📈</span>
           <span class="dashboard-prognose-text" id="dashboard-prognose-text"></span>
         </div>
-      </div>
-
-      <!-- Tax Simulator Widget (full-width 2×1 wide tile, collapsible) -->
-      <div id="tax-simulator-widget" class="tax-simulator" data-reorderable="true" data-widget-id="tax-simulator" data-widget-size="full">
-        <div class="tax-tile">
-          <header class="tax-tile__header" id="tax-tile-toggle" role="button" aria-expanded="false" tabindex="0">
-            <span class="tax-tile__icon" aria-hidden="true">💶</span>
-            <span class="tax-tile__title">Steuer-Simulator</span>
-            <span class="tax-tile__preview" id="tax-tile-preview">+0,00 €</span>
-            <span class="tax-tile__chevron">▼</span>
-          </header>
-          <div class="tax-tile__body" id="tax-tile-body" hidden>
-            <div class="tax-tile__row">
-              <span class="tax-tile__row-label">Aktuell</span>
-              <span class="tax-tile__row-value" id="tax-sim-current">0,00 € / 0,00 €</span>
-            </div>
-            <div class="tax-tile__row">
-              <span class="tax-tile__row-label">Mit +<span id="tax-sim-hours-display">0</span>h</span>
-              <span class="tax-tile__row-value" id="tax-sim-new">0,00 € / 0,00 €</span>
-            </div>
-            <div class="tax-tile__slider-row">
-              <input type="range" id="tax-simulator-slider" class="tax-tile-slider" min="0" max="160" value="0" step="1" aria-label="Zusätzliche Stunden" aria-valuemin="0" aria-valuemax="160" aria-valuenow="0">
-            </div>
-            <div class="tax-tile__delta">
-              <span class="tax-tile__delta-label">Netto extra</span>
-              <span class="tax-tile__delta-amount" id="tax-simulator-net-add">+0,00 €</span>
-            </div>
-          </div>
-          <select id="tax-simulator-job-select" class="tax-tile__job-select" style="display:none;" aria-label="Job auswählen"></select>
-        </div>
-        <p id="tax-simulator-missing-profile" class="tax-missing-msg" style="display:none;" role="alert"></p>
-        <!-- Hidden gross-add element kept for legacy compatibility (e.g. tests / external callers) -->
-        <span id="tax-simulator-gross-add" class="visually-hidden" aria-hidden="true">0,00 €</span>
       </div>
 
       <!-- Minijob Forecast Widget -->

@@ -4458,14 +4458,18 @@ const JobTracker = (function () {
      * @param {string} jobId
      * @param {number} year
      * @param {number} month - 1-12
+     * @param {boolean} [includePending=false] - When true, also count entries
+     *   with status === 'pending' (treated like 'worked'). Used by the
+     *   "Projiziert" mode in Gesamtübersicht.
      * @returns {number}
      */
-    function calculateMonthlyBrutto(jobId, year, month) {
+    function calculateMonthlyBrutto(jobId, year, month, includePending) {
       var job = _findJob(jobId);
       if (!job) return 0.00;
 
       var workdays = _getWorkdaysForMonth(jobId, year, month);
       var provisions = getProvisionTotal(jobId, year, month);
+      var inclPending = includePending === true;
 
       var brutto = 0;
 
@@ -4473,7 +4477,8 @@ const JobTracker = (function () {
         // Sum (hours × applicable rate) for each worked day
         for (var i = 0; i < workdays.length; i++) {
           var entry = workdays[i];
-          if (entry.status === 'worked' && entry.hours) {
+          var counts = entry.status === 'worked' || (inclPending && entry.status === 'pending');
+          if (counts && entry.hours) {
             var rate = (entry.hourlyRateOverride !== null && entry.hourlyRateOverride !== undefined)
               ? entry.hourlyRateOverride
               : job.defaultHourlyRate;
@@ -4487,6 +4492,8 @@ const JobTracker = (function () {
         }
 
         // Overtime calculation: hours beyond standardHoursPerDay × standardDaysPerWeek × 4.33 weeks
+        // NOTE: overtime is intentionally based on actual worked hours only —
+        // pending shifts are not counted toward overtime even in projected mode.
         if (workdays.length > 0 && job.standardHoursPerDay && job.standardDaysPerWeek && job.defaultHourlyRate) {
           var standardMonthlyHours = job.standardHoursPerDay * job.standardDaysPerWeek * 4.33;
           var totalWorkedHours = 0;
@@ -4503,9 +4510,11 @@ const JobTracker = (function () {
       } else if (job.salaryType === 'daily') {
         // Daily rate: sum of dailyRateOverride (or defaultDailyRate) for each worked day
         for (var d = 0; d < workdays.length; d++) {
-          if (workdays[d].status === 'worked') {
-            var dayRate = (workdays[d].dailyRateOverride !== null && workdays[d].dailyRateOverride !== undefined)
-              ? workdays[d].dailyRateOverride
+          var dEntry = workdays[d];
+          var dCounts = dEntry.status === 'worked' || (inclPending && dEntry.status === 'pending');
+          if (dCounts) {
+            var dayRate = (dEntry.dailyRateOverride !== null && dEntry.dailyRateOverride !== undefined)
+              ? dEntry.dailyRateOverride
               : (job.defaultDailyRate || 0);
             brutto += dayRate;
           }
@@ -4533,12 +4542,13 @@ const JobTracker = (function () {
      * Calculates yearly Brutto for a given job (sum of all monthly brutto values).
      * @param {string} jobId
      * @param {number} year
+     * @param {boolean} [includePending=false]
      * @returns {number}
      */
-    function calculateYearlyBrutto(jobId, year) {
+    function calculateYearlyBrutto(jobId, year, includePending) {
       var total = 0;
       for (var m = 1; m <= 12; m++) {
-        total += calculateMonthlyBrutto(jobId, year, m);
+        total += calculateMonthlyBrutto(jobId, year, m, includePending === true);
       }
       return Math.round(total * 100) / 100;
     }
@@ -4757,20 +4767,22 @@ const JobTracker = (function () {
      * @param {string} jobId
      * @param {number} year
      * @param {number} month - 1-12
+     * @param {boolean} [includePending=false] - When true, also count pending entries
      * @returns {{ netto: number, available: boolean, reason?: string }}
      */
-    function calculateMonthlyNetto(jobId, year, month) {
+    function calculateMonthlyNetto(jobId, year, month, includePending) {
       var job = _findJob(jobId);
       if (!job) return { netto: 0, available: true };
 
-      var brutto = calculateMonthlyBrutto(jobId, year, month);
+      var brutto = calculateMonthlyBrutto(jobId, year, month, includePending === true);
       return _netFromBrutto(brutto, job, year);
     }
 
     /**
      * Public helper: calculate net income for a hypothetical monthly gross
-     * using the same logic as calculateMonthlyNetto. Used by TaxSimulator
-     * to project additional-hour scenarios without re-implementing tax math.
+     * using the same logic as calculateMonthlyNetto. Used by simulation
+     * widgets (e.g. Stunden-Stepper) to project additional-hour scenarios
+     * without re-implementing tax math.
      *
      * @param {string} jobId
      * @param {number} brutto - Hypothetical monthly gross
@@ -4968,12 +4980,13 @@ const JobTracker = (function () {
      *
      * @param {string} jobId
      * @param {number} year
+     * @param {boolean} [includePending=false]
      * @returns {{ netto: number, available: boolean, reason?: string }}
      */
-    function calculateYearlyNetto(jobId, year) {
+    function calculateYearlyNetto(jobId, year, includePending) {
       var total = 0;
       for (var m = 1; m <= 12; m++) {
-        var monthResult = calculateMonthlyNetto(jobId, year, m);
+        var monthResult = calculateMonthlyNetto(jobId, year, m, includePending === true);
         if (!monthResult.available) {
           return { netto: 0, available: false, reason: monthResult.reason };
         }
@@ -4987,10 +5000,12 @@ const JobTracker = (function () {
      * @param {string} jobId
      * @param {number} year
      * @param {number} month - 1-12
+     * @param {boolean} [includePending=false]
      * @returns {{ hours: number, workingDays: number, vacationDays: number, sickDays: number }}
      */
-    function _getJobMonthStats(jobId, year, month) {
+    function _getJobMonthStats(jobId, year, month, includePending) {
       var workdays = _getWorkdaysForMonth(jobId, year, month);
+      var inclPending = includePending === true;
       var hours = 0;
       var workingDays = 0;
       var vacationDays = 0;
@@ -4998,7 +5013,7 @@ const JobTracker = (function () {
 
       for (var i = 0; i < workdays.length; i++) {
         var entry = workdays[i];
-        if (entry.status === 'worked') {
+        if (entry.status === 'worked' || (inclPending && entry.status === 'pending')) {
           workingDays++;
           if (entry.hours) hours += entry.hours;
         } else if (entry.status === 'vacation') {
@@ -5020,10 +5035,12 @@ const JobTracker = (function () {
      * Calculates hours, working days, vacation days, and sick days for a job in a year.
      * @param {string} jobId
      * @param {number} year
+     * @param {boolean} [includePending=false]
      * @returns {{ hours: number, workingDays: number, vacationDays: number, sickDays: number }}
      */
-    function _getJobYearStats(jobId, year) {
+    function _getJobYearStats(jobId, year, includePending) {
       var workdays = _getWorkdaysForYear(jobId, year);
+      var inclPending = includePending === true;
       var hours = 0;
       var workingDays = 0;
       var vacationDays = 0;
@@ -5031,7 +5048,7 @@ const JobTracker = (function () {
 
       for (var i = 0; i < workdays.length; i++) {
         var entry = workdays[i];
-        if (entry.status === 'worked') {
+        if (entry.status === 'worked' || (inclPending && entry.status === 'pending')) {
           workingDays++;
           if (entry.hours) hours += entry.hours;
         } else if (entry.status === 'vacation') {
@@ -5142,10 +5159,12 @@ const JobTracker = (function () {
      * Tips (Trinkgeld) are added to the final netto cashflow display but do NOT affect brutto.
      *
      * @param {number} year
+     * @param {boolean} [includePending=false] - When true, also count pending entries
      * @returns {object} AggregateTotals with backward-compatible fields
      */
-    function getAggregatedYearly(year) {
+    function getAggregatedYearly(year, includePending) {
       var jobs = AppState.getState().jobs;
+      var inclPending = includePending === true;
       var totalBrutto = 0;
       var totalNetto = 0;
       var totalTips = 0;
@@ -5159,11 +5178,11 @@ const JobTracker = (function () {
 
       for (var i = 0; i < jobs.length; i++) {
         var job = jobs[i];
-        var brutto = calculateYearlyBrutto(job.id, year);
-        var nettoResult = calculateYearlyNetto(job.id, year);
+        var brutto = calculateYearlyBrutto(job.id, year, inclPending);
+        var nettoResult = calculateYearlyNetto(job.id, year, inclPending);
         var tips = getTipTotal(job.id, year);
         var provisions = getProvisionTotal(job.id, year);
-        var stats = _getJobYearStats(job.id, year);
+        var stats = _getJobYearStats(job.id, year, inclPending);
 
         totalBrutto += brutto;
         totalTips += tips;
@@ -8452,7 +8471,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.5.0';
+    const APP_VERSION = '2.6.0';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -11344,6 +11363,9 @@ const JobTracker = (function () {
   const GesamtübersichtModule = (function () {
     let _initialized = false;
     let _showAllTime = false; // false = current billing period, true = all time
+    let _showProjected = false; // false = actual (worked only), true = include pending
+    let _simHoursDelta = 0; // signed integer; 0 = no simulation
+    let _stepperBound = false;
 
     /**
      * Formats a number as German currency string: "1.234,56 €"
@@ -11391,6 +11413,103 @@ const JobTracker = (function () {
     }
 
     /**
+     * Returns true if any job has at least one 'pending' entry within the
+     * active billing window (per-job billingMonth in current-period mode,
+     * or whole year in all-time mode).
+     */
+    function _hasAnyPendingInWindow() {
+      var now = new Date();
+      var year = now.getFullYear();
+      var month = now.getMonth() + 1;
+      var day = now.getDate();
+      var jobs = AppState.getState().jobs;
+
+      for (var ji = 0; ji < jobs.length; ji++) {
+        var job = jobs[ji];
+        if (_showAllTime) {
+          // Scan whole current year
+          for (var m = 1; m <= 12; m++) {
+            var entriesY = TimeTrackerModule.getEntriesForMonth(year, m, job.id);
+            for (var ei = 0; ei < entriesY.length; ei++) {
+              if (entriesY[ei].status === 'pending') return true;
+            }
+          }
+        } else {
+          var billingMonth = month;
+          var billingYear = year;
+          if (job.billingDay && day > job.billingDay) {
+            billingMonth++;
+            if (billingMonth > 12) { billingMonth = 1; billingYear++; }
+          }
+          var entries = TimeTrackerModule.getEntriesForMonth(billingYear, billingMonth, job.id);
+          for (var ek = 0; ek < entries.length; ek++) {
+            if (entries[ek].status === 'pending') return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    /**
+     * Updates the visibility and label of the Tatsächlich/Projiziert toggle
+     * based on whether pending entries exist in the active window. Forces
+     * _showProjected=false when no pending entries are present.
+     */
+    function _updateSourceToggleVisibility() {
+      var btn = document.getElementById('dashboard-source-toggle');
+      var label = document.getElementById('dashboard-source-label');
+      var card = document.getElementById('daily-dashboard');
+      if (!btn) return;
+
+      var hasPending = _hasAnyPendingInWindow();
+      if (!hasPending) {
+        _showProjected = false;
+        btn.hidden = true;
+        if (card) card.classList.remove('is-projected');
+      } else {
+        btn.hidden = false;
+      }
+
+      if (label) {
+        label.textContent = _showProjected ? 'Projiziert' : 'Tatsächlich';
+      }
+      if (card) {
+        if (_showProjected) {
+          card.classList.add('is-projected');
+        } else {
+          card.classList.remove('is-projected');
+        }
+      }
+    }
+
+    /**
+     * Returns the first job with hourly salary type and a positive default rate.
+     * @returns {object|null}
+     */
+    function _getPrimaryHourlyJob() {
+      var jobs = AppState.getState().jobs;
+      for (var i = 0; i < jobs.length; i++) {
+        if (jobs[i].salaryType === 'hourly' && jobs[i].defaultHourlyRate > 0) {
+          return jobs[i];
+        }
+      }
+      return null;
+    }
+
+    /**
+     * Counts hourly jobs with a positive default rate.
+     * @returns {number}
+     */
+    function _findHourlyJobsCount() {
+      var jobs = AppState.getState().jobs;
+      var count = 0;
+      for (var i = 0; i < jobs.length; i++) {
+        if (jobs[i].salaryType === 'hourly' && jobs[i].defaultHourlyRate > 0) count++;
+      }
+      return count;
+    }
+
+    /**
      * Calculates current month aggregated totals and updates the DOM.
      * Also populates the Brutto/Netto breakdown dropdown and absence row.
      */
@@ -11406,6 +11525,10 @@ const JobTracker = (function () {
         periodLabel.textContent = _showAllTime ? 'Gesamt' : 'Aktueller Monat';
       }
 
+      // Visibility of Tatsächlich/Projiziert toggle (also forces _showProjected=false
+      // when there are no pending entries left)
+      _updateSourceToggleVisibility();
+
       var jobs = AppState.getState().jobs;
       var totalHours = 0;
       var totalBrutto = 0;
@@ -11419,7 +11542,7 @@ const JobTracker = (function () {
 
       if (_showAllTime) {
         // All-time mode: use yearly aggregation for current year
-        var aggregatedYearly = IncomeEngine.getAggregatedYearly(year);
+        var aggregatedYearly = IncomeEngine.getAggregatedYearly(year, _showProjected);
         totalHours = aggregatedYearly.hours || 0;
         totalBrutto = aggregatedYearly.totalBrutto || 0;
         totalNetto = aggregatedYearly.totalNetto || 0;
@@ -11438,6 +11561,7 @@ const JobTracker = (function () {
           nettoCashflow: nettoCashflow, nettoAvailable: nettoAvailable, perJob: perJob
         };
         _renderDashboard(aggregated, year, month);
+        _renderStepper(aggregated, year, month);
       } else {
         // Current billing period mode (per-job billing day)
         for (var ji = 0; ji < jobs.length; ji++) {
@@ -11448,15 +11572,15 @@ const JobTracker = (function () {
             billingMonth++;
             if (billingMonth > 12) { billingMonth = 1; billingYear++; }
           }
-          var brutto = IncomeEngine.calculateMonthlyBrutto(job.id, billingYear, billingMonth);
-          var nettoResult = IncomeEngine.calculateMonthlyNetto(job.id, billingYear, billingMonth);
+          var brutto = IncomeEngine.calculateMonthlyBrutto(job.id, billingYear, billingMonth, _showProjected);
+          var nettoResult = IncomeEngine.calculateMonthlyNetto(job.id, billingYear, billingMonth, _showProjected);
           var tips = IncomeEngine.getTipTotal(job.id, billingYear, billingMonth);
           var provisions = IncomeEngine.getProvisionTotal(job.id, billingYear, billingMonth);
 
           var entries = TimeTrackerModule.getEntriesForMonth(billingYear, billingMonth, job.id);
           var jobHours = 0, jobVacDays = 0, jobSickDays = 0;
           for (var ei = 0; ei < entries.length; ei++) {
-            if (entries[ei].status === 'worked' && entries[ei].hours) jobHours += entries[ei].hours;
+            if ((entries[ei].status === 'worked' || (_showProjected && entries[ei].status === 'pending')) && entries[ei].hours) jobHours += entries[ei].hours;
             else if (entries[ei].status === 'vacation') jobVacDays++;
             else if (entries[ei].status === 'sick') jobSickDays++;
           }
@@ -11485,6 +11609,7 @@ const JobTracker = (function () {
           nettoCashflow: nettoCashflow, nettoAvailable: nettoAvailable, perJob: perJob
         };
         _renderDashboard(aggregated, year, month);
+        _renderStepper(aggregated, year, month);
       }
     }
 
@@ -11707,6 +11832,184 @@ const JobTracker = (function () {
     }
 
     /**
+     * Renders the hours stepper (▲▼) and reset button. Recomputes simulated
+     * hours/brutto/netto when _simHoursDelta != 0 and overwrites the DOM
+     * values written by _renderDashboard.
+     *
+     * Hidden when no primary hourly job exists or when in all-time mode.
+     */
+    function _renderStepper(aggregated, year, month) {
+      var stepperRoot = document.querySelector('.dashboard-stat--stepper');
+      var btnUp = document.getElementById('dashboard-hours-up');
+      var btnDown = document.getElementById('dashboard-hours-down');
+      var btnReset = document.getElementById('dashboard-hours-reset');
+      var simInfo = document.getElementById('dashboard-hours-sim-info');
+      var hoursEl = document.getElementById('dashboard-total-hours');
+      var bruttoEl = document.getElementById('dashboard-total-brutto');
+      var nettoEl = document.getElementById('dashboard-total-netto');
+      if (!stepperRoot || !btnUp || !btnDown) return;
+
+      var primaryJob = _getPrimaryHourlyJob();
+
+      // Hide stepper entirely when there's no hourly job or in all-time mode
+      if (!primaryJob || _showAllTime) {
+        _simHoursDelta = 0;
+        btnUp.hidden = true;
+        btnDown.hidden = true;
+        if (btnReset) btnReset.hidden = true;
+        if (simInfo) simInfo.hidden = true;
+        stepperRoot.classList.remove('is-simulating');
+        return;
+      }
+
+      // Show stepper buttons (always enabled when shown)
+      btnUp.hidden = false;
+      btnDown.hidden = false;
+      btnUp.disabled = false;
+      btnDown.disabled = false;
+
+      if (_simHoursDelta === 0) {
+        // No simulation — actual values already written by _renderDashboard
+        stepperRoot.classList.remove('is-simulating');
+        if (btnReset) btnReset.hidden = true;
+        if (simInfo) simInfo.hidden = true;
+        return;
+      }
+
+      // Active simulation
+      stepperRoot.classList.add('is-simulating');
+      if (btnReset) btnReset.hidden = false;
+
+      var simulatedHours = aggregated.hours + _simHoursDelta;
+      if (simulatedHours < 0) simulatedHours = 0;
+
+      // Brutto delta: simHoursDelta × primary hourly rate (clamped at 0)
+      var simulatedBrutto = aggregated.brutto + (_simHoursDelta * primaryJob.defaultHourlyRate);
+      if (simulatedBrutto < 0) simulatedBrutto = 0;
+
+      // Netto: prefer engine, fall back to ratio, then 65%
+      var simulatedNetto;
+      var netRes = null;
+      try {
+        netRes = IncomeEngine.calculateNetForBrutto(primaryJob.id, simulatedBrutto, year);
+      } catch (e) { netRes = null; }
+      if (netRes && netRes.available) {
+        simulatedNetto = netRes.netto;
+      } else if (aggregated.brutto > 0) {
+        simulatedNetto = simulatedBrutto * (aggregated.nettoCashflow / aggregated.brutto);
+      } else {
+        simulatedNetto = simulatedBrutto * 0.65;
+      }
+
+      // Add tips back so the displayed netto is comparable to the actual
+      // "netto cashflow" already shown
+      var simulatedNettoCashflow = simulatedNetto + (aggregated.tips || 0);
+
+      if (hoursEl) hoursEl.textContent = _formatHours(simulatedHours);
+      if (bruttoEl) bruttoEl.textContent = _formatCurrency(simulatedBrutto);
+      if (nettoEl) nettoEl.textContent = _formatCurrency(simulatedNettoCashflow);
+
+      if (simInfo) {
+        var sign = _simHoursDelta > 0 ? '+' : '−';
+        var absDelta = Math.abs(_simHoursDelta);
+        simInfo.textContent = sign + absDelta + ' Std. simuliert für ' + (primaryJob.employerName || '');
+        simInfo.hidden = false;
+      }
+    }
+
+    /**
+     * Binds stepper button click handlers. Idempotent.
+     */
+    function _bindStepper() {
+      if (_stepperBound) return;
+      var btnUp = document.getElementById('dashboard-hours-up');
+      var btnDown = document.getElementById('dashboard-hours-down');
+      var btnReset = document.getElementById('dashboard-hours-reset');
+      if (!btnUp || !btnDown) return;
+      _stepperBound = true;
+
+      btnUp.addEventListener('click', function () {
+        _simHoursDelta += 1;
+        _update();
+      });
+
+      btnDown.addEventListener('click', function () {
+        // Don't allow simulated hours to go below 0
+        var now = new Date();
+        var year = now.getFullYear();
+        var month = now.getMonth() + 1;
+        var aggregated = _computeAggregatedForBaseline(year, month);
+        var currentTotal = aggregated ? aggregated.hours : 0;
+        var nextDelta = _simHoursDelta - 1;
+        if (currentTotal + nextDelta < 0) {
+          // Clamp instead of decrementing further
+          return;
+        }
+        _simHoursDelta = nextDelta;
+        _update();
+      });
+
+      if (btnReset) {
+        btnReset.addEventListener('click', function () {
+          _simHoursDelta = 0;
+          _update();
+        });
+      }
+    }
+
+    /**
+     * Lightweight baseline aggregation used by the stepper's down-button to
+     * decide whether decrementing would push hours below zero. Mirrors the
+     * hour-counting logic in _update without touching the DOM.
+     */
+    function _computeAggregatedForBaseline(year, month) {
+      var now = new Date();
+      var day = now.getDate();
+      var jobs = AppState.getState().jobs;
+      var totalHours = 0;
+      var totalBrutto = 0;
+      var totalNetto = 0;
+      var totalTips = 0;
+
+      if (_showAllTime) {
+        var ay = IncomeEngine.getAggregatedYearly(year, _showProjected);
+        return {
+          hours: ay.hours || 0,
+          brutto: ay.totalBrutto || 0,
+          nettoCashflow: ay.nettoCashflow || 0,
+          tips: ay.totalTips || 0
+        };
+      }
+
+      for (var ji = 0; ji < jobs.length; ji++) {
+        var job = jobs[ji];
+        var bMonth = month;
+        var bYear = year;
+        if (job.billingDay && day > job.billingDay) {
+          bMonth++;
+          if (bMonth > 12) { bMonth = 1; bYear++; }
+        }
+        var entries = TimeTrackerModule.getEntriesForMonth(bYear, bMonth, job.id);
+        for (var ei = 0; ei < entries.length; ei++) {
+          if ((entries[ei].status === 'worked' || (_showProjected && entries[ei].status === 'pending')) && entries[ei].hours) {
+            totalHours += entries[ei].hours;
+          }
+        }
+        totalBrutto += IncomeEngine.calculateMonthlyBrutto(job.id, bYear, bMonth, _showProjected) || 0;
+        totalTips += IncomeEngine.getTipTotal(job.id, bYear, bMonth) || 0;
+        var nr = IncomeEngine.calculateMonthlyNetto(job.id, bYear, bMonth, _showProjected);
+        if (nr && nr.available) totalNetto += nr.netto;
+      }
+
+      return {
+        hours: totalHours,
+        brutto: totalBrutto,
+        nettoCashflow: totalNetto + totalTips,
+        tips: totalTips
+      };
+    }
+
+    /**
      * Initializes the module: performs initial calculation and subscribes to
      * income:updated event for reactive updates.
      */
@@ -11719,6 +12022,8 @@ const JobTracker = (function () {
       if (periodToggle) {
         periodToggle.addEventListener('click', function () {
           _showAllTime = !_showAllTime;
+          // All-time mode disables the stepper — reset any pending simulation
+          if (_showAllTime) _simHoursDelta = 0;
           _update();
           // Also re-render job cards to match the period
           if (typeof JobCardRenderer !== 'undefined' && JobCardRenderer.render) {
@@ -11726,6 +12031,19 @@ const JobTracker = (function () {
           }
         });
       }
+
+      // Bind source toggle (Tatsächlich ↔ Projiziert)
+      var sourceToggle = document.getElementById('dashboard-source-toggle');
+      if (sourceToggle && !sourceToggle._sourceBound) {
+        sourceToggle._sourceBound = true;
+        sourceToggle.addEventListener('click', function () {
+          _showProjected = !_showProjected;
+          _update();
+        });
+      }
+
+      // Bind stepper buttons (idempotent)
+      _bindStepper();
 
       // Initial render
       _update();
@@ -11744,6 +12062,17 @@ const JobTracker = (function () {
         _update();
       });
 
+      // Re-evaluate visibility of the source toggle when entries change
+      // (e.g. user confirms a pending shift — toggle should hide if no
+      // pending entries remain).
+      EventBus.on('workday:saved', function () {
+        _update();
+      });
+
+      EventBus.on('workday:deleted', function () {
+        _update();
+      });
+
       // Also update on data:imported (full reload scenario)
       EventBus.on('data:imported', function () {
         _update();
@@ -11753,6 +12082,7 @@ const JobTracker = (function () {
     return {
       init: init,
       isShowingAllTime: function () { return _showAllTime; },
+      isShowingProjected: function () { return _showProjected; },
       // Exposed for testing
       _formatCurrency: _formatCurrency,
       _formatHours: _formatHours,
@@ -15109,336 +15439,6 @@ const JobTracker = (function () {
     return { init: init, update: update, getForecast: getForecast };
   })();
 
-  // ─── TaxSimulator ──────────────────────────────────────────────────────────────
-  // Compact 1×1 glass-tile widget: realtime slider showing monthly netto-extra
-  // for additional hours, using IncomeEngine for the same calculation path as
-  // the rest of the app. Always-visible (no expand/collapse).
-  // Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7
-  const TaxSimulator = (function () {
-    var _selectedJobId = null;
-    var _currentHours = 0;
-    var _initialized = false;
-
-    /**
-     * Initialize: bind slider + job-select, populate UI, subscribe to events.
-     */
-    function init() {
-      if (_initialized) return;
-      _initialized = true;
-
-      _bindSliderEvents();
-      _bindToggle();
-
-      var jobSelect = document.getElementById('tax-simulator-job-select');
-      if (jobSelect && !jobSelect._taxBound) {
-        jobSelect._taxBound = true;
-        jobSelect.addEventListener('change', function () {
-          _selectedJobId = jobSelect.value || null;
-          _runSimulation();
-        });
-      }
-
-      _populateJobSelect();
-      _runSimulation();
-
-      EventBus.on('income:updated', function () { _runSimulation(); });
-      EventBus.on('profile:updated', function () { _runSimulation(); });
-      EventBus.on('job:created', function () { _populateJobSelect(); _runSimulation(); });
-      EventBus.on('job:deleted', function () { _populateJobSelect(); _runSimulation(); });
-      EventBus.on('job:updated', function () { _populateJobSelect(); _runSimulation(); });
-      EventBus.on('navigation:change', function (data) {
-        if (data && (data.viewId === 'view-daily' || data.view === 'view-daily')) {
-          _bindSliderEvents();
-          _populateJobSelect();
-          _runSimulation();
-        }
-      });
-    }
-
-    /**
-     * Bind the collapse/expand toggle on the tax tile header.
-     */
-    function _bindToggle() {
-      var toggleEl = document.getElementById('tax-tile-toggle');
-      if (toggleEl && !toggleEl._taxToggleBound) {
-        toggleEl._taxToggleBound = true;
-        toggleEl.addEventListener('click', function () {
-          var body = document.getElementById('tax-tile-body');
-          var expanded = body && !body.hidden;
-          if (body) body.hidden = expanded;
-          toggleEl.setAttribute('aria-expanded', String(!expanded));
-        });
-      }
-    }
-
-    /**
-     * Bind the slider input event handler. Idempotent — safe to call repeatedly.
-     * Also adds document-level touch tracking so the user can slide their finger
-     * anywhere on screen after starting on the thumb (iOS pattern).
-     */
-    function _bindSliderEvents() {
-      var slider = document.getElementById('tax-simulator-slider');
-      if (!slider || slider._taxBound) return;
-      slider._taxBound = true;
-
-      var onChange = function () {
-        _currentHours = parseInt(slider.value, 10) || 0;
-        slider.setAttribute('aria-valuenow', _currentHours);
-        _runSimulation();
-        EventBus.emit('tax:slider_changed', { hours: _currentHours });
-      };
-
-      slider.addEventListener('input', onChange);
-      slider.addEventListener('change', onChange);
-
-      // ── iOS full-screen slider tracking ──
-      var _sliderActive = false;
-      var _sliderRect = null;
-
-      slider.addEventListener('touchstart', function (e) {
-        _sliderActive = true;
-        _sliderRect = slider.getBoundingClientRect();
-      }, { passive: true });
-
-      document.addEventListener('touchmove', function (e) {
-        if (!_sliderActive || !_sliderRect) return;
-        e.preventDefault();
-        var touch = e.touches[0];
-        var relX = touch.clientX - _sliderRect.left;
-        var ratio = relX / _sliderRect.width;
-        if (ratio < 0) ratio = 0;
-        if (ratio > 1) ratio = 1;
-        var min = parseInt(slider.min, 10) || 0;
-        var max = parseInt(slider.max, 10) || 160;
-        var newVal = Math.round(min + ratio * (max - min));
-        slider.value = newVal;
-        var inputEvt = new Event('input', { bubbles: true });
-        slider.dispatchEvent(inputEvt);
-      }, { passive: false });
-
-      document.addEventListener('touchend', function () {
-        if (_sliderActive) {
-          _sliderActive = false;
-          _sliderRect = null;
-        }
-      }, { passive: true });
-    }
-
-    /**
-     * Calculate the net-income delta from working `additionalHours` extra hours
-     * this month. Uses IncomeEngine.calculateNetForBrutto so we always agree
-     * with the dashboard's headline net figure — no parallel approximations.
-     *
-     * For fixed-salary jobs the additionalHours concept doesn't apply; we
-     * return a flagged result so the UI can surface it.
-     *
-     * @param {number} additionalHours - 0 to 160
-     * @param {string} jobId
-     * @returns {{ grossAdd: number, netAdd: number, effectiveRate: number, supported: boolean,
-     *            currentBrutto: number, currentNetto: number,
-     *            simulatedBrutto: number, simulatedNetto: number }}
-     */
-    function simulate(additionalHours, jobId) {
-      var job = JobManager.getJob(jobId);
-      if (!job) {
-        return {
-          grossAdd: 0, netAdd: 0, effectiveRate: 0, supported: false,
-          currentBrutto: 0, currentNetto: 0,
-          simulatedBrutto: 0, simulatedNetto: 0
-        };
-      }
-
-      // Determine hourly rate. Pure fixed-salary or daily-rate jobs don't have
-      // a meaningful "+X hours" simulation — flag as unsupported.
-      var rate = null;
-      if (typeof job.defaultHourlyRate === 'number' && job.defaultHourlyRate > 0) {
-        rate = job.defaultHourlyRate;
-      }
-      if (!rate) {
-        return {
-          grossAdd: 0, netAdd: 0, effectiveRate: 0, supported: false,
-          currentBrutto: 0, currentNetto: 0,
-          simulatedBrutto: 0, simulatedNetto: 0
-        };
-      }
-
-      var hrs = additionalHours > 0 ? additionalHours : 0;
-      var additionalGross = hrs * rate;
-
-      var now = new Date();
-      var year = now.getFullYear();
-      var month = now.getMonth() + 1;
-
-      var currentBrutto = 0;
-      var currentNetto = 0;
-      try {
-        currentBrutto = IncomeEngine.calculateMonthlyBrutto(jobId, year, month) || 0;
-      } catch (e) { currentBrutto = 0; }
-
-      try {
-        var currentRes = IncomeEngine.calculateMonthlyNetto(jobId, year, month);
-        if (currentRes && currentRes.available) {
-          currentNetto = currentRes.netto;
-        } else {
-          // Fallback: run net-from-brutto with the current brutto so the
-          // baseline matches the simulation path.
-          var fb = IncomeEngine.calculateNetForBrutto(jobId, currentBrutto, year);
-          currentNetto = (fb && fb.available) ? fb.netto : currentBrutto * 0.65;
-        }
-      } catch (e) {
-        currentNetto = currentBrutto * 0.65;
-      }
-
-      var simulatedBrutto = currentBrutto + additionalGross;
-      var simulatedNetto = currentNetto;
-      try {
-        var simRes = IncomeEngine.calculateNetForBrutto(jobId, simulatedBrutto, year);
-        if (simRes && simRes.available) {
-          simulatedNetto = simRes.netto;
-        } else {
-          // Profile incomplete — apply consistent ~35% deduction on the delta only.
-          simulatedNetto = currentNetto + additionalGross * 0.65;
-        }
-      } catch (e) {
-        simulatedNetto = currentNetto + additionalGross * 0.65;
-      }
-
-      var netDelta = simulatedNetto - currentNetto;
-      if (!isFinite(netDelta)) netDelta = 0;
-      if (netDelta < 0) netDelta = 0;
-
-      var effectiveRate = additionalGross > 0
-        ? ((additionalGross - netDelta) / additionalGross) * 100
-        : 0;
-      if (!isFinite(effectiveRate)) effectiveRate = 0;
-      if (effectiveRate < 0) effectiveRate = 0;
-      if (effectiveRate > 100) effectiveRate = 100;
-
-      return {
-        grossAdd: Math.round(additionalGross * 100) / 100,
-        netAdd: Math.round(netDelta * 100) / 100,
-        effectiveRate: Math.round(effectiveRate * 10) / 10,
-        supported: true,
-        currentBrutto: Math.round(currentBrutto * 100) / 100,
-        currentNetto: Math.round(currentNetto * 100) / 100,
-        simulatedBrutto: Math.round(simulatedBrutto * 100) / 100,
-        simulatedNetto: Math.round(simulatedNetto * 100) / 100
-      };
-    }
-
-    // ─── Private ─────────────────────────────────────────────────────────────
-
-    /**
-     * Populate the job selection dropdown. Only shows the dropdown when there
-     * are 2+ jobs configured.
-     */
-    function _populateJobSelect() {
-      var jobSelect = document.getElementById('tax-simulator-job-select');
-      if (!jobSelect) return;
-
-      var jobs = JobManager.getAllJobs();
-      var previousValue = jobSelect.value;
-
-      jobSelect.innerHTML = '';
-      for (var i = 0; i < jobs.length; i++) {
-        var option = document.createElement('option');
-        option.value = jobs[i].id;
-        option.textContent = jobs[i].name || jobs[i].employer || ('Job ' + (i + 1));
-        jobSelect.appendChild(option);
-      }
-
-      if (previousValue && jobSelect.querySelector('option[value="' + previousValue + '"]')) {
-        jobSelect.value = previousValue;
-      } else if (jobs.length > 0) {
-        jobSelect.value = jobs[0].id;
-      }
-      _selectedJobId = jobSelect.value || null;
-
-      // Show inline pill when there's more than one job
-      jobSelect.style.display = jobs.length > 1 ? '' : 'none';
-    }
-
-    /**
-     * Update the slider hours display in the "Mit +Xh" row label.
-     */
-    function _updateHoursLabel() {
-      var el = document.getElementById('tax-sim-hours-display');
-      if (el) el.textContent = String(_currentHours);
-    }
-
-    /**
-     * Run the simulation with the current slider + selected job and update UI.
-     * Renders 4 lines: current brutto/netto, simulated brutto/netto, slider, big delta.
-     */
-    function _runSimulation() {
-      if (!_selectedJobId) {
-        var jobs = JobManager.getAllJobs();
-        if (jobs.length > 0) _selectedJobId = jobs[0].id;
-      }
-
-      _updateHoursLabel();
-
-      var deltaEl = document.getElementById('tax-simulator-net-add');
-      var currentEl = document.getElementById('tax-sim-current');
-      var newEl = document.getElementById('tax-sim-new');
-      var grossEl = document.getElementById('tax-simulator-gross-add'); // legacy hidden
-      var missingEl = document.getElementById('tax-simulator-missing-profile');
-
-      if (!_selectedJobId) {
-        if (deltaEl) deltaEl.textContent = '+0,00 €';
-        if (currentEl) currentEl.textContent = '0,00 € / 0,00 €';
-        if (newEl) newEl.textContent = '0,00 € / 0,00 €';
-        if (grossEl) grossEl.textContent = '0,00 €';
-        if (missingEl) missingEl.style.display = 'none';
-        return;
-      }
-
-      var result = simulate(_currentHours, _selectedJobId);
-
-      // Surface fixed-salary / daily-rate jobs with a friendly message
-      if (!result.supported) {
-        if (deltaEl) deltaEl.textContent = '–';
-        if (currentEl) currentEl.textContent = '–';
-        if (newEl) newEl.textContent = '–';
-        if (grossEl) grossEl.textContent = '0,00 €';
-        if (missingEl) {
-          missingEl.style.display = '';
-          missingEl.textContent = 'Nur für Stundenlohn-Jobs verfügbar';
-        }
-        return;
-      }
-
-      if (missingEl) missingEl.style.display = 'none';
-
-      if (currentEl) {
-        currentEl.textContent = _formatCurrency(result.currentBrutto) + ' / ' + _formatCurrency(result.currentNetto);
-      }
-      if (newEl) {
-        newEl.textContent = _formatCurrency(result.simulatedBrutto) + ' / ' + _formatCurrency(result.simulatedNetto);
-      }
-      if (deltaEl) deltaEl.textContent = '+' + _formatCurrency(result.netAdd);
-      if (grossEl) grossEl.textContent = _formatCurrency(result.grossAdd);
-
-      // Update collapsed preview with the netto-delta value
-      var previewEl = document.getElementById('tax-tile-preview');
-      if (previewEl) previewEl.textContent = '+' + _formatCurrency(result.netAdd);
-    }
-
-    /**
-     * Format a number as German currency string.
-     * @param {number} value
-     * @returns {string}
-     */
-    function _formatCurrency(value) {
-      return value.toFixed(2).replace('.', ',') + ' €';
-    }
-
-    return {
-      init: init,
-      simulate: simulate
-    };
-  })();
-
   // ─── DashboardOrderManager ───────────────────────────────────────────────────
   // Grid-based dashboard reorder for #view-daily / .dashboard-grid. Widgets
   // declare a size via data-widget-size="full" | "small". The grid is a
@@ -17234,8 +17234,19 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.5.0';
+  const APP_VERSION = '2.6.0';
   const APP_CHANGELOG = [
+    {
+      version: '2.6.0',
+      date: '2026-05-24',
+      changes: [
+        'v2.6.0 — Tatsächlich/Projiziert-Toggle, Stunden-Simulator, Steuer-Simulator entfernt',
+        '⚡ Gesamtübersicht: Neuer Toggle "Tatsächlich" ↔ "Projiziert" zeigt Brutto/Netto inklusive ausstehender Schichten (erscheint nur wenn Pending-Einträge vorhanden)',
+        '🔢 Stunden-Stepper in der Gesamtübersicht: ▲▼-Buttons neben den Stunden für What-If-Simulation, Brutto/Netto aktualisieren live',
+        '↺ Zurücksetzen-Button bringt die Simulation auf die tatsächlichen Stunden zurück',
+        '🗑️ Steuer-Simulator-Widget entfernt — Funktion ist jetzt direkt in der Gesamtübersicht integriert'
+      ]
+    },
     {
       version: '2.5.0',
       date: '2026-06-09',
@@ -17719,7 +17730,6 @@ const JobTracker = (function () {
     PunchClock.init();
     RuleChecker.init();
     MinijobForecastWidget.init();
-    TaxSimulator.init();
     GeoReminderService.init();
     DashboardOrderManager.init();
     NotificationScheduler.init();
@@ -18050,7 +18060,6 @@ const JobTracker = (function () {
     PunchClock: PunchClock,
     RuleChecker: RuleChecker,
     MinijobForecastWidget: MinijobForecastWidget,
-    TaxSimulator: TaxSimulator,
     GeoReminderService: GeoReminderService,
     DashboardOrderManager: DashboardOrderManager,
     NotificationScheduler: NotificationScheduler,

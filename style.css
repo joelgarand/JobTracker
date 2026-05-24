@@ -5612,3 +5612,108 @@ body.widget-dragging .view-section {
 .entry-recent-item.entry-pending:active {
   background: rgba(245, 158, 11, 0.06);
 }
+
+/* ============================================================
+   v2.6.0 — Tatsächlich/Projiziert-Toggle & Stunden-Stepper
+   ============================================================ */
+
+.dashboard-source-btn {
+  margin-left: var(--spacing-sm);
+}
+
+.daily-dashboard-card {
+  position: relative;
+}
+
+.daily-dashboard-card.is-projected #dashboard-total-brutto,
+.daily-dashboard-card.is-projected #dashboard-total-netto,
+.daily-dashboard-card.is-projected #dashboard-total-hours {
+  font-style: italic;
+  color: var(--color-accent);
+}
+
+.daily-dashboard-card.is-projected::before {
+  content: '⚡ Projiziert';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* Stunden-Stepper im Gesamtübersicht-Card */
+.dashboard-stat--stepper {
+  position: relative;
+}
+
+.dashboard-stat-value-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.dashboard-stepper-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--color-accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s ease, background 0.15s ease;
+  font-family: var(--font-family);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dashboard-stepper-btn:active {
+  transform: scale(0.92);
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+.dashboard-stepper-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.dashboard-hours-reset {
+  display: block;
+  margin: 6px auto 0;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  background: transparent;
+  color: var(--color-accent);
+  border: 1px solid rgba(var(--accent-rgb), 0.5);
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: var(--font-family);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dashboard-hours-reset:active {
+  transform: scale(0.95);
+  background: rgba(var(--accent-rgb), 0.12);
+}
+
+.dashboard-hours-sim-info {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.7rem;
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
+.dashboard-stat--stepper.is-simulating .dashboard-stat-value {
+  color: var(--color-accent);
+  font-style: italic;
+}
