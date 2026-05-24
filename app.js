@@ -89,17 +89,11 @@ const JobTracker = (function () {
   // ─── Global Utilities (Req 2.7, 13.6) ────────────────────────────────────────
 
   /**
-   * Update the --app-header-height CSS variable to match the actual rendered
-   * height of the fixed app header. Called on init, resize, and orientation
-   * change so .view-section padding-top stays in sync.
+   * V3.1.1: Header is now in-flow (scrolls with content); the variable is
+   * preserved as 0 so any legacy padding-top calc sites collapse cleanly.
    */
   function _setHeaderHeightVar() {
-    var header = document.querySelector('.app-header');
-    if (!header) return;
-    var h = header.offsetHeight;
-    if (h > 0) {
-      document.documentElement.style.setProperty('--app-header-height', h + 'px');
-    }
+    document.documentElement.style.setProperty('--app-header-height', '0px');
   }
 
   /**
@@ -8484,7 +8478,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '3.1.0';
+    const APP_VERSION = '3.1.1';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -11970,7 +11964,9 @@ const JobTracker = (function () {
         if (hoursLabel) hoursLabel.textContent = 'Stunden';
         if (hoursEl) hoursEl.textContent = _formatHours(aggregated.hours);
         if (bruttoEl) bruttoEl.textContent = _formatCurrency(aggregated.brutto);
-        if (nettoEl) nettoEl.textContent = _formatCurrency(aggregated.nettoCashflow);
+        if (nettoEl) nettoEl.textContent = _formatCurrency(_showHeaderBrutto ? aggregated.brutto : aggregated.nettoCashflow);
+        var balanceLabelEl = document.getElementById('dashboard-header-balance-label');
+        if (balanceLabelEl) balanceLabelEl.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
         return;
       }
 
@@ -12031,7 +12027,9 @@ const JobTracker = (function () {
         
         if (hoursEl) hoursEl.textContent = isDaily ? String(baselineVal) : _formatHours(baselineVal);
         if (bruttoEl) bruttoEl.textContent = _formatCurrency(aggregated.brutto);
-        if (nettoEl) nettoEl.textContent = _formatCurrency(aggregated.nettoCashflow);
+        if (nettoEl) nettoEl.textContent = _formatCurrency(_showHeaderBrutto ? aggregated.brutto : aggregated.nettoCashflow);
+        var balanceLabelElZero = document.getElementById('dashboard-header-balance-label');
+        if (balanceLabelElZero) balanceLabelElZero.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
         
         _renderSimulatorExpandedState();
         return;
@@ -12068,7 +12066,9 @@ const JobTracker = (function () {
       // Write simulated values to DOM
       if (hoursEl) hoursEl.textContent = isDaily ? String(simulatedVal) : _formatHours(simulatedVal);
       if (bruttoEl) bruttoEl.textContent = _formatCurrency(simulatedBrutto);
-      if (nettoEl) nettoEl.textContent = _formatCurrency(simulatedNettoCashflow);
+      if (nettoEl) nettoEl.textContent = _formatCurrency(_showHeaderBrutto ? simulatedBrutto : simulatedNettoCashflow);
+      var balanceLabelElSim = document.getElementById('dashboard-header-balance-label');
+      if (balanceLabelElSim) balanceLabelElSim.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
 
       // Calculate Netto delta
       var deltaNetto = simulatedNettoCashflow - aggregated.nettoCashflow;
@@ -17595,8 +17595,18 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '3.1.0';
+  const APP_VERSION = '3.1.1';
   const APP_CHANGELOG = [
+    {
+      version: '3.1.1',
+      date: '2026-05-24',
+      changes: [
+        'v3.1.1 — Scroll-Away-Header & Brutto/Netto-Toggle gefixt',
+        '🌅 Großer Gradient-Header scrollt jetzt natürlich mit — kein dauerhaft fixiertes Riesenpanel mehr',
+        '🔘 Beim Scrollen erscheint eine kleine kompakte Leiste oben mit den runden Buttons (Theme & Info)',
+        '💰 Bugfix: Tippen auf den Cashflow-Betrag schaltet jetzt korrekt zwischen Brutto- und Netto-Anzeige um (das Stepper-Update überschrieb den Wert vorher)'
+      ]
+    },
     {
       version: '3.1.0',
       date: '2026-05-24',
@@ -18284,6 +18294,76 @@ const JobTracker = (function () {
           document.body.classList.remove('modal-open');
         }
       });
+    }
+
+    // ── V3.1.1: Compact-bar duplicate buttons (same handlers as the big header) ──
+    var headerThemeToggleCompact = document.getElementById('header-theme-toggle-btn-compact');
+    if (headerThemeToggleCompact && !headerThemeToggleCompact._compactBound) {
+      headerThemeToggleCompact._compactBound = true;
+      var updateCompactIcon = function () {
+        var current = ThemeManager.getTheme();
+        var isDark = (current === 'dark' || (current === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches));
+        headerThemeToggleCompact.textContent = isDark ? '☀️' : '🌙';
+      };
+      headerThemeToggleCompact.addEventListener('click', function () {
+        var current = ThemeManager.getTheme();
+        var next = (current === 'dark') ? 'light' : 'dark';
+        ThemeManager.setTheme(next);
+        updateCompactIcon();
+        // Sync the big-header icon too
+        var bigBtn = document.getElementById('header-theme-toggle-btn');
+        if (bigBtn) bigBtn.textContent = headerThemeToggleCompact.textContent;
+        if (typeof HapticFeedbackService !== 'undefined' && HapticFeedbackService.micro) {
+          HapticFeedbackService.micro();
+        }
+      });
+      updateCompactIcon();
+    }
+
+    var rulesInfoBtnCompact = document.getElementById('header-rules-info-btn-compact');
+    if (rulesInfoBtnCompact && !rulesInfoBtnCompact._rulesInfoCompactBound) {
+      rulesInfoBtnCompact._rulesInfoCompactBound = true;
+      rulesInfoBtnCompact.addEventListener('click', function () {
+        var modal = document.getElementById('rules-info-modal');
+        if (modal) {
+          modal.classList.add('active');
+          document.body.classList.add('modal-open');
+        }
+        if (typeof HapticFeedbackService !== 'undefined' && HapticFeedbackService.micro) {
+          HapticFeedbackService.micro();
+        }
+      });
+    }
+
+    // ── V3.1.1: Scroll listener — show compact header after scrolling past the hero ──
+    var compactHeader = document.getElementById('app-header-compact');
+    if (compactHeader && !compactHeader._scrollBound) {
+      compactHeader._scrollBound = true;
+      var SCROLL_THRESHOLD = 180; // px — about half-way down the hero
+      var lastScrollY = -1;
+      var compactScrollRaf = null;
+
+      var updateCompactVisibility = function () {
+        compactScrollRaf = null;
+        var y = window.pageYOffset || document.documentElement.scrollTop || 0;
+        if (y === lastScrollY) return;
+        lastScrollY = y;
+        if (y > SCROLL_THRESHOLD) {
+          compactHeader.classList.add('is-visible');
+          compactHeader.setAttribute('aria-hidden', 'false');
+        } else {
+          compactHeader.classList.remove('is-visible');
+          compactHeader.setAttribute('aria-hidden', 'true');
+        }
+      };
+
+      window.addEventListener('scroll', function () {
+        if (compactScrollRaf) return;
+        compactScrollRaf = requestAnimationFrame(updateCompactVisibility);
+      }, { passive: true });
+
+      // Initial state
+      updateCompactVisibility();
     }
 
     // ── Accent Color Picker ──
