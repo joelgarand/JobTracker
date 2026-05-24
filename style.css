@@ -5644,76 +5644,278 @@ body.widget-dragging .view-section {
   pointer-events: none;
 }
 
-/* Stunden-Stepper im Gesamtübersicht-Card */
-.dashboard-stat--stepper {
+/* ============================================================
+   Steuer-Simulator (Redesigned Full-Width Panel)
+   ============================================================ */
+.dashboard-simulator-panel {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
   position: relative;
+  overflow: visible;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.05), 
+              0 8px 32px rgba(0, 0, 0, 0.2);
 }
 
-.dashboard-stat-value-row {
+.simulator-header {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.simulator-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
   gap: 6px;
 }
 
-.dashboard-stepper-btn {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  border-radius: 8px;
-  border: none;
-  background: rgba(var(--accent-rgb), 0.12);
-  color: var(--color-accent);
+/* Glowing Netto-Delta Badges */
+.simulator-delta-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 20px;
   font-size: 0.8rem;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.2px;
+  transition: all 0.2s ease;
+  animation: badge-pulse 2s infinite ease-in-out;
+}
+
+@keyframes badge-pulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(78, 204, 163, 0.4); }
+  70% { transform: scale(1.02); box-shadow: 0 0 10px 4px rgba(78, 204, 163, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(78, 204, 163, 0); }
+}
+
+.simulator-delta-badge.badge--positive {
+  background: rgba(78, 204, 163, 0.15);
+  color: var(--color-success);
+  border: 1px solid rgba(78, 204, 163, 0.3);
+  box-shadow: 0 0 8px rgba(78, 204, 163, 0.2);
+}
+
+.simulator-delta-badge.badge--negative {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--color-danger);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.2);
+  animation: badge-pulse-negative 2s infinite ease-in-out;
+}
+
+@keyframes badge-pulse-negative {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  70% { transform: scale(1.02); box-shadow: 0 0 10px 4px rgba(239, 68, 68, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.simulator-controls-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  margin-top: 4px;
+}
+
+/* Circular Tap-friendly Buttons (iOS optimal) */
+.simulator-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-primary);
+  font-size: 1.2rem;
+  font-weight: 500;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.1s ease, background 0.15s ease;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   font-family: var(--font-family);
   -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
-.dashboard-stepper-btn:active {
-  transform: scale(0.92);
+.simulator-btn:active {
+  transform: scale(0.9);
   background: var(--color-accent);
-  color: var(--color-accent-text);
+  color: var(--color-accent-text, #fff);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 12px var(--color-accent);
 }
 
-.dashboard-stepper-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
+.simulator-slider-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+  overflow: visible;
+  padding: 8px 0;
 }
 
-.dashboard-hours-reset {
-  display: block;
-  margin: 6px auto 0;
-  padding: 4px 10px;
-  font-size: 0.72rem;
-  background: transparent;
-  color: var(--color-accent);
-  border: 1px solid rgba(var(--accent-rgb), 0.5);
-  border-radius: 999px;
+/* Premium Range Slider Track & Thumb */
+.simulator-range-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  outline: none;
+  margin: 0;
   cursor: pointer;
+}
+
+.simulator-range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4), 0 0 10px rgba(78, 204, 163, 0.3);
+  cursor: pointer;
+  transition: transform 0.1s ease, background 0.15s ease;
+  margin-top: -11px;
+}
+
+.simulator-range-slider::-webkit-slider-thumb:active {
+  transform: scale(1.15);
+  background: #ffffff;
+}
+
+.simulator-range-slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.simulator-range-slider::-moz-range-thumb:active {
+  transform: scale(1.15);
+}
+
+.simulator-range-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.simulator-range-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Slider Labels & Bubble */
+.simulator-slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--color-text-tertiary);
+  margin-top: 2px;
+  position: relative;
+  width: 100%;
+}
+
+.slider-bubble {
+  position: absolute;
+  top: -38px;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background: var(--color-accent);
+  color: var(--color-accent-text, #050510);
+  font-weight: 700;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3), 0 0 8px rgba(78, 204, 163, 0.4);
+  transition: left 0.1s ease-out;
+}
+
+.slider-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 4px 4px 0;
+  border-style: solid;
+  border-color: var(--color-accent) transparent transparent;
+  display: block;
+  width: 0;
+}
+
+/* Footer Section */
+.simulator-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: var(--spacing-xs);
+  min-height: 24px;
+}
+
+.simulator-info-text {
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+  transition: color 0.2s ease;
+}
+
+.simulator-reset-btn {
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0;
+  transform: scale(0.9);
+  pointer-events: none;
   font-family: var(--font-family);
   -webkit-tap-highlight-color: transparent;
 }
 
-.dashboard-hours-reset:active {
+.simulator-reset-btn.visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+.simulator-reset-btn:active {
   transform: scale(0.95);
-  background: rgba(var(--accent-rgb), 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
-.dashboard-hours-sim-info {
-  display: block;
-  margin-top: 4px;
-  font-size: 0.7rem;
-  color: var(--color-text-tertiary);
-  text-align: center;
-}
-
-.dashboard-stat--stepper.is-simulating .dashboard-stat-value {
-  color: var(--color-accent);
+/* Simulator Active Glow on Stat Container */
+#stat-stunden-root.is-simulating .dashboard-stat-value {
+  color: var(--color-accent) !important;
+  text-shadow: 0 0 10px rgba(78, 204, 163, 0.5);
   font-style: italic;
 }

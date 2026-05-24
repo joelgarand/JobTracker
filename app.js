@@ -11832,62 +11832,155 @@ const JobTracker = (function () {
     }
 
     /**
-     * Renders the hours stepper (▲▼) and reset button. Recomputes simulated
-     * hours/brutto/netto when _simHoursDelta != 0 and overwrites the DOM
-     * values written by _renderDashboard.
-     *
-     * Hidden when no primary hourly job exists or when in all-time mode.
+     * Returns the primary simulatable job (prefers hourly with rate > 0, falls back to daily with rate > 0).
+     * @returns {object|null}
+     */
+    function _getPrimarySimulatableJob() {
+      var jobs = AppState.getState().jobs;
+      if (!jobs || jobs.length === 0) return null;
+      for (var i = 0; i < jobs.length; i++) {
+        if (jobs[i].salaryType === 'hourly' && jobs[i].defaultHourlyRate > 0) {
+          return jobs[i];
+        }
+      }
+      for (var j = 0; j < jobs.length; j++) {
+        if (jobs[j].salaryType === 'daily' && jobs[j].defaultDailyRate > 0) {
+          return jobs[j];
+        }
+      }
+      return null;
+    }
+
+    /**
+     * Counts worked/pending days for a job in a specific month.
+     * @returns {number}
+     */
+    function _getWorkedDaysForJob(jobId, year, month) {
+      var entries = TimeTrackerModule.getEntriesForMonth(year, month, jobId);
+      var count = 0;
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i].status === 'worked' || (_showProjected && entries[i].status === 'pending')) {
+          count++;
+        }
+      }
+      return count;
+    }
+
+    /**
+     * Renders the Steuer-Simulator panel. Recomputes simulated hours/days,
+     * brutto, and netto, and updates the dashboard values.
      */
     function _renderStepper(aggregated, year, month) {
-      var stepperRoot = document.querySelector('.dashboard-stat--stepper');
+      var simPanel = document.getElementById('dashboard-simulator-panel');
+      var hoursLabel = document.getElementById('dashboard-hours-label');
+      var hoursEl = document.getElementById('dashboard-total-hours');
+      var bruttoEl = document.getElementById('dashboard-total-brutto');
+      var nettoEl = document.getElementById('dashboard-total-netto');
+      
+      var slider = document.getElementById('dashboard-hours-slider');
+      var sliderMin = document.getElementById('slider-min-label');
+      var sliderMax = document.getElementById('slider-max-label');
+      var sliderBubble = document.getElementById('slider-current-bubble');
       var btnUp = document.getElementById('dashboard-hours-up');
       var btnDown = document.getElementById('dashboard-hours-down');
       var btnReset = document.getElementById('dashboard-hours-reset');
       var simInfo = document.getElementById('dashboard-hours-sim-info');
-      var hoursEl = document.getElementById('dashboard-total-hours');
-      var bruttoEl = document.getElementById('dashboard-total-brutto');
-      var nettoEl = document.getElementById('dashboard-total-netto');
-      if (!stepperRoot || !btnUp || !btnDown) return;
+      var badge = document.getElementById('simulator-delta-badge');
+      var badgeVal = document.getElementById('simulator-delta-value');
+      var statRoot = document.getElementById('stat-stunden-root');
 
-      var primaryJob = _getPrimaryHourlyJob();
+      var primaryJob = _getPrimarySimulatableJob();
 
-      // Hide stepper entirely when there's no hourly job or in all-time mode
+      // Hide simulator entirely when there's no simulatable job or in all-time mode
       if (!primaryJob || _showAllTime) {
         _simHoursDelta = 0;
-        btnUp.hidden = true;
-        btnDown.hidden = true;
-        if (btnReset) btnReset.hidden = true;
-        if (simInfo) simInfo.hidden = true;
-        stepperRoot.classList.remove('is-simulating');
+        if (simPanel) simPanel.style.display = 'none';
+        if (statRoot) statRoot.classList.remove('is-simulating');
+        if (hoursLabel) hoursLabel.textContent = 'Stunden';
+        if (hoursEl) hoursEl.textContent = _formatHours(aggregated.hours);
+        if (bruttoEl) bruttoEl.textContent = _formatCurrency(aggregated.brutto);
+        if (nettoEl) nettoEl.textContent = _formatCurrency(aggregated.nettoCashflow);
         return;
       }
 
-      // Show stepper buttons (always enabled when shown)
-      btnUp.hidden = false;
-      btnDown.hidden = false;
-      btnUp.disabled = false;
-      btnDown.disabled = false;
+      if (simPanel) simPanel.style.display = 'block';
+
+      var isDaily = primaryJob.salaryType === 'daily';
+      var baselineVal = 0;
+      var unit = '';
+      var maxDelta = 0;
+
+      var now = new Date();
+      var day = now.getDate();
+      var billingYear = year;
+      var billingMonth = month;
+      if (primaryJob.billingDay && day > primaryJob.billingDay) {
+        billingMonth++;
+        if (billingMonth > 12) { billingMonth = 1; billingYear++; }
+      }
+
+      if (isDaily) {
+        baselineVal = _getWorkedDaysForJob(primaryJob.id, billingYear, billingMonth);
+        unit = ' Tage';
+        var daysInMonth = new Date(billingYear, billingMonth, 0).getDate();
+        maxDelta = Math.max(5, daysInMonth - baselineVal);
+        
+        if (hoursLabel) hoursLabel.textContent = 'Tage';
+        if (hoursEl) hoursEl.textContent = String(baselineVal);
+      } else {
+        baselineVal = aggregated.hours;
+        unit = ' Std.';
+        maxDelta = Math.max(20, 160 - Math.round(baselineVal));
+        
+        if (hoursLabel) hoursLabel.textContent = 'Stunden';
+        if (hoursEl) hoursEl.textContent = _formatHours(baselineVal);
+      }
+
+      // Clamp _simHoursDelta within valid range [0, maxDelta]
+      if (_simHoursDelta < 0) _simHoursDelta = 0;
+      if (_simHoursDelta > maxDelta) _simHoursDelta = maxDelta;
+
+      // Update range slider constraints
+      if (slider) {
+        slider.min = '0';
+        slider.max = String(maxDelta);
+        slider.value = String(_simHoursDelta);
+      }
+      if (sliderMin) sliderMin.textContent = '0' + unit;
+      if (sliderMax) sliderMax.textContent = '+' + maxDelta + unit;
+      if (sliderBubble) {
+        sliderBubble.textContent = (_simHoursDelta > 0 ? '+' : '') + _simHoursDelta + unit;
+        var pct = (maxDelta > 0) ? (_simHoursDelta / maxDelta) * 100 : 0;
+        sliderBubble.style.left = 'calc(' + pct + '% + (' + (8 - pct * 0.16) + 'px))';
+      }
 
       if (_simHoursDelta === 0) {
-        // No simulation — actual values already written by _renderDashboard
-        stepperRoot.classList.remove('is-simulating');
-        if (btnReset) btnReset.hidden = true;
-        if (simInfo) simInfo.hidden = true;
+        if (statRoot) statRoot.classList.remove('is-simulating');
+        if (btnReset) btnReset.classList.remove('visible');
+        if (badge) badge.style.display = 'none';
+        if (simInfo) {
+          simInfo.textContent = 'Zusatzleistung simulieren (' + (primaryJob.employerName || '') + ')';
+        }
+        
+        if (hoursEl) hoursEl.textContent = isDaily ? String(baselineVal) : _formatHours(baselineVal);
+        if (bruttoEl) bruttoEl.textContent = _formatCurrency(aggregated.brutto);
+        if (nettoEl) nettoEl.textContent = _formatCurrency(aggregated.nettoCashflow);
         return;
       }
 
       // Active simulation
-      stepperRoot.classList.add('is-simulating');
-      if (btnReset) btnReset.hidden = false;
+      if (statRoot) statRoot.classList.add('is-simulating');
+      if (btnReset) btnReset.classList.add('visible');
 
-      var simulatedHours = aggregated.hours + _simHoursDelta;
-      if (simulatedHours < 0) simulatedHours = 0;
-
-      // Brutto delta: simHoursDelta × primary hourly rate (clamped at 0)
-      var simulatedBrutto = aggregated.brutto + (_simHoursDelta * primaryJob.defaultHourlyRate);
+      var simulatedVal = baselineVal + _simHoursDelta;
+      var simulatedBrutto = aggregated.brutto;
+      if (isDaily) {
+        simulatedBrutto += _simHoursDelta * (primaryJob.defaultDailyRate || 0);
+      } else {
+        simulatedBrutto += _simHoursDelta * primaryJob.defaultHourlyRate;
+      }
       if (simulatedBrutto < 0) simulatedBrutto = 0;
 
-      // Netto: prefer engine, fall back to ratio, then 65%
       var simulatedNetto;
       var netRes = null;
       try {
@@ -11896,118 +11989,128 @@ const JobTracker = (function () {
       if (netRes && netRes.available) {
         simulatedNetto = netRes.netto;
       } else if (aggregated.brutto > 0) {
-        simulatedNetto = simulatedBrutto * (aggregated.nettoCashflow / aggregated.brutto);
+        simulatedNetto = simulatedBrutto * (aggregated.netto / aggregated.brutto);
       } else {
         simulatedNetto = simulatedBrutto * 0.65;
       }
 
-      // Add tips back so the displayed netto is comparable to the actual
-      // "netto cashflow" already shown
       var simulatedNettoCashflow = simulatedNetto + (aggregated.tips || 0);
 
-      if (hoursEl) hoursEl.textContent = _formatHours(simulatedHours);
+      // Write simulated values to DOM
+      if (hoursEl) hoursEl.textContent = isDaily ? String(simulatedVal) : _formatHours(simulatedVal);
       if (bruttoEl) bruttoEl.textContent = _formatCurrency(simulatedBrutto);
       if (nettoEl) nettoEl.textContent = _formatCurrency(simulatedNettoCashflow);
 
+      // Render delta badge
+      var deltaNetto = simulatedNettoCashflow - aggregated.nettoCashflow;
+      if (badge && badgeVal) {
+        badge.style.display = 'inline-flex';
+        badge.className = 'simulator-delta-badge ' + (deltaNetto >= 0 ? 'badge--positive' : 'badge--negative');
+        badgeVal.textContent = (deltaNetto >= 0 ? '+' : '') + _formatCurrency(deltaNetto) + ' Netto';
+      }
+
       if (simInfo) {
-        var sign = _simHoursDelta > 0 ? '+' : '−';
-        var absDelta = Math.abs(_simHoursDelta);
-        simInfo.textContent = sign + absDelta + ' Std. simuliert für ' + (primaryJob.employerName || '');
-        simInfo.hidden = false;
+        simInfo.textContent = '+' + _simHoursDelta + ' ' + (isDaily ? 'Tag' : 'Std.') + (_simHoursDelta > 1 ? (isDaily ? 'e' : '.)') : (isDaily ? '' : '.')) + ' simuliert für ' + (primaryJob.employerName || '');
       }
     }
 
     /**
-     * Binds stepper button click handlers. Idempotent.
+     * Binds range slider and stepper button click handlers. Idempotent.
      */
     function _bindStepper() {
       if (_stepperBound) return;
       var btnUp = document.getElementById('dashboard-hours-up');
       var btnDown = document.getElementById('dashboard-hours-down');
       var btnReset = document.getElementById('dashboard-hours-reset');
+      var slider = document.getElementById('dashboard-hours-slider');
       if (!btnUp || !btnDown) return;
       _stepperBound = true;
 
       btnUp.addEventListener('click', function () {
-        _simHoursDelta += 1;
-        _update();
+        var primaryJob = _getPrimarySimulatableJob();
+        if (!primaryJob) return;
+        var isDaily = primaryJob.salaryType === 'daily';
+        
+        var now = new Date();
+        var billingYear = now.getFullYear();
+        var billingMonth = now.getMonth() + 1;
+        if (primaryJob.billingDay && now.getDate() > primaryJob.billingDay) {
+          billingMonth++;
+          if (billingMonth > 12) { billingMonth = 1; billingYear++; }
+        }
+
+        var baselineVal = 0;
+        var maxDelta = 0;
+        if (isDaily) {
+          baselineVal = _getWorkedDaysForJob(primaryJob.id, billingYear, billingMonth);
+          var daysInMonth = new Date(billingYear, billingMonth, 0).getDate();
+          maxDelta = Math.max(5, daysInMonth - baselineVal);
+        } else {
+          // Count active month hours baseline
+          var jobs = AppState.getState().jobs;
+          var totalHours = 0;
+          for (var ji = 0; ji < jobs.length; ji++) {
+            var job = jobs[ji];
+            var billingM = now.getMonth() + 1;
+            var billingY = now.getFullYear();
+            if (job.billingDay && now.getDate() > job.billingDay) {
+              billingM++;
+              if (billingM > 12) { billingM = 1; billingY++; }
+            }
+            var entries = TimeTrackerModule.getEntriesForMonth(billingY, billingM, job.id);
+            for (var ei = 0; ei < entries.length; ei++) {
+              if ((entries[ei].status === 'worked' || (_showProjected && entries[ei].status === 'pending')) && entries[ei].hours) {
+                totalHours += entries[ei].hours;
+              }
+            }
+          }
+          baselineVal = totalHours;
+          maxDelta = Math.max(20, 160 - Math.round(baselineVal));
+        }
+
+        if (_simHoursDelta < maxDelta) {
+          _simHoursDelta += 1;
+          _update();
+          _triggerMicroHaptic();
+        }
       });
 
       btnDown.addEventListener('click', function () {
-        // Don't allow simulated hours to go below 0
-        var now = new Date();
-        var year = now.getFullYear();
-        var month = now.getMonth() + 1;
-        var aggregated = _computeAggregatedForBaseline(year, month);
-        var currentTotal = aggregated ? aggregated.hours : 0;
-        var nextDelta = _simHoursDelta - 1;
-        if (currentTotal + nextDelta < 0) {
-          // Clamp instead of decrementing further
-          return;
+        if (_simHoursDelta > 0) {
+          _simHoursDelta -= 1;
+          _update();
+          _triggerMicroHaptic();
         }
-        _simHoursDelta = nextDelta;
-        _update();
       });
+
+      if (slider) {
+        slider.addEventListener('input', function (e) {
+          var val = parseInt(e.target.value, 10) || 0;
+          if (_simHoursDelta !== val) {
+            _simHoursDelta = val;
+            _update();
+            _triggerMicroHaptic();
+          }
+        });
+      }
 
       if (btnReset) {
         btnReset.addEventListener('click', function () {
-          _simHoursDelta = 0;
-          _update();
+          if (_simHoursDelta !== 0) {
+            _simHoursDelta = 0;
+            _update();
+            _triggerMicroHaptic();
+          }
         });
       }
     }
 
-    /**
-     * Lightweight baseline aggregation used by the stepper's down-button to
-     * decide whether decrementing would push hours below zero. Mirrors the
-     * hour-counting logic in _update without touching the DOM.
-     */
-    function _computeAggregatedForBaseline(year, month) {
-      var now = new Date();
-      var day = now.getDate();
-      var jobs = AppState.getState().jobs;
-      var totalHours = 0;
-      var totalBrutto = 0;
-      var totalNetto = 0;
-      var totalTips = 0;
-
-      if (_showAllTime) {
-        var ay = IncomeEngine.getAggregatedYearly(year, _showProjected);
-        return {
-          hours: ay.hours || 0,
-          brutto: ay.totalBrutto || 0,
-          nettoCashflow: ay.nettoCashflow || 0,
-          tips: ay.totalTips || 0
-        };
+    function _triggerMicroHaptic() {
+      if (typeof HapticFeedbackService !== 'undefined' && HapticFeedbackService.micro) {
+        HapticFeedbackService.micro();
       }
-
-      for (var ji = 0; ji < jobs.length; ji++) {
-        var job = jobs[ji];
-        var bMonth = month;
-        var bYear = year;
-        if (job.billingDay && day > job.billingDay) {
-          bMonth++;
-          if (bMonth > 12) { bMonth = 1; bYear++; }
-        }
-        var entries = TimeTrackerModule.getEntriesForMonth(bYear, bMonth, job.id);
-        for (var ei = 0; ei < entries.length; ei++) {
-          if ((entries[ei].status === 'worked' || (_showProjected && entries[ei].status === 'pending')) && entries[ei].hours) {
-            totalHours += entries[ei].hours;
-          }
-        }
-        totalBrutto += IncomeEngine.calculateMonthlyBrutto(job.id, bYear, bMonth, _showProjected) || 0;
-        totalTips += IncomeEngine.getTipTotal(job.id, bYear, bMonth) || 0;
-        var nr = IncomeEngine.calculateMonthlyNetto(job.id, bYear, bMonth, _showProjected);
-        if (nr && nr.available) totalNetto += nr.netto;
-      }
-
-      return {
-        hours: totalHours,
-        brutto: totalBrutto,
-        nettoCashflow: totalNetto + totalTips,
-        tips: totalTips
-      };
     }
+
 
     /**
      * Initializes the module: performs initial calculation and subscribes to
