@@ -5,15 +5,15 @@
 /* --- CSS Custom Properties (Dark Theme Default) --- */
 :root {
   /* Color palette */
-  --color-bg: #0a0a1a;
-  --color-surface: #1a1a2e;
-  --color-surface-solid: #1a1a2e;
-  --color-text-primary: #e0e0e0;
-  --color-text-secondary: #a0a0b0;
-  --color-text-tertiary: #6b6b80;
-  --color-border: rgba(255, 255, 255, 0.08);
+  --color-bg: #040409;
+  --color-surface: rgba(13, 13, 23, 0.45);
+  --color-surface-solid: #0d0d17;
+  --color-text-primary: #e2e2e9;
+  --color-text-secondary: #9494a6;
+  --color-text-tertiary: #5d5d73;
+  --color-border: rgba(255, 255, 255, 0.05);
   --color-accent: #4ecca3;
-  --color-accent-text: #0a0a1a;
+  --color-accent-text: #040409;
   --accent-rgb: 78, 204, 163;
   --color-accent-blue: #3b82f6;
   --color-success: #4ecca3;
@@ -21,16 +21,16 @@
   --color-danger: #ef4444;
 
   /* Content area backgrounds */
-  --color-content-bg: #1a1a2e;
-  --color-content-bg-solid: #1a1a2e;
+  --color-content-bg: rgba(13, 13, 23, 0.45);
+  --color-content-bg-solid: #0d0d17;
 
   /* Navigation bar */
-  --nav-bg: #0f0f1f;
-  --nav-border: rgba(255, 255, 255, 0.06);
+  --nav-bg: rgba(13, 13, 23, 0.65);
+  --nav-border: rgba(255, 255, 255, 0.05);
 
   /* Shadows */
-  --shadow-content: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-overlay: 0 -2px 12px rgba(0, 0, 0, 0.4);
+  --shadow-content: 0 8px 32px rgba(0, 0, 0, 0.35);
+  --shadow-overlay: 0 -8px 32px rgba(0, 0, 0, 0.4);
 
   /* Spacing */
   --spacing-xs: 4px;
@@ -40,7 +40,7 @@
   --spacing-xl: 32px;
 
   /* Typography */
-  --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
   --font-size-xs: 11px;
   --font-size-sm: 13px;
   --font-size-base: 15px;
@@ -49,10 +49,10 @@
   --font-size-xxl: 28px;
 
   /* Border radius */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 30px;
 
   /* Nav bar height */
   --nav-height: 60px;
@@ -140,11 +140,12 @@ a {
   left: 0;
   right: 0;
   z-index: var(--z-glass-overlay);
-  background: color-mix(in srgb, var(--color-bg) 90%, transparent);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(13, 13, 23, 0.65);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
   padding-top: max(env(safe-area-inset-top, 0px), 8px);
-  border-bottom: 0.5px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
 }
 
 .app-header__top {
@@ -165,11 +166,10 @@ a {
 
 .app-header__logo {
   text-align: center;
-  font-family: 'Georgia', 'Times New Roman', serif;
-  font-size: 18px;
-  font-weight: 700;
-  font-style: italic;
-  letter-spacing: -0.3px;
+  font-family: var(--font-family);
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
   color: var(--color-text-primary);
   justify-self: center;
 }
@@ -208,26 +208,31 @@ a {
 
 .header-tab {
   flex: 1;
-  padding: 10px 8px;
+  padding: 8px 12px;
   background: transparent;
-  border: none;
-  border-radius: 12px;
-  font-size: 12px;
+  border: 1px solid transparent;
+  border-radius: 20px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--color-text-secondary);
   cursor: pointer;
   font-family: var(--font-family);
-  transition: background 0.2s ease, color 0.2s ease;
+  transition: all 0.22s cubic-bezier(0.25, 0.8, 0.25, 1);
   -webkit-tap-highlight-color: transparent;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-height: 40px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .header-tab.active {
-  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
-  color: var(--color-accent);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.05);
 }
 
 .header-tab:active {
@@ -246,7 +251,39 @@ a {
 .glass-surface {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Ambient Background Glow Auroras */
+.ambient-glow {
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: var(--z-background);
+  filter: blur(140px);
+  -webkit-filter: blur(140px);
+  opacity: 0.45;
+  transition: opacity 0.5s ease;
+}
+
+.ambient-glow--1 {
+  width: 350px;
+  height: 350px;
+  top: -100px;
+  left: -100px;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.22) 0%, rgba(245, 158, 11, 0) 70%);
+}
+
+.ambient-glow--2 {
+  width: 400px;
+  height: 400px;
+  bottom: 10%;
+  right: -150px;
+  background: radial-gradient(circle, rgba(78, 204, 163, 0.18) 0%, rgba(78, 204, 163, 0) 70%);
 }
 
 /* Layer classes */
@@ -277,39 +314,44 @@ a {
   top: var(--app-header-height, 108px);
   left: 0;
   right: 0;
-  z-index: 99; /* just below .app-header (z-glass-overlay = 100) */
+  z-index: 99;
   display: flex;
   gap: var(--spacing-xs);
   padding: 8px 12px;
-  background: color-mix(in srgb, var(--color-bg) 92%, transparent);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
-  border-bottom: 0.5px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+  background: rgba(13, 13, 23, 0.65);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .sub-nav-bar .sub-nav-btn {
   flex: 1;
   padding: 8px 12px;
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
-  border-radius: 8px;
+  border-radius: 20px;
   color: var(--color-text-secondary);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   font-family: var(--font-family);
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition: all 0.22s cubic-bezier(0.25, 0.8, 0.25, 1);
   -webkit-tap-highlight-color: transparent;
   min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .sub-nav-bar .sub-nav-btn.active {
-  background: var(--color-accent);
-  color: var(--color-accent-text);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.05);
 }
 
 .sub-nav-bar .sub-nav-btn:not(.active):hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 /* Legacy .sub-nav / .tracking-sub-nav rules — retained for backward
@@ -1563,6 +1605,9 @@ body.theme-light .toast {
 .daily-dashboard-card {
   padding: var(--spacing-lg);
   margin-bottom: var(--spacing-md);
+  background: linear-gradient(135deg, rgba(78, 204, 163, 0.12) 0%, rgba(78, 204, 163, 0.02) 50%, rgba(13, 13, 23, 0.45) 100%);
+  border: 1px solid rgba(78, 204, 163, 0.15) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 24px rgba(78, 204, 163, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.04);
 }
 
 .dashboard-header-row {
@@ -1604,33 +1649,36 @@ body.theme-light .toast {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: var(--spacing-sm) 4px;
-  background: #0f0f1f;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  padding: var(--spacing-md) 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.04);
   min-width: 0;
-  /* allow long currency values to render in full instead of being clipped */
   overflow: visible;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.02);
+  transition: all 0.25s ease;
 }
 
 .dashboard-stat-value {
-  font-size: clamp(11px, 4vw, 18px);
-  font-weight: 700;
-  color: var(--color-accent);
+  font-size: clamp(12px, 4.5vw, 19px);
+  font-weight: 800;
+  color: var(--color-text-primary);
   white-space: nowrap;
   overflow: visible;
   text-overflow: clip;
   max-width: 100%;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.5px;
+  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .dashboard-stat-label {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
-  margin-top: var(--spacing-xs);
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  margin-top: 6px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
+  font-weight: 700;
 }
 
 .dashboard-jobs-summary {
@@ -3759,13 +3807,15 @@ body.theme-light .entry-history-filter {
    ============================================================ */
 .dashboard-details-dropdown {
   margin-top: var(--spacing-md);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 18px;
   overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.02);
 }
 
 .dashboard-details-toggle {
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: 10px 16px;
   font-size: var(--font-size-sm);
   font-weight: 600;
   cursor: pointer;
@@ -3774,7 +3824,9 @@ body.theme-light .entry-history-filter {
   align-items: center;
   gap: var(--spacing-sm);
   color: var(--color-text-primary);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
+  transition: background 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .dashboard-details-toggle::-webkit-details-marker {
@@ -3794,7 +3846,7 @@ details[open] .dashboard-details-toggle::after {
 
 .dashboard-details-content {
   padding: var(--spacing-md);
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .dashboard-details-empty {
@@ -3856,9 +3908,10 @@ details[open] .dashboard-details-toggle::after {
   align-items: center;
   gap: 6px;
   flex: 1;
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 18px;
 }
 
 .dashboard-absence-icon {
@@ -3880,7 +3933,7 @@ details[open] .dashboard-details-toggle::after {
 .dashboard-extras-row {
   margin-top: 0;
   padding: var(--spacing-md) 0;
-  border-top: 0.5px solid var(--color-border);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .dashboard-extra-item {
@@ -3891,24 +3944,26 @@ details[open] .dashboard-details-toggle::after {
 /* Familienversicherung Warning */
 .dashboard-fv-warning {
   margin-top: var(--spacing-md);
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  padding: 10px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
 }
 
 .dashboard-fv-warning.fv-safe {
   background: rgba(var(--accent-rgb), 0.05);
-  border-color: rgba(var(--accent-rgb), 0.2);
+  border-color: rgba(var(--accent-rgb), 0.15) !important;
 }
 
 .dashboard-fv-warning.fv-warning {
-  background: rgba(245, 158, 11, 0.08);
-  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.06);
+  border-color: rgba(245, 158, 11, 0.25) !important;
 }
 
 .dashboard-fv-warning.fv-critical {
-  background: rgba(239, 68, 68, 0.08);
-  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.06);
+  border-color: rgba(239, 68, 68, 0.25) !important;
 }
 
 .fv-warning-header {

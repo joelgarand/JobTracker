@@ -8471,7 +8471,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.7.1';
+    const APP_VERSION = '2.8.0';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -17362,8 +17362,21 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.7.1';
+  const APP_VERSION = '2.8.0';
   const APP_CHANGELOG = [
+    {
+      version: '2.8.0',
+      date: '2026-05-24',
+      changes: [
+        'v2.8.0 — Premium Web 3.0 Design-Revamp',
+        '🌌 Ambiance Auroras: Sanft leuchtende, fixierte Amber- und Teal-Hintergrundeffekte (Radial Glow) sorgen für ein faszinierendes Tiefengefühl',
+        '💎 Obsidian-Glasmorphismus: Sämtliche App-Karten wurden in hochtransparente, tief verschwommene (blur: 24px) dunkle Paneele mit filigranen Borders (rgba 255/255/255/0.05) und weichen Schatten umgestaltet',
+        '🌟 Dashboard-Highlight-Glow: Die Gesamtübersicht-Karte glänzt nun mit einem edlen, dynamisch leuchtenden Teal-Verlaufshintergrund',
+        '🧭 Dynamic Island Header: Das Kopfzeilenmenü wurde in eine schwebende, hochauflösende Dynamic Island Bar umgewandelt',
+        '📱 Apple Native Design: Beibehaltung der standardmäßigen, gestochen scharfen iOS-Systemschriftarten für das ultimative PWA-Gefühl',
+        '💊 Visuelle Kapseln: Urlaub, Krankheit und rechtliche Warnungen werden jetzt in eleganten, farbig akzentuierten Pillen und Statuskapseln dargestellt'
+      ]
+    },
     {
       version: '2.7.1',
       date: '2026-05-24',
