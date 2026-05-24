@@ -8452,7 +8452,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.4.0';
+    const APP_VERSION = '2.4.1';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -8958,8 +8958,9 @@ const JobTracker = (function () {
 
     /**
      * Imports a list of parsed VEVENTs as workday entries on the chosen job.
-     * Append-mode: existing manual entries are preserved. Existing entries
-     * with a matching (jobId, date, startTime) get their hours updated.
+     * One entry per (jobId, date): if an entry already exists for the job on
+     * that date — whether manual or from a prior import — its hours are
+     * overwritten. This makes re-imports idempotent.
      *
      * @param {Array} events - From parseICS()
      * @param {string} jobId - Target job
@@ -8981,14 +8982,16 @@ const JobTracker = (function () {
       // Snapshot the workdays array so we mutate locally and persist once.
       var workdays = (AppState.getState().workdays || []).slice();
 
-      // Build a quick lookup index by jobId|date|startTime to avoid O(n²) on big imports.
+      // Build a lookup index by jobId|date — one entry per job per day.
+      // If multiple entries exist for the same job+date, keep the last one
+      // (most recent index) so updates target the freshest record.
       var index = {};
       for (var k = 0; k < workdays.length; k++) {
         var w = workdays[k];
         if (!w || !w.date) continue;
         if (w.jobId !== jobId) continue;
-        if (!w.startTime) continue;
-        index[w.date + '|' + w.startTime] = k;
+        // Match by date only (not startTime) — one shift per job per day.
+        index[w.date] = k;
       }
 
       for (var i = 0; i < events.length; i++) {
@@ -8999,7 +9002,7 @@ const JobTracker = (function () {
           continue;
         }
 
-        var key = built.date + '|' + built.startTime;
+        var key = built.date;
         var existingIdx = index[key];
         var nowIso = new Date().toISOString();
 
@@ -9041,7 +9044,7 @@ const JobTracker = (function () {
           };
           workdays.push(newEntry);
           // Index the freshly added entry so a subsequent VEVENT with the
-          // same date+startTime updates rather than duplicates it.
+          // same date updates rather than duplicates it.
           index[key] = workdays.length - 1;
           result.added++;
         }
@@ -16980,8 +16983,18 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.4.0';
+  const APP_VERSION = '2.4.1';
   const APP_CHANGELOG = [
+    {
+      version: '2.4.1',
+      date: '2026-06-08',
+      changes: [
+        'v2.4.1 — ICS-Import: ein Eintrag pro Tag (Match nur per Datum)',
+        '📅 Kalender-Import: Pro Job und Datum existiert ab jetzt nur noch ein Eintrag — bestehende Einträge werden beim Re-Import überschrieben',
+        '🔁 Idempotenter Re-Import: Mehrfaches Importieren derselben .ics-Datei erzeugt keine Duplikate mehr',
+        '🛠️ Match-Logik: Statt (Job + Datum + Startzeit) wird nur noch (Job + Datum) zur Erkennung bestehender Einträge verwendet'
+      ]
+    },
     {
       version: '2.4.0',
       date: '2026-06-07',
