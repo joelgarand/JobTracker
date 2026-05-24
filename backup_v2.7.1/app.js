@@ -8471,7 +8471,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.8.0';
+    const APP_VERSION = '2.7.1';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -11641,85 +11641,9 @@ const JobTracker = (function () {
         }
       }
 
-      // Dynamic Greeting & Avatar Initials
-      var profile = AppState.getState().userProfile;
-      var name = (profile && (profile.name || profile.username)) ? (profile.name || profile.username) : 'Joel';
-      var greetingEl = document.getElementById('header-greeting-title');
-      if (greetingEl) {
-        greetingEl.textContent = 'Servus ' + name + '!';
-      }
-      var avatarEl = document.getElementById('header-user-avatar');
-      if (avatarEl) {
-        if (profile && (profile.name || profile.username)) {
-          var nameVal = profile.name || profile.username;
-          var initials = nameVal.trim().split(/\s+/).map(function(n) { return n.charAt(0); }).join('').toUpperCase();
-          avatarEl.textContent = initials || 'JG';
-        } else {
-          avatarEl.textContent = 'JG';
-        }
-      }
-
       _updateNettoBreakdown(aggregated, year, month);
       _updateAbsenceRow(aggregated);
       _updateFVWarning(year, month);
-      _renderFinancialChart(aggregated);
-    }
-
-    /**
-     * Renders the Einnahmen-Bericht vertical capsules chart and legend.
-     */
-    function _renderFinancialChart(aggregated) {
-      var chartCard = document.getElementById('dashboard-financial-chart-card');
-      var pillsEl = document.getElementById('financial-chart-pills');
-      var legendEl = document.getElementById('financial-chart-legend');
-
-      if (!chartCard || !pillsEl || !legendEl) return;
-
-      var perJob = aggregated.perJob || [];
-      // Filter out jobs with zero brutto
-      var activeJobs = perJob.filter(function (pj) { return pj.brutto > 0; });
-
-      if (activeJobs.length === 0 || aggregated.brutto === 0) {
-        chartCard.style.display = 'none';
-        return;
-      }
-
-      chartCard.style.display = 'block';
-
-      var neonColors = [
-        { hex: '#4ecca3', shadow: 'rgba(78, 204, 163, 0.4)' },
-        { hex: '#3b82f6', shadow: 'rgba(59, 130, 246, 0.4)' },
-        { hex: '#f59e0b', shadow: 'rgba(245, 158, 11, 0.4)' },
-        { hex: '#ef4444', shadow: 'rgba(239, 68, 68, 0.4)' },
-        { hex: '#a855f7', shadow: 'rgba(168, 85, 247, 0.4)' }
-      ];
-
-      var pillsHtml = '';
-      var legendHtml = '';
-
-      for (var i = 0; i < activeJobs.length; i++) {
-        var pj = activeJobs[i];
-        var pct = Math.round((pj.brutto / aggregated.brutto) * 100);
-        var color = neonColors[i % neonColors.length];
-
-        // Format value for tooltip
-        var shortVal = _formatCurrency(pj.brutto);
-
-        pillsHtml += '<div class="financial-pill-wrapper">';
-        pillsHtml += '  <div class="financial-pill-column" style="height: ' + pct + '%; background: ' + color.hex + '; box-shadow: 0 4px 16px ' + color.shadow + ';">';
-        pillsHtml += '    <span class="financial-pill-value">' + shortVal + '</span>';
-        pillsHtml += '  </div>';
-        pillsHtml += '  <span class="financial-pill-percentage">' + pct + '%</span>';
-        pillsHtml += '</div>';
-
-        legendHtml += '<div class="financial-legend-item">';
-        legendHtml += '  <span class="legend-dot" style="color: ' + color.hex + '; background-color: ' + color.hex + ';"></span>';
-        legendHtml += '  <span>' + pj.employerName + ' (' + pct + '%)</span>';
-        legendHtml += '</div>';
-      }
-
-      pillsEl.innerHTML = pillsHtml;
-      legendEl.innerHTML = legendHtml;
     }
 
     /**
@@ -12248,52 +12172,6 @@ const JobTracker = (function () {
 
       // Bind stepper buttons (idempotent)
       _bindStepper();
-
-      // Bind dynamic Mockup Layout buttons
-      var settingsBtn = document.getElementById('header-settings-btn');
-      if (settingsBtn) {
-        settingsBtn.addEventListener('click', function () {
-          NavigationController.switchTo('view-settings');
-          _triggerMicroHaptic();
-        });
-      }
-
-      var avatarBtn = document.getElementById('header-user-avatar');
-      if (avatarBtn) {
-        avatarBtn.addEventListener('click', function () {
-          NavigationController.switchTo('view-settings');
-          _triggerMicroHaptic();
-        });
-      }
-
-      var addShiftBtn = document.getElementById('action-add-shift-btn');
-      if (addShiftBtn) {
-        addShiftBtn.addEventListener('click', function () {
-          NavigationController.switchTo('view-entry');
-          _triggerMicroHaptic();
-        });
-      }
-
-      var simBtn = document.getElementById('action-simulator-btn');
-      if (simBtn) {
-        simBtn.addEventListener('click', function () {
-          _simulatorExpanded = !_simulatorExpanded;
-          _renderSimulatorExpandedState();
-          _update();
-          _triggerMicroHaptic();
-        });
-      }
-
-      var detailsBtn = document.getElementById('action-details-btn');
-      if (detailsBtn) {
-        detailsBtn.addEventListener('click', function () {
-          var detailsEl = document.getElementById('dashboard-netto-details');
-          if (detailsEl) {
-            detailsEl.open = !detailsEl.open;
-          }
-          _triggerMicroHaptic();
-        });
-      }
 
       // Initial render
       _update();
@@ -12853,150 +12731,40 @@ const JobTracker = (function () {
 
       // Create card element
       var card = document.createElement('div');
-      card.className = 'glass-surface goal-job-card job-card';
+      card.className = 'glass-surface job-card';
       card.id = 'job-card-' + job.id;
       card.setAttribute('data-job-id', job.id);
       card.setAttribute('data-job-type', job.type);
 
       // 1. Header
-      var headerHtml = '<div class="goal-job-header">' +
-        '  <span class="goal-job-title">' + _escapeHtml(job.employerName) + '</span>' +
-        '  <span class="goal-job-badge">' + _escapeHtml(job.type) + '</span>' +
-        '</div>';
+      var headerHtml = _renderCardHeader(job);
 
-      // 2. Mockup Savings Goal Calculations
-      var limit = 0;
-      var current = 0;
-      var remaining = 0;
-      var percentage = 0;
-      var warningLevel = 'safe';
-      var formattedLimit = '';
-      var formattedCurrent = '';
-      var formattedRemaining = '';
-
+      // 2. Type-specific content
+      var contentHtml = '';
       if (period.allTime) {
-        // Yearly mode
-        if (job.type === 'Minijob') {
-          limit = RuleConfigEngine.getMinijobLimit(year) * 12;
-          current = IncomeEngine.calculateYearlyBrutto(job.id, year);
-          remaining = Math.max(0, limit - current);
-          percentage = limit > 0 ? Math.min((current / limit) * 100, 100) : 0;
-          warningLevel = percentage >= 95 ? 'critical' : (percentage >= 80 ? 'warning' : 'safe');
-          formattedLimit = _formatCurrency(limit);
-          formattedCurrent = _formatCurrency(current);
-          formattedRemaining = _formatCurrency(remaining);
-        } else if (job.type === 'KFB') {
-          limit = 70;
-          // Count KFB worked days in year
-          for (var m = 1; m <= 12; m++) {
-            var entries = TimeTrackerModule.getEntriesForMonth(year, m, job.id);
-            for (var i = 0; i < entries.length; i++) {
-              if (entries[i].status === 'worked' || entries[i].status === 'pending') {
-                current++;
-              }
-            }
-          }
-          remaining = Math.max(0, limit - current);
-          percentage = limit > 0 ? Math.min((current / limit) * 100, 100) : 0;
-          warningLevel = percentage >= 95 ? 'critical' : (percentage >= 80 ? 'warning' : 'safe');
-          formattedLimit = limit + ' Tage';
-          formattedCurrent = current + ' Tage';
-          formattedRemaining = remaining + ' Tage';
-        } else {
-          // Werkstudent, Teilzeit, Vollzeit
-          var standardMonthlyHours = 80;
-          if (job.standardHoursPerDay && job.standardDaysPerWeek) {
-            standardMonthlyHours = job.standardHoursPerDay * job.standardDaysPerWeek * 4.33;
-          } else if (job.type === 'Teilzeit' || job.type === 'Vollzeit') {
-            standardMonthlyHours = 160;
-          }
-          limit = Math.round(standardMonthlyHours * 12 * 10) / 10;
-          // Sum hours across all months
-          for (var m = 1; m <= 12; m++) {
-            current += _getMonthlyHours(job.id, year, m);
-          }
-          current = Math.round(current * 100) / 100;
-          remaining = Math.max(0, limit - current);
-          percentage = limit > 0 ? Math.min((current / limit) * 100, 100) : 0;
-          formattedLimit = _formatHours(limit) + ' Std.';
-          formattedCurrent = _formatHours(current) + ' Std.';
-          formattedRemaining = _formatHours(remaining) + ' Std.';
-        }
+        // All-time mode: show yearly totals in a simple summary
+        contentHtml = _renderAllTimeContent(job, year);
+      } else if (job.type === 'KFB') {
+        contentHtml = _renderKFBContent(job);
+      } else if (job.type === 'Minijob') {
+        contentHtml = _renderMinijobContent(job, year, month);
+      } else if ((job.type === 'Teilzeit' || job.type === 'Vollzeit') && job.salaryType === 'fixed') {
+        contentHtml = _renderFixedSalaryContent(job, year, month);
       } else {
-        // Monthly mode
-        if (job.type === 'Minijob') {
-          limit = RuleConfigEngine.getMinijobLimit(year);
-          current = IncomeEngine.calculateMonthlyBrutto(job.id, year, month);
-          remaining = Math.max(0, limit - current);
-          percentage = limit > 0 ? Math.min((current / limit) * 100, 100) : 0;
-          warningLevel = percentage >= 95 ? 'critical' : (percentage >= 80 ? 'warning' : 'safe');
-          formattedLimit = _formatCurrency(limit);
-          formattedCurrent = _formatCurrency(current);
-          formattedRemaining = _formatCurrency(remaining);
-        } else if (job.type === 'KFB') {
-          limit = 70;
-          // Worked days in current year (KFB limit is yearly)
-          for (var m = 1; m <= 12; m++) {
-            var entries = TimeTrackerModule.getEntriesForMonth(year, m, job.id);
-            for (var i = 0; i < entries.length; i++) {
-              if (entries[i].status === 'worked' || entries[i].status === 'pending') {
-                current++;
-              }
-            }
-          }
-          remaining = Math.max(0, limit - current);
-          percentage = limit > 0 ? Math.min((current / limit) * 100, 100) : 0;
-          warningLevel = percentage >= 95 ? 'critical' : (percentage >= 80 ? 'warning' : 'safe');
-          formattedLimit = limit + ' Tage';
-          formattedCurrent = current + ' Tage';
-          formattedRemaining = remaining + ' Tage';
-        } else {
-          // Werkstudent, Teilzeit, Vollzeit
-          var standardMonthlyHours = 80;
-          if (job.standardHoursPerDay && job.standardDaysPerWeek) {
-            standardMonthlyHours = job.standardHoursPerDay * job.standardDaysPerWeek * 4.33;
-          } else if (job.type === 'Teilzeit' || job.type === 'Vollzeit') {
-            standardMonthlyHours = 160;
-          }
-          limit = Math.round(standardMonthlyHours * 10) / 10;
-          current = _getMonthlyHours(job.id, year, month);
-          remaining = Math.max(0, limit - current);
-          percentage = limit > 0 ? Math.min((current / limit) * 100, 100) : 0;
-          formattedLimit = _formatHours(limit) + ' Std.';
-          formattedCurrent = _formatHours(current) + ' Std.';
-          formattedRemaining = _formatHours(remaining) + ' Std.';
-        }
+        contentHtml = _renderHourlyContent(job, year, month);
       }
 
-      // 3. Body HTML
-      var bodyHtml = '<div class="goal-progress-container">' +
-        '  <div class="goal-progress-bar">' +
-        '    <div class="goal-progress-fill ' + warningLevel + '" style="width: ' + percentage.toFixed(1) + '%"></div>' +
-        '  </div>' +
-        '</div>' +
-        '<div class="goal-stats-row">' +
-        '  <div class="goal-stat-item">' +
-        '    <span class="goal-stat-label">LIMIT</span>' +
-        '    <span class="goal-stat-val">' + formattedLimit + '</span>' +
-        '  </div>' +
-        '  <div class="goal-stat-item">' +
-        '    <span class="goal-stat-label">AKTUELL</span>' +
-        '    <span class="goal-stat-val">' + formattedCurrent + '</span>' +
-        '  </div>' +
-        '  <div class="goal-stat-item">' +
-        '    <span class="goal-stat-label">VERBLEIBEND</span>' +
-        '    <span class="goal-stat-val">' + formattedRemaining + '</span>' +
-        '  </div>' +
-        '</div>';
+      // 3. Limit/rules info box placeholder
+      var limitsHtml = '<div class="job-card-limits" id="job-card-limits-' + job.id + '"></div>';
 
-      // Wrap in collapsible container
+      // Wrap content in collapsible container
       var collapsed = AppState.get('jobCardCollapsed_' + job.id) || false;
       var collapseClass = collapsed ? ' job-card-collapsed' : '';
-      card.innerHTML = headerHtml + '<div class="job-card-body' + collapseClass + '">' + bodyHtml + '</div>';
+      card.innerHTML = headerHtml + '<div class="job-card-body' + collapseClass + '">' + contentHtml + limitsHtml + '</div>';
       container.appendChild(card);
 
       // Make header clickable to toggle collapse
-      var header = card.querySelector('.goal-job-header');
+      var header = card.querySelector('.job-card-header');
       if (header) {
         header.style.cursor = 'pointer';
         header.addEventListener('click', function () {
@@ -13006,6 +12774,41 @@ const JobTracker = (function () {
             AppState.set('jobCardCollapsed_' + job.id, body.classList.contains('job-card-collapsed'));
           }
         });
+      }
+
+      // Render limit/rules info box via LimitMonitorUI
+      var limitsContainer = document.getElementById('job-card-limits-' + job.id);
+      if (limitsContainer) {
+        LimitMonitorUI.renderForJob(job.id, limitsContainer);
+      }
+
+      // Render KFB ring if applicable
+      if (job.type === 'KFB') {
+        var ringContainer = document.getElementById('job-card-kfb-ring-' + job.id);
+        if (ringContainer) {
+          LimitMonitorUI.renderKFBRing(job.id, ringContainer);
+        }
+      }
+
+      // Render 26-week progress for Werkstudent if container exists
+      if (job.type === 'Werkstudent') {
+        var weekContainer = document.getElementById('job-card-26week-' + job.id);
+        if (weekContainer) {
+          var weekStatus = LimitMonitor.check26WeekRule(year);
+          if (weekStatus) {
+            var current26 = weekStatus.current || 0;
+            var limit26 = weekStatus.limit || 26;
+            var pct26 = limit26 > 0 ? Math.min((current26 / limit26) * 100, 100) : 0;
+            var level26 = pct26 >= 95 ? 'critical' : (pct26 >= 80 ? 'warning' : 'safe');
+            weekContainer.innerHTML = '<div class="job-card-progress-label">' +
+              '<span>26-Wochen-Regel: ' + current26 + ' / ' + limit26 + ' Wochen</span>' +
+              '<span class="status-badge ' + level26 + '">' + Math.round(pct26) + '%</span>' +
+              '</div>' +
+              '<div class="job-card-progress-bar">' +
+              '<div class="job-card-progress-fill ' + level26 + '" style="width:' + pct26.toFixed(1) + '%"></div>' +
+              '</div>';
+          }
+        }
       }
     }
 
@@ -15564,8 +15367,23 @@ const JobTracker = (function () {
     function update() {
       var widget = document.getElementById('minijob-forecast-widget');
       if (!widget) return;
-      widget.classList.add('forecast-widget--hidden');
-      widget.style.display = 'none';
+
+      // Get active Minijobs
+      var activeMinijobs = _getActiveMinijobs();
+
+      // Show/hide widget based on whether active Minijobs exist
+      if (activeMinijobs.length === 0) {
+        widget.classList.add('forecast-widget--hidden');
+        return;
+      }
+
+      widget.classList.remove('forecast-widget--hidden');
+
+      // Calculate forecast
+      var forecast = getForecast();
+
+      // Update DOM elements
+      _renderForecast(forecast);
     }
 
     /**
@@ -17544,21 +17362,8 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.8.0';
+  const APP_VERSION = '2.7.1';
   const APP_CHANGELOG = [
-    {
-      version: '2.8.0',
-      date: '2026-05-24',
-      changes: [
-        'v2.8.0 — Premium Web 3.0 Design-Revamp',
-        '🌌 Ambiance Auroras: Sanft leuchtende, fixierte Amber- und Teal-Hintergrundeffekte (Radial Glow) sorgen für ein faszinierendes Tiefengefühl',
-        '💎 Obsidian-Glasmorphismus: Sämtliche App-Karten wurden in hochtransparente, tief verschwommene (blur: 24px) dunkle Paneele mit filigranen Borders (rgba 255/255/255/0.05) und weichen Schatten umgestaltet',
-        '🌟 Dashboard-Highlight-Glow: Die Gesamtübersicht-Karte glänzt nun mit einem edlen, dynamisch leuchtenden Teal-Verlaufshintergrund',
-        '🧭 Dynamic Island Header: Das Kopfzeilenmenü wurde in eine schwebende, hochauflösende Dynamic Island Bar umgewandelt',
-        '📱 Apple Native Design: Beibehaltung der standardmäßigen, gestochen scharfen iOS-Systemschriftarten für das ultimative PWA-Gefühl',
-        '💊 Visuelle Kapseln: Urlaub, Krankheit und rechtliche Warnungen werden jetzt in eleganten, farbig akzentuierten Pillen und Statuskapseln dargestellt'
-      ]
-    },
     {
       version: '2.7.1',
       date: '2026-05-24',
