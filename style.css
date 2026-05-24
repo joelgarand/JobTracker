@@ -80,6 +80,9 @@
 
   /* App header height — set dynamically by JS, fallback for first paint */
   --app-header-height: 108px;
+
+  /* Sub-nav bar height — set dynamically by JS, fallback for first paint */
+  --sub-nav-height: 52px;
 }
 
 /* --- Base Reset & Typography --- */
@@ -264,11 +267,54 @@ a {
 
 /* ============================================================
    Sub-Navigation — Segmented control within Tracking view
-   Sticky-positioned so it remains visible just below the fixed
-   .app-header while the view scrolls. The parent .view-section
-   provides the padding-top for the header, so top:0 here lines
-   the sub-nav up directly under the header tabs.
+   v2.2.1: Now a SECOND fixed bar between the header and content.
+   position:sticky was unreliable on iOS Safari with a fixed
+   header above; using position:fixed at top:var(--app-header-height)
+   guarantees the sub-nav stays pinned just below the header.
    ============================================================ */
+.sub-nav-bar {
+  position: fixed;
+  top: var(--app-header-height, 108px);
+  left: 0;
+  right: 0;
+  z-index: 99; /* just below .app-header (z-glass-overlay = 100) */
+  display: flex;
+  gap: var(--spacing-xs);
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--color-bg) 92%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 0.5px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+}
+
+.sub-nav-bar .sub-nav-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font-family);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 36px;
+}
+
+.sub-nav-bar .sub-nav-btn.active {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+.sub-nav-bar .sub-nav-btn:not(.active):hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Legacy .sub-nav / .tracking-sub-nav rules — retained for backward
+   compatibility with any markup that still uses these classes. The
+   shared sub-nav now uses .sub-nav-bar above. */
 .sub-nav,
 .tracking-sub-nav {
   display: flex;
@@ -330,6 +376,14 @@ a {
   padding-top: calc(var(--app-header-height, 108px) + var(--spacing-md));
   max-width: 100%;
   overflow-x: hidden;
+}
+
+/* Tracking views: extra padding-top so content clears both the header and
+   the fixed sub-nav bar that sits between header and content. */
+body.has-sub-nav #view-daily,
+body.has-sub-nav #view-monthly,
+body.has-sub-nav #view-yearly {
+  padding-top: calc(var(--app-header-height, 108px) + var(--sub-nav-height, 52px) + var(--spacing-md));
 }
 
 .view-section.active {

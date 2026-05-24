@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=60">
+  <link rel="stylesheet" href="style.css?v=61">
   <title>JobTracker</title>
 </head>
 <body>
@@ -26,6 +26,13 @@
       <button class="header-tab" data-view="view-settings" type="button">Einstellungen</button>
     </nav>
   </header>
+
+  <!-- Shared Sub-Nav Bar (fixed below header, only visible for tracking views) -->
+  <nav class="sub-nav-bar" id="tracking-sub-nav" aria-label="Tracking Unter-Navigation" style="display:none;">
+    <button class="sub-nav-btn active" data-target="view-daily" type="button">Übersicht</button>
+    <button class="sub-nav-btn" data-target="view-monthly" type="button">Monat</button>
+    <button class="sub-nav-btn" data-target="view-yearly" type="button">Jahr</button>
+  </nav>
 
   <!-- Error banner for localStorage errors -->
   <div id="error-banner" class="error-banner" role="alert" aria-live="assertive">
@@ -368,12 +375,6 @@
           <circle class="pull-spinner__circle" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="50" stroke-dashoffset="20"/>
         </svg>
       </div>
-      <!-- Sub-navigation for Tracking views -->
-      <div class="sub-nav">
-        <button class="sub-nav-btn active" data-target="view-daily" type="button">Übersicht</button>
-        <button class="sub-nav-btn" data-target="view-monthly" type="button">Monat</button>
-        <button class="sub-nav-btn" data-target="view-yearly" type="button">Jahr</button>
-      </div>
 
       <!-- Dashboard Edit Done Button (shown in edit mode) -->
       <button id="dashboard-edit-done" class="dashboard-edit-done" type="button">✓ Fertig</button>
@@ -517,13 +518,6 @@
   <!-- View: Monthly Overview -->
   <section id="view-monthly" class="view-section">
     <div class="scroll-content">
-      <!-- Sub-navigation for Tracking views -->
-      <div class="sub-nav">
-        <button class="sub-nav-btn" data-target="view-daily" type="button">Übersicht</button>
-        <button class="sub-nav-btn active" data-target="view-monthly" type="button">Monat</button>
-        <button class="sub-nav-btn" data-target="view-yearly" type="button">Jahr</button>
-      </div>
-
       <h1 class="monthly-title">Monatsübersicht</h1>
 
       <div class="glass-surface layer-content monthly-selector-card">
@@ -573,13 +567,6 @@
   <!-- View: Yearly Overview -->
   <section id="view-yearly" class="view-section">
     <div class="scroll-content">
-      <!-- Sub-navigation for Tracking views -->
-      <div class="sub-nav">
-        <button class="sub-nav-btn" data-target="view-daily" type="button">Übersicht</button>
-        <button class="sub-nav-btn" data-target="view-monthly" type="button">Monat</button>
-        <button class="sub-nav-btn active" data-target="view-yearly" type="button">Jahr</button>
-      </div>
-
       <h1 class="yearly-title">Jahresübersicht</h1>
 
       <div class="glass-surface layer-content yearly-selector-card">

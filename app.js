@@ -103,6 +103,20 @@ const JobTracker = (function () {
   }
 
   /**
+   * Update the --sub-nav-height CSS variable to match the actual rendered
+   * height of the fixed sub-nav bar. Called on init, resize, and orientation
+   * change so the tracking views' padding-top stays in sync with the bar.
+   */
+  function _setSubNavHeightVar() {
+    var subNav = document.getElementById('tracking-sub-nav');
+    if (!subNav) return;
+    var h = subNav.offsetHeight;
+    if (h > 0) {
+      document.documentElement.style.setProperty('--sub-nav-height', h + 'px');
+    }
+  }
+
+  /**
    * Shows a toast notification with the given message.
    * Used globally for save failures, import errors, and other transient messages.
    *
@@ -1148,6 +1162,31 @@ const JobTracker = (function () {
     }
 
     /**
+     * Shows or hides the shared fixed sub-nav bar based on whether the
+     * current view is a tracking view (Übersicht/Monat/Jahr). Toggles a
+     * body class so the tracking views' padding-top can account for the
+     * extra fixed bar height.
+     * @param {string} viewId
+     */
+    function _updateSubNavVisibility(viewId) {
+      var subNav = document.getElementById('tracking-sub-nav');
+      if (!subNav) return;
+      var TRACKING_VIEWS_LOCAL = ['view-daily', 'view-monthly', 'view-yearly'];
+      if (TRACKING_VIEWS_LOCAL.indexOf(viewId) !== -1) {
+        subNav.style.display = 'flex';
+        document.body.classList.add('has-sub-nav');
+        // Re-measure the bar height now that it's visible (offsetHeight is 0
+        // while display:none, so we have to do this after toggling visibility).
+        if (typeof _setSubNavHeightVar === 'function') {
+          _setSubNavHeightVar();
+        }
+      } else {
+        subNav.style.display = 'none';
+        document.body.classList.remove('has-sub-nav');
+      }
+    }
+
+    /**
      * Shows or hides the header tab bar (used during onboarding).
      * @param {boolean} visible - true to show, false to hide
      */
@@ -1228,6 +1267,7 @@ const JobTracker = (function () {
       _hideAllViews();
       _showView(viewId);
       _updateNavBar(viewId);
+      _updateSubNavVisibility(viewId);
 
       _activeView = viewId;
 
@@ -1322,6 +1362,7 @@ const JobTracker = (function () {
 
       // Update sub-nav highlighting (bottom nav stays on Tracking)
       _updateSubNav(subViewId);
+      _updateSubNavVisibility(subViewId);
       _updateNavBar(subViewId);
 
       // Persist to AppState
@@ -1398,6 +1439,7 @@ const JobTracker = (function () {
           _activeSubView = 'view-daily';
           _showView('view-pwa-install');
           _updateNavBar('');
+          _updateSubNavVisibility('view-pwa-install');
           EventBus.emit('navigation:change', { viewId: 'view-pwa-install' });
         } else {
           // Show onboarding directly (already standalone or not iOS Safari)
@@ -1405,6 +1447,7 @@ const JobTracker = (function () {
           _activeSubView = 'view-daily';
           _showView('view-onboarding');
           _updateNavBar('');
+          _updateSubNavVisibility('view-onboarding');
           AppState.set('activeView', 'view-onboarding');
           _lazyInit('view-onboarding');
           EventBus.emit('navigation:change', { viewId: 'view-onboarding' });
@@ -1442,6 +1485,7 @@ const JobTracker = (function () {
       if (TRACKING_VIEWS.indexOf(targetView) !== -1) {
         _updateSubNav(targetView);
       }
+      _updateSubNavVisibility(targetView);
 
       // Emit initial navigation event
       var payload = { viewId: targetView };
@@ -8408,7 +8452,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.2.0';
+    const APP_VERSION = '2.2.1';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -16553,8 +16597,18 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.2.0';
+  const APP_VERSION = '2.2.1';
   const APP_CHANGELOG = [
+    {
+      version: '2.2.1',
+      date: '2026-06-05',
+      changes: [
+        'v2.2.1 — Sub-Nav als fixed bar — bleibt zuverlässig unter dem Header',
+        '🧭 Sub-Tabs (Übersicht/Monat/Jahr): Jetzt als fixierte Leiste direkt unter dem Header — bleibt auf iOS Safari zuverlässig oben sichtbar (sticky war unzuverlässig)',
+        '🎯 Eine geteilte Sub-Nav für alle Tracking-Ansichten statt drei separate Leisten',
+        '📐 Inhalts-Padding wird dynamisch an die Höhe von Header + Sub-Nav angepasst'
+      ]
+    },
     {
       version: '2.2.0',
       date: '2026-06-04',
@@ -16963,13 +17017,17 @@ const JobTracker = (function () {
     NavigationController.init();
     ThemeManager.init();
 
-    // ── Header height CSS variable (kept in sync with the fixed header) ──
+    // ── Header & Sub-Nav height CSS variables (kept in sync with fixed bars) ──
     _setHeaderHeightVar();
-    window.addEventListener('resize', _setHeaderHeightVar);
+    _setSubNavHeightVar();
+    window.addEventListener('resize', function () {
+      _setHeaderHeightVar();
+      _setSubNavHeightVar();
+    });
     window.addEventListener('orientationchange', function () {
       // Defer one tick so the layout settles
-      setTimeout(_setHeaderHeightVar, 50);
-      setTimeout(_setHeaderHeightVar, 250);
+      setTimeout(function () { _setHeaderHeightVar(); _setSubNavHeightVar(); }, 50);
+      setTimeout(function () { _setHeaderHeightVar(); _setSubNavHeightVar(); }, 250);
     });
 
     // ── Phase 2.5: v2.0 Utility Modules ──
