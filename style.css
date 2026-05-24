@@ -1609,17 +1609,20 @@ body.theme-light .toast {
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   min-width: 0;
-  overflow: hidden;
+  /* allow long currency values to render in full instead of being clipped */
+  overflow: visible;
 }
 
 .dashboard-stat-value {
-  font-size: clamp(14px, 4.5vw, 20px);
+  font-size: clamp(11px, 4vw, 18px);
   font-weight: 700;
   color: var(--color-accent);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  text-overflow: clip;
   max-width: 100%;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
 }
 
 .dashboard-stat-label {
@@ -3612,7 +3615,7 @@ input[type="number"]::-webkit-outer-spin-button {
   }
   
   .dashboard-stat-value {
-    font-size: clamp(12px, 4vw, 16px);
+    font-size: clamp(10px, 3.8vw, 16px);
   }
 }
 
@@ -5020,8 +5023,9 @@ body.theme-light .tax-tile {
   margin: 0;
 }
 
-/* Notification time picker — constrained size */
-#notif-evening-time {
+/* Notification time pickers — constrained size */
+#notif-evening-time,
+#notif-morning-time {
   max-width: 120px;
   height: 40px;
   font-size: var(--font-size-base);
@@ -5532,4 +5536,79 @@ body.widget-dragging .view-section {
 .entry-form-card.editing {
   border-color: rgba(var(--accent-rgb), 0.4);
   box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.2);
+}
+
+/* ============================================================
+   v2.5.0 Pending Future Shifts — confirm/decline UI in entry list
+   ============================================================ */
+.entry-recent-item.entry-pending {
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  cursor: default;
+}
+
+.entry-pending-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(245, 158, 11, 0.18);
+  color: var(--color-warning);
+  margin-left: 4px;
+}
+
+.entry-pending-hours {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  display: block;
+  margin-top: 2px;
+}
+
+.entry-pending-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.entry-pending-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font-family);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s ease, opacity 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.entry-pending-btn:active {
+  transform: scale(0.92);
+}
+
+.entry-pending-btn--confirm {
+  background: rgba(78, 204, 163, 0.18);
+  color: var(--color-success);
+  border: 1px solid rgba(78, 204, 163, 0.4);
+}
+
+.entry-pending-btn--decline {
+  background: rgba(239, 68, 68, 0.18);
+  color: var(--color-danger);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+/* Suppress the generic press feedback on pending rows so it doesn't fight
+   with the action-button feedback. */
+.entry-recent-item.entry-pending:active {
+  background: rgba(245, 158, 11, 0.06);
 }

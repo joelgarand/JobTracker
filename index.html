@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=64">
+  <link rel="stylesheet" href="style.css?v=65">
   <title>JobTracker</title>
 </head>
 <body>
@@ -808,6 +808,19 @@
           <label class="form-label" for="notif-evening-time">Uhrzeit</label>
           <input type="time" id="notif-evening-time" class="form-input" value="22:00">
           <span class="form-hint">Wenn du um diese Zeit noch keine Stunden für heute eingetragen hast, erinnert dich JobTracker.</span>
+        </div>
+
+        <div class="toggle-group">
+          <label class="toggle-label" for="notif-morning-toggle">
+            <input type="checkbox" id="notif-morning-toggle" class="toggle-input">
+            <span class="toggle-switch"></span>
+            <span class="toggle-text">Morgens-Erinnerung an Schichten</span>
+          </label>
+        </div>
+        <div class="form-group" id="notif-morning-time-group" style="display:none;">
+          <label class="form-label" for="notif-morning-time">Uhrzeit</label>
+          <input type="time" id="notif-morning-time" class="form-input" value="07:00">
+          <span class="form-hint">Du wirst um diese Zeit erinnert wenn du heute eine Schicht hast.</span>
         </div>
 
         <div class="toggle-group">

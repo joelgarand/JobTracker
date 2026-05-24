@@ -6150,7 +6150,7 @@ const JobTracker = (function () {
       }
 
       // Status required
-      var validStatuses = ['worked', 'vacation', 'sick', 'not_worked'];
+      var validStatuses = ['worked', 'vacation', 'sick', 'not_worked', 'pending'];
       if (!entry.status || validStatuses.indexOf(entry.status) === -1) {
         errors.push('Gültiger Status ist erforderlich.');
       }
@@ -8452,7 +8452,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.4.1';
+    const APP_VERSION = '2.5.0';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -8785,6 +8785,20 @@ const JobTracker = (function () {
     }
 
     /**
+     * Returns true when the given YYYY-MM-DD string is strictly after today
+     * (using local time). Used by the ICS importer to mark future shifts as
+     * 'pending' so they don't count toward brutto until confirmed.
+     * @param {string} dateStr
+     * @returns {boolean}
+     */
+    function _isFutureDate(dateStr) {
+      if (!dateStr) return false;
+      var today = new Date();
+      var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+      return dateStr > todayStr;
+    }
+
+    /**
      * Formats a Date as HH:MM using local time components.
      * @param {Date} d
      * @returns {string}
@@ -9011,7 +9025,7 @@ const JobTracker = (function () {
           var prev = workdays[existingIdx];
           var updated = Object.assign({}, prev, {
             hours: built.hours,
-            status: prev.status === 'vacation' || prev.status === 'sick' ? prev.status : 'worked',
+            status: prev.status === 'vacation' || prev.status === 'sick' ? prev.status : (_isFutureDate(built.date) ? 'pending' : 'worked'),
             startTime: built.startTime,
             icsUid: ev.uid || prev.icsUid || null,
             updatedAt: nowIso
@@ -9028,7 +9042,7 @@ const JobTracker = (function () {
             id: _generateUUID(),
             jobId: jobId,
             date: built.date,
-            status: 'worked',
+            status: _isFutureDate(built.date) ? 'pending' : 'worked',
             hours: built.hours,
             hourlyRateOverride: null,
             dailyRateOverride: null,
@@ -9539,6 +9553,7 @@ const JobTracker = (function () {
           case 'vacation': statusLabel = 'Urlaub'; break;
           case 'sick': statusLabel = 'krank'; break;
           case 'not_worked': statusLabel = 'nicht gearbeitet'; break;
+          case 'pending': statusLabel = 'ausstehend'; break;
           default: statusLabel = entry.status; break;
         }
         var hoursStr = entry.hours !== null && entry.hours !== undefined ? entry.hours.toFixed(2) + 'h' : '—';
@@ -10781,8 +10796,33 @@ const JobTracker = (function () {
       var listEl = document.getElementById('entry-recent-list');
       if (!listEl) return;
       listEl.addEventListener('click', function (e) {
+        // Pending action buttons take priority — they manage their own state
+        // and shouldn't fall through to tap-to-edit.
+        var actionBtn = e.target.closest ? e.target.closest('.entry-pending-btn') : null;
+        if (actionBtn) {
+          e.stopPropagation();
+          var pendingId = actionBtn.getAttribute('data-entry-id');
+          var action = actionBtn.getAttribute('data-pending-action');
+          if (!pendingId) return;
+          if (action === 'confirm') {
+            var upd = TimeTrackerModule.updateEntry(pendingId, { status: 'worked' });
+            if (upd && upd.success === false) {
+              showToast(upd.error || 'Fehler beim Bestätigen.', 4000);
+            } else {
+              showToast('Schicht bestätigt ✓');
+            }
+          } else if (action === 'decline') {
+            TimeTrackerModule.deleteEntry(pendingId);
+            showToast('Schicht entfernt');
+          }
+          setTimeout(function () { _renderRecentEntries(); }, 100);
+          return;
+        }
+
         var entryEl = e.target.closest ? e.target.closest('.entry-recent-item') : null;
         if (!entryEl) return;
+        // Pending entries have their own action buttons — never enter edit mode.
+        if (entryEl.classList.contains('entry-pending')) return;
         // Don't enter edit mode when the entry is swiped open (the user is
         // interacting with the swipe-to-delete affordance).
         if (entryEl.classList.contains('swipeable-entry--swiped')) return;
@@ -10896,7 +10936,8 @@ const JobTracker = (function () {
         worked: 'Gearbeitet',
         vacation: 'Urlaub',
         sick: 'Krank',
-        not_worked: 'Nicht gearbeitet'
+        not_worked: 'Nicht gearbeitet',
+        pending: 'Ausstehend'
       };
 
       var html = '';
@@ -10905,17 +10946,36 @@ const JobTracker = (function () {
         var job = jobMap[entry.jobId];
         var jobName = job ? job.employerName : 'Unbekannt';
         var statusLabel = statusLabels[entry.status] || entry.status;
-        var hoursText = (entry.status === 'worked' && entry.hours) ? entry.hours + ' Std.' : statusLabel;
 
-        html += '<div class="entry-recent-item swipeable-entry" data-entry-id="' + entry.id + '">';
-        html += '<div class="entry-recent-info">';
-        html += '<span class="entry-recent-date">' + _formatDate(entry.date) + '</span>';
-        html += '<span class="entry-recent-meta">' + jobName + ' · ' + statusLabel + '</span>';
-        html += '</div>';
-        html += '<div class="entry-recent-actions">';
-        html += '<span class="entry-recent-hours">' + hoursText + '</span>';
-        html += '</div>';
-        html += '</div>';
+        if (entry.status === 'pending') {
+          // Pending future shift — special UI with confirm/decline action buttons.
+          // Skip swipe-to-delete and tap-to-edit so the action buttons are the
+          // only interaction surface.
+          var pendingHoursText = (entry.hours !== null && entry.hours !== undefined && entry.hours !== '') ? entry.hours + ' Std.' : '';
+          html += '<div class="entry-recent-item entry-pending" data-entry-id="' + entry.id + '">';
+          html += '<div class="entry-recent-info">';
+          html += '<span class="entry-recent-date">' + _formatDate(entry.date) + '</span>';
+          html += '<span class="entry-recent-meta entry-pending-meta">' + jobName + ' · <span class="entry-pending-badge">AUSSTEHEND</span></span>';
+          if (pendingHoursText) html += '<span class="entry-pending-hours">Geplant: ' + pendingHoursText + '</span>';
+          html += '</div>';
+          html += '<div class="entry-recent-actions entry-pending-actions">';
+          html += '<button type="button" class="entry-pending-btn entry-pending-btn--confirm" data-pending-action="confirm" data-entry-id="' + entry.id + '" aria-label="Schicht bestätigen">✓</button>';
+          html += '<button type="button" class="entry-pending-btn entry-pending-btn--decline" data-pending-action="decline" data-entry-id="' + entry.id + '" aria-label="Schicht löschen">✕</button>';
+          html += '</div>';
+          html += '</div>';
+        } else {
+          var hoursText = (entry.status === 'worked' && entry.hours) ? entry.hours + ' Std.' : statusLabel;
+
+          html += '<div class="entry-recent-item swipeable-entry" data-entry-id="' + entry.id + '">';
+          html += '<div class="entry-recent-info">';
+          html += '<span class="entry-recent-date">' + _formatDate(entry.date) + '</span>';
+          html += '<span class="entry-recent-meta">' + jobName + ' · ' + statusLabel + '</span>';
+          html += '</div>';
+          html += '<div class="entry-recent-actions">';
+          html += '<span class="entry-recent-hours">' + hoursText + '</span>';
+          html += '</div>';
+          html += '</div>';
+        }
       }
 
       listEl.innerHTML = html;
@@ -16574,8 +16634,10 @@ const JobTracker = (function () {
   const NotificationScheduler = (function () {
     var STORAGE_KEY = 'jt_notification_prefs';
     var LAST_TRIGGER_KEY = 'jt_evening_reminder_last';
+    var LAST_MORNING_TRIGGER_KEY = 'jt_morning_reminder_last';
     var DEFAULTS = {
       eveningReminder: { enabled: true, hour: 22, minute: 0 },
+      morningReminder: { enabled: false, hour: 7, minute: 0 },
       geoReminder:     { enabled: true },
       ruleWarning:     { enabled: true },
       minijobWarning:  { enabled: true }
@@ -16583,6 +16645,7 @@ const JobTracker = (function () {
 
     var _prefs = null;
     var _eveningTimerId = null;
+    var _morningTimerId = null;
     var _initialized = false;
 
     /**
@@ -16597,9 +16660,11 @@ const JobTracker = (function () {
 
       // Run missed-reminder check now (handles iOS PWA reopens after suspension)
       _checkMissedReminder();
+      _checkMissedMorning();
 
-      // Schedule the next evening reminder via setTimeout
+      // Schedule the next evening + morning reminders via setTimeout
       _scheduleNextEvening();
+      _scheduleNextMorning();
 
       // Subscribe so a freshly-saved workday cancels today's pending reminder
       EventBus.on('workday:saved', function () {
@@ -16623,13 +16688,27 @@ const JobTracker = (function () {
     }
 
     /**
+     * Configure the morning reminder time.
+     * @param {number} hour 0-23
+     * @param {number} minute 0-59
+     */
+    function setMorningReminderTime(hour, minute) {
+      if (typeof hour !== 'number' || typeof minute !== 'number') return;
+      _prefs.morningReminder.hour = Math.max(0, Math.min(23, hour|0));
+      _prefs.morningReminder.minute = Math.max(0, Math.min(59, minute|0));
+      _persistPrefs();
+      _scheduleNextMorning();
+    }
+
+    /**
      * Enable/disable a specific notification type.
-     * @param {string} type 'evening_reminder' | 'geo_reminder' | 'rule_warning' | 'minijob_warning'
+     * @param {string} type 'evening_reminder' | 'morning_reminder' | 'geo_reminder' | 'rule_warning' | 'minijob_warning'
      * @param {boolean} enabled
      */
     function enableType(type, enabled) {
       var key = null;
       if (type === 'evening_reminder') key = 'eveningReminder';
+      else if (type === 'morning_reminder') key = 'morningReminder';
       else if (type === 'geo_reminder') key = 'geoReminder';
       else if (type === 'rule_warning') key = 'ruleWarning';
       else if (type === 'minijob_warning') key = 'minijobWarning';
@@ -16640,6 +16719,8 @@ const JobTracker = (function () {
 
       if (key === 'eveningReminder') {
         _scheduleNextEvening();
+      } else if (key === 'morningReminder') {
+        _scheduleNextMorning();
       }
     }
 
@@ -16658,6 +16739,10 @@ const JobTracker = (function () {
         clearTimeout(_eveningTimerId);
         _eveningTimerId = null;
       }
+      if (_morningTimerId !== null) {
+        clearTimeout(_morningTimerId);
+        _morningTimerId = null;
+      }
     }
 
     // ── Private ────────────────────────────────────────────────────────────
@@ -16670,6 +16755,7 @@ const JobTracker = (function () {
           // Merge over defaults so newly-added keys appear with their defaults
           _prefs = {
             eveningReminder: Object.assign({}, DEFAULTS.eveningReminder, parsed.eveningReminder || {}),
+            morningReminder: Object.assign({}, DEFAULTS.morningReminder, parsed.morningReminder || {}),
             geoReminder:     Object.assign({}, DEFAULTS.geoReminder, parsed.geoReminder || {}),
             ruleWarning:     Object.assign({}, DEFAULTS.ruleWarning, parsed.ruleWarning || {}),
             minijobWarning:  Object.assign({}, DEFAULTS.minijobWarning, parsed.minijobWarning || {})
@@ -16689,6 +16775,8 @@ const JobTracker = (function () {
     function _bindUI() {
       var eveningToggle = document.getElementById('notif-evening-toggle');
       var eveningTimeInput = document.getElementById('notif-evening-time');
+      var morningToggle = document.getElementById('notif-morning-toggle');
+      var morningTimeInput = document.getElementById('notif-morning-time');
       var geoToggle = document.getElementById('notif-geo-toggle');
       var ruleToggle = document.getElementById('notif-rule-toggle');
       var minijobToggle = document.getElementById('notif-minijob-toggle');
@@ -16714,6 +16802,27 @@ const JobTracker = (function () {
           var parts = (eveningTimeInput.value || '22:00').split(':');
           if (parts.length === 2) {
             setReminderTime(parseInt(parts[0], 10) || 0, parseInt(parts[1], 10) || 0);
+          }
+        });
+      }
+      if (morningToggle) {
+        morningToggle.checked = _prefs.morningReminder.enabled;
+        morningToggle.addEventListener('change', function () {
+          enableType('morning_reminder', morningToggle.checked);
+          var grpM = document.getElementById('notif-morning-time-group');
+          if (grpM) grpM.style.display = morningToggle.checked ? '' : 'none';
+        });
+        var grpMInit = document.getElementById('notif-morning-time-group');
+        if (grpMInit) grpMInit.style.display = morningToggle.checked ? '' : 'none';
+      }
+      if (morningTimeInput) {
+        var mhh = String(_prefs.morningReminder.hour).padStart(2, '0');
+        var mmm = String(_prefs.morningReminder.minute).padStart(2, '0');
+        morningTimeInput.value = mhh + ':' + mmm;
+        morningTimeInput.addEventListener('change', function () {
+          var parts = (morningTimeInput.value || '07:00').split(':');
+          if (parts.length === 2) {
+            setMorningReminderTime(parseInt(parts[0], 10) || 0, parseInt(parts[1], 10) || 0);
           }
         });
       }
@@ -16895,9 +17004,151 @@ const JobTracker = (function () {
       return y + '-' + m + '-' + day;
     }
 
+    /**
+     * Schedule a setTimeout that fires at the next configured morning time.
+     * Mirrors _scheduleNextEvening: caps at 24h, re-schedules itself after
+     * each fire.
+     */
+    function _scheduleNextMorning() {
+      if (_morningTimerId !== null) {
+        clearTimeout(_morningTimerId);
+        _morningTimerId = null;
+      }
+      if (!_prefs.morningReminder.enabled) return;
+
+      var now = new Date();
+      var trigger = new Date(now.getFullYear(), now.getMonth(), now.getDate(),
+                             _prefs.morningReminder.hour, _prefs.morningReminder.minute, 0, 0);
+      if (trigger.getTime() <= now.getTime()) {
+        trigger.setDate(trigger.getDate() + 1);
+      }
+      var ms = trigger.getTime() - now.getTime();
+      if (ms > 86400000) ms = 86400000;
+      _morningTimerId = setTimeout(function () {
+        _morningTimerId = null;
+        _triggerMorningReminder(false);
+        _scheduleNextMorning();
+      }, ms);
+    }
+
+    /**
+     * Catch up if we missed today's morning reminder (e.g., the PWA was
+     * suspended over the configured time on iOS). Fires inline if needed.
+     */
+    function _checkMissedMorning() {
+      if (!_prefs.morningReminder.enabled) return;
+      var now = new Date();
+      var todayKey = _todayKey(now);
+      var trigger = new Date(now.getFullYear(), now.getMonth(), now.getDate(),
+                             _prefs.morningReminder.hour, _prefs.morningReminder.minute, 0, 0);
+      if (now.getTime() < trigger.getTime()) return;
+
+      var lastTrigger = null;
+      try { lastTrigger = localStorage.getItem(LAST_MORNING_TRIGGER_KEY); } catch (e) {}
+      if (lastTrigger === todayKey) return;
+
+      _triggerMorningReminder(true);
+    }
+
+    /**
+     * Build and dispatch the morning reminder. Skips silently when there are
+     * no shifts (worked or pending) on today's date — but still records the
+     * trigger so we don't recheck on every reopen.
+     */
+    function _triggerMorningReminder(viaCatchUp) {
+      var todayKey = _todayKey(new Date());
+
+      var todayShifts = _getTodayShifts(todayKey);
+      if (todayShifts.length === 0) {
+        try { localStorage.setItem(LAST_MORNING_TRIGGER_KEY, todayKey); } catch (e) {}
+        return;
+      }
+
+      try { localStorage.setItem(LAST_MORNING_TRIGGER_KEY, todayKey); } catch (e) {}
+
+      var body = '';
+      if (todayShifts.length === 1) {
+        var s = todayShifts[0];
+        body = 'Heute: ' + (s.hours ? s.hours + 'h' : 'Schicht') + ' bei ' + s.jobName;
+      } else {
+        var totalHours = 0;
+        for (var i = 0; i < todayShifts.length; i++) {
+          if (todayShifts[i].hours) totalHours += parseFloat(todayShifts[i].hours);
+        }
+        body = 'Heute: ' + todayShifts.length + ' Schichten' + (totalHours ? ' (' + totalHours + 'h)' : '');
+      }
+
+      var title = '☀️ Guten Morgen';
+      var options = {
+        body: body,
+        icon: 'icons/icon-192.png',
+        badge: 'icons/icon-192.png',
+        tag: 'jt-morning-reminder-' + todayKey
+      };
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
+          navigator.serviceWorker.ready.then(function (registration) {
+            if (registration && typeof registration.showNotification === 'function') {
+              registration.showNotification(title, options);
+            } else {
+              try { new Notification(title, options); } catch (e) {}
+            }
+          }).catch(function () {
+            try { new Notification(title, options); } catch (e) {}
+          });
+        } else {
+          try { new Notification(title, options); } catch (e) {}
+        }
+      }
+
+      if (typeof showToast === 'function' && viaCatchUp) {
+        showToast('☀️ ' + body, 6000);
+      }
+    }
+
+    /**
+     * Returns an array of {hours, jobName} for every workday on the given
+     * date that is in 'worked' or 'pending' status.
+     */
+    function _getTodayShifts(todayKey) {
+      var workdays = [];
+      try {
+        workdays = (typeof AppState !== 'undefined' && AppState.getState)
+          ? (AppState.getState().workdays || [])
+          : [];
+      } catch (e) { return []; }
+
+      var jobs = [];
+      try {
+        jobs = (typeof AppState !== 'undefined' && AppState.getState)
+          ? (AppState.getState().jobs || [])
+          : [];
+      } catch (e) { return []; }
+
+      var jobMap = {};
+      for (var j = 0; j < jobs.length; j++) {
+        if (jobs[j] && jobs[j].id) jobMap[jobs[j].id] = jobs[j];
+      }
+
+      var result = [];
+      for (var i = 0; i < workdays.length; i++) {
+        var w = workdays[i];
+        if (!w || w.date !== todayKey) continue;
+        if (w.status !== 'worked' && w.status !== 'pending') continue;
+        var job = jobMap[w.jobId];
+        result.push({
+          hours: w.hours,
+          jobName: job ? job.employerName : 'Unbekannt'
+        });
+      }
+      return result;
+    }
+
     return {
       init: init,
       setReminderTime: setReminderTime,
+      setMorningReminderTime: setMorningReminderTime,
       enableType: enableType,
       getPreferences: getPreferences,
       clearAll: clearAll
@@ -16983,8 +17234,19 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.4.1';
+  const APP_VERSION = '2.5.0';
   const APP_CHANGELOG = [
+    {
+      version: '2.5.0',
+      date: '2026-06-09',
+      changes: [
+        'v2.5.0 — Ausstehende Schichten, Morgens-Erinnerung & Stat-Anzeige',
+        '⏳ ICS-Import erkennt Schichten in der Zukunft jetzt als „Ausstehend" — sie zählen erst nach Bestätigung in Brutto/Netto',
+        '✅/❌ „Letzte Einträge" zeigt für ausstehende Einträge zwei Aktionsbuttons: grün ✓ bestätigt die Schicht, rot ✕ entfernt sie',
+        '☀️ Neue Morgens-Erinnerung in den Einstellungen — wird nur ausgelöst wenn heute eine Schicht eingeplant ist',
+        '💶 Gesamtübersicht: Brutto/Netto werden bei großen Beträgen nicht mehr abgeschnitten (kleinere Schrift, tabellarische Ziffern)'
+      ]
+    },
     {
       version: '2.4.1',
       date: '2026-06-08',
