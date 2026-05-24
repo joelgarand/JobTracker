@@ -8478,7 +8478,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '3.1.1';
+    const APP_VERSION = '3.1.2';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -17595,8 +17595,18 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '3.1.1';
+  const APP_VERSION = '3.1.2';
   const APP_CHANGELOG = [
+    {
+      version: '3.1.2',
+      date: '2026-05-24',
+      changes: [
+        'v3.1.2 — Gradient schrumpft beim Scrollen statt zu verschwinden',
+        '🌅 Beim Scrollen erscheint jetzt eine kompakte Leiste oben mit demselben Gradient wie der große Header (Warmth, Emerald, Sunset, Ocean, Lavender oder Monochrome)',
+        '✨ Sanfter scroll-gebundener Fade statt eines harten Wechsels',
+        '📝 Kleines „JobTracker"-Wordmark in der kompakten Leiste'
+      ]
+    },
     {
       version: '3.1.1',
       date: '2026-05-24',
@@ -18335,11 +18345,12 @@ const JobTracker = (function () {
       });
     }
 
-    // ── V3.1.1: Scroll listener — show compact header after scrolling past the hero ──
+    // ── V3.1.2: Scroll listener — fade compact header in over a range as the hero scrolls away ──
     var compactHeader = document.getElementById('app-header-compact');
     if (compactHeader && !compactHeader._scrollBound) {
       compactHeader._scrollBound = true;
-      var SCROLL_THRESHOLD = 180; // px — about half-way down the hero
+      var FADE_START = 80;   // start fading in
+      var FADE_END = 220;    // fully visible
       var lastScrollY = -1;
       var compactScrollRaf = null;
 
@@ -18348,12 +18359,27 @@ const JobTracker = (function () {
         var y = window.pageYOffset || document.documentElement.scrollTop || 0;
         if (y === lastScrollY) return;
         lastScrollY = y;
-        if (y > SCROLL_THRESHOLD) {
+
+        if (y <= FADE_START) {
+          compactHeader.classList.remove('is-visible');
+          compactHeader.style.opacity = '';
+          compactHeader.style.transform = '';
+          compactHeader.style.pointerEvents = '';
+          compactHeader.setAttribute('aria-hidden', 'true');
+        } else if (y >= FADE_END) {
           compactHeader.classList.add('is-visible');
+          compactHeader.style.opacity = '';
+          compactHeader.style.transform = '';
+          compactHeader.style.pointerEvents = '';
           compactHeader.setAttribute('aria-hidden', 'false');
         } else {
+          // In between — interpolate opacity manually for smooth scroll-tied fade
+          var t = (y - FADE_START) / (FADE_END - FADE_START);
           compactHeader.classList.remove('is-visible');
-          compactHeader.setAttribute('aria-hidden', 'true');
+          compactHeader.style.opacity = String(t);
+          compactHeader.style.transform = 'translateY(' + ((1 - t) * -4) + 'px)';
+          compactHeader.style.pointerEvents = t > 0.5 ? 'auto' : 'none';
+          compactHeader.setAttribute('aria-hidden', t > 0.5 ? 'false' : 'true');
         }
       };
 
@@ -18438,12 +18464,15 @@ const JobTracker = (function () {
 
     function _applyHeaderGradientClass(gradient) {
       var header = document.querySelector('.app-header');
-      if (!header) return;
+      var compact = document.getElementById('app-header-compact');
       for (var gi = 0; gi < GRADIENT_CLASSES.length; gi++) {
-        header.classList.remove(GRADIENT_CLASSES[gi]);
+        if (header) header.classList.remove(GRADIENT_CLASSES[gi]);
+        if (compact) compact.classList.remove(GRADIENT_CLASSES[gi]);
       }
       if (gradient && gradient !== 'default') {
-        header.classList.add('gradient-' + gradient);
+        var cls = 'gradient-' + gradient;
+        if (header) header.classList.add(cls);
+        if (compact) compact.classList.add(cls);
       }
     }
 

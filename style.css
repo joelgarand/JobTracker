@@ -6424,7 +6424,7 @@ body.theme-light .app-header {
   border-bottom: none;
 }
 
-/* ─── V3.1.1 Compact sticky header bar — appears after scrolling past hero ─── */
+/* ─── V3.1.2 Compact sticky header bar — gradient persists in shrunken form ─── */
 .app-header-compact {
   position: fixed;
   top: 0;
@@ -6439,21 +6439,93 @@ body.theme-light .app-header {
   opacity: 0;
   transform: translateY(-4px);
   transition: opacity 0.25s ease, transform 0.25s ease, background 0.3s ease;
+  /* Default = warmth gradient (top portion only) */
+  background: linear-gradient(180deg, #f4d989 0%, #f0c764 100%);
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.15);
 }
 
 .app-header-compact.is-visible {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
-  background: rgba(20, 20, 28, 0.65);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
-  border-bottom: 0.5px solid rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: saturate(140%);
+  backdrop-filter: saturate(140%);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 body.theme-light .app-header-compact.is-visible {
-  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 4px 16px rgba(166, 144, 100, 0.12);
+}
+
+/* Per-gradient theme variants — match active gradient (dark mode / default) */
+.app-header-compact.gradient-warmth,
+body:not(.theme-light) .app-header-compact:not(.gradient-emerald):not(.gradient-sunset):not(.gradient-ocean):not(.gradient-lavender):not(.gradient-monochrome) {
+  background: linear-gradient(180deg, #f4d989 0%, #f0c764 100%);
+}
+.app-header-compact.gradient-emerald {
+  background: linear-gradient(180deg, #6ee0bf 0%, #2eb59a 100%);
+}
+.app-header-compact.gradient-sunset {
+  background: linear-gradient(180deg, #ff9f7a 0%, #ef6c5b 100%);
+}
+.app-header-compact.gradient-ocean {
+  background: linear-gradient(180deg, #8fb4ff 0%, #5b8def 100%);
+}
+.app-header-compact.gradient-lavender {
+  background: linear-gradient(180deg, #c5a8ec 0%, #9b7fd1 100%);
+}
+.app-header-compact.gradient-monochrome {
+  background: linear-gradient(180deg, #4a4d5b 0%, #2a2c36 100%);
+}
+
+/* Light mode: lighter variants */
+body.theme-light .app-header-compact.gradient-warmth,
+body.theme-light .app-header-compact:not(.gradient-emerald):not(.gradient-sunset):not(.gradient-ocean):not(.gradient-lavender):not(.gradient-monochrome) {
+  background: linear-gradient(180deg, #ffe8a8 0%, #f8d97f 100%);
   border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+}
+body.theme-light .app-header-compact.gradient-emerald {
+  background: linear-gradient(180deg, #b8efdc 0%, #7eddc1 100%);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+}
+body.theme-light .app-header-compact.gradient-sunset {
+  background: linear-gradient(180deg, #ffc7ad 0%, #ff9d80 100%);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+}
+body.theme-light .app-header-compact.gradient-ocean {
+  background: linear-gradient(180deg, #c5d8ff 0%, #9dbcff 100%);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+}
+body.theme-light .app-header-compact.gradient-lavender {
+  background: linear-gradient(180deg, #dec9f3 0%, #b8a0e2 100%);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+}
+body.theme-light .app-header-compact.gradient-monochrome {
+  background: linear-gradient(180deg, #d6d8e0 0%, #b6b9c5 100%);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+}
+
+/* Centered wordmark in compact bar */
+.app-header-compact__title {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 17px;
+  font-weight: 700;
+  font-style: italic;
+  color: #1a1a1a;
+  letter-spacing: -0.3px;
+  flex: 1;
+  text-align: center;
+  margin: 0 12px;
+  pointer-events: none;
+}
+
+body.theme-light .app-header-compact__title {
+  color: #1a1a1a;
+}
+
+/* Monochrome dark gradient — invert title so it stays readable */
+body.theme-dark .app-header-compact.gradient-monochrome .app-header-compact__title {
+  color: #ffffff;
 }
 
 /* ─── V3.1 Gradient Presets ─── */
