@@ -395,6 +395,19 @@ body.has-sub-nav #view-yearly {
   padding-top: 0;
 }
 
+/* V3.1.5: Gradient header lives inside #view-daily; other views need
+   their own safe-area-aware top padding so titles don't stick to the
+   iPhone notch. */
+#view-daily {
+  padding-top: 0;
+}
+#view-entry,
+#view-settings,
+#view-monthly,
+#view-yearly {
+  padding-top: max(env(safe-area-inset-top, 0px), 24px);
+}
+
 .view-section.active {
   display: block;
 }
@@ -4409,13 +4422,21 @@ details[open] .dashboard-details-toggle::after {
   background: var(--color-content-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  min-height: 140px;
+  /* V3.1.5: lock height so the tile stays the same size when active.
+     Pressing play must NOT make the bubble grow. 200px fits ring (64px) +
+     bottom-area (timer/label) + skip-link comfortably. */
+  min-height: 200px;
+  height: 200px;
+  max-height: 200px;
+  box-sizing: border-box;
   overflow: hidden;
 }
 
-/* Remove the old active override that changed aspect-ratio */
+/* V3.1.5: Active state keeps the same fixed height — no aspect-ratio or size change */
 .punch-clock--active .punch-clock-tile {
-  /* no aspect-ratio change */
+  min-height: 200px;
+  height: 200px;
+  max-height: 200px;
 }
 
 .punch-clock-tile::before {
@@ -5712,14 +5733,12 @@ body.widget-dragging .view-section {
 }
 
 .simulator-title {
-  font-size: 0.82rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-primary);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   transition: color 0.2s ease;
 }
 
@@ -5728,10 +5747,10 @@ body.widget-dragging .view-section {
 }
 
 .simulator-toggle-arrow {
-  font-size: 0.75rem;
+  font-size: 10px;
   color: var(--color-text-tertiary);
   display: inline-block;
-  transition: color 0.2s ease;
+  transition: transform 0.2s ease, color 0.2s ease;
 }
 
 /* Compact Summary when Collapsed */
@@ -5765,41 +5784,25 @@ body.widget-dragging .view-section {
 .simulator-delta-badge {
   display: inline-flex;
   align-items: center;
+  background: rgba(var(--accent-rgb), 0.16);
+  color: var(--color-accent);
   padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.78rem;
+  border-radius: 999px;
+  font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.2px;
   transition: all 0.2s ease;
-  animation: badge-pulse 2s infinite ease-in-out;
-}
-
-@keyframes badge-pulse {
-  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(78, 204, 163, 0.4); }
-  70% { transform: scale(1.02); box-shadow: 0 0 8px 3px rgba(78, 204, 163, 0); }
-  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(78, 204, 163, 0); }
 }
 
 .simulator-delta-badge.badge--positive {
-  background: rgba(78, 204, 163, 0.12);
+  background: rgba(78, 204, 163, 0.16);
   color: var(--color-success);
-  border: 1px solid rgba(78, 204, 163, 0.25);
-  box-shadow: 0 0 6px rgba(78, 204, 163, 0.15);
 }
 
 .simulator-delta-badge.badge--negative {
-  background: rgba(239, 68, 68, 0.12);
+  background: rgba(239, 68, 68, 0.16);
   color: var(--color-danger);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  box-shadow: 0 0 6px rgba(239, 68, 68, 0.15);
-  animation: badge-pulse-negative 2s infinite ease-in-out;
-}
-
-@keyframes badge-pulse-negative {
-  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-  70% { transform: scale(1.02); box-shadow: 0 0 8px 3px rgba(239, 68, 68, 0); }
-  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
 .simulator-collapsible-content {
@@ -5817,47 +5820,47 @@ body.widget-dragging .view-section {
 .simulator-controls-row {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: 10px;
   width: 100%;
-  margin-top: 6px;
+  padding: 8px 0;
 }
 
-/* Circular Tap-friendly Buttons (iOS optimal) */
+/* Circular Tap-friendly Buttons (iOS optimal) — V3.1.5 polished */
 .simulator-btn {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--color-text-primary);
-  font-size: 1.3rem;
-  font-weight: 400;
+  border: none;
+  background: rgba(var(--accent-rgb), 0.16);
+  color: var(--color-accent);
+  font-size: 16px;
+  font-weight: 700;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.12s ease, background 0.15s ease;
   font-family: var(--font-family);
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  flex-shrink: 0;
 }
 
 .simulator-btn:active {
   transform: scale(0.88);
-  background: rgba(var(--accent-rgb), 0.15);
+  background: rgba(var(--accent-rgb), 0.32);
   color: var(--color-accent);
-  border-color: rgba(var(--accent-rgb), 0.4);
 }
 
 .simulator-slider-container {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px;
+  min-width: 0;
   position: relative;
   overflow: visible;
-  padding: 8px 0;
 }
 
 /* Premium Range Slider Track & Thumb */
@@ -5865,9 +5868,9 @@ body.widget-dragging .view-section {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 3px;
+  height: 4px;
+  background: rgba(var(--accent-rgb), 0.18);
+  border-radius: 2px;
   outline: none;
   margin: 0;
   cursor: pointer;
@@ -5876,30 +5879,28 @@ body.widget-dragging .view-section {
 .simulator-range-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: var(--color-accent);
-  border: 2px solid rgba(255, 255, 255, 0.95);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   cursor: pointer;
-  transition: transform 0.1s ease, background 0.15s ease;
-  margin-top: -11px;
+  transition: transform 0.1s ease;
+  margin-top: -9px;
 }
 
 .simulator-range-slider::-webkit-slider-thumb:active {
   transform: scale(1.12);
-  background: #ffffff;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
 }
 
 .simulator-range-slider::-moz-range-thumb {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: var(--color-accent);
-  border: 2px solid rgba(255, 255, 255, 0.95);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   cursor: pointer;
   transition: transform 0.1s ease;
 }
@@ -5909,24 +5910,25 @@ body.widget-dragging .view-section {
 }
 
 .simulator-range-slider::-webkit-slider-runnable-track {
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.08);
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(var(--accent-rgb), 0.18);
 }
 
 .simulator-range-slider::-moz-range-track {
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.08);
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(var(--accent-rgb), 0.18);
 }
 
 /* Slider Labels */
 .simulator-slider-labels {
   display: flex;
   justify-content: space-between;
-  font-size: 0.72rem;
+  font-size: 9px;
   color: var(--color-text-tertiary);
-  margin-top: 1px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   position: relative;
   width: 100%;
 }
@@ -5937,34 +5939,35 @@ body.widget-dragging .view-section {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  margin-top: var(--spacing-xs);
-  min-height: 24px;
+  padding-top: 8px;
+  gap: 8px;
 }
 
 .simulator-info-text {
-  font-size: 0.76rem;
+  font-size: 11px;
   color: var(--color-text-secondary);
   font-weight: 500;
-  transition: color 0.2s ease;
+  flex: 1;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 70%;
 }
 
 .simulator-reset-btn {
-  padding: 4px 12px;
-  font-size: 0.74rem;
+  padding: 4px 10px;
+  font-size: 10px;
   font-weight: 600;
   background: transparent;
-  color: var(--color-text-secondary);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
+  color: var(--color-accent);
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
+  border-radius: 999px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.1s ease, background 0.15s ease, opacity 0.2s ease;
   opacity: 0;
   transform: scale(0.9);
   pointer-events: none;
+  flex-shrink: 0;
   font-family: var(--font-family);
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
@@ -5977,9 +5980,8 @@ body.widget-dragging .view-section {
 }
 
 .simulator-reset-btn:active {
-  transform: scale(0.95);
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.3);
+  transform: scale(0.94);
+  background: rgba(var(--accent-rgb), 0.12);
 }
 
 /* Simulator Active Glow on Stat Container */
@@ -6657,24 +6659,28 @@ body.theme-light .balance-val {
 }
 
 .header-chip {
-  background: rgba(255, 255, 255, 0.18);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.30);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
   border-radius: 14px;
   padding: 8px 10px;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.40);
   min-width: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 body.theme-light .header-chip {
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.65);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 2px 8px rgba(166, 144, 100, 0.08);
 }
 body.theme-dark .app-header.gradient-monochrome .header-chip {
   background: rgba(255, 255, 255, 0.10);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .header-chip__label {
@@ -6728,6 +6734,29 @@ body.theme-light .dashboard-brutto-hours-strip {
   text-align: center;
 }
 
+/* V3.1.5: Brutto/Netto toggle button styled to look identical to a strip-item */
+button.strip-item,
+.strip-item--toggle {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-family: var(--font-family);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  color: inherit;
+  transition: transform 0.1s ease;
+}
+button.strip-item:active,
+.strip-item--toggle:active {
+  transform: scale(0.96);
+}
+
 .strip-label {
   font-size: 10px;
   font-weight: 700;
@@ -6745,7 +6774,7 @@ body.theme-light .dashboard-brutto-hours-strip {
   letter-spacing: -0.3px;
 }
 
-/* ─── Floating Glass Bottom Navigation Bar ─── */
+/* ─── Floating Glass Bottom Navigation Bar — V3.1.5 enlarged ─── */
 .bottom-tab-bar {
   position: fixed;
   bottom: max(env(safe-area-inset-bottom, 0px), 16px);
@@ -6754,12 +6783,12 @@ body.theme-light .dashboard-brutto-hours-strip {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   background: rgba(20, 20, 28, 0.7);
   -webkit-backdrop-filter: blur(30px) saturate(180%);
   backdrop-filter: blur(30px) saturate(180%);
-  padding: 6px;
-  border-radius: 28px;
+  padding: 8px;
+  border-radius: 32px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
   z-index: 1000;
@@ -6773,8 +6802,8 @@ body.theme-light .bottom-tab-bar {
 }
 
 .bottom-tab-btn {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   background: transparent;
   border: none;
@@ -6789,7 +6818,7 @@ body.theme-light .bottom-tab-bar {
 }
 
 .bottom-tab-btn .tab-icon {
-  font-size: 22px;
+  font-size: 24px;
   transition: transform 0.3s ease;
 }
 

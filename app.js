@@ -1579,6 +1579,8 @@ const JobTracker = (function () {
     function _onSystemThemeChange() {
       if (_preference === 'system') {
         _applyThemeClass();
+        // V3.1.5: Notify listeners so dependent UI (e.g. theme-color meta) updates
+        EventBus.emit('theme:applied', { theme: _preference });
       }
     }
 
@@ -1609,6 +1611,9 @@ const JobTracker = (function () {
       _applyThemeClass();
       _updateToggleUI();
       AppState.set('themePreference', preference);
+      // V3.1.5: Notify listeners (e.g. theme-color meta updater) that the
+      // theme has been applied so they can refresh dependent UI.
+      EventBus.emit('theme:applied', { theme: preference });
     }
 
     /**
@@ -8478,7 +8483,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '3.1.4';
+    const APP_VERSION = '3.1.5';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -11375,6 +11380,7 @@ const JobTracker = (function () {
     let _stepperBound = false;
     let _simulatorExpanded = false; // Collapsible simulator panel state
     let _showHeaderBrutto = false; // Toggle: false = Netto-Cashflow, true = Brutto-Einkommen
+    let _stripShowsNetto = false;  // V3.1.5: dashboard strip toggle: false = Brutto-Einkommen, true = Netto-Cashflow
 
     /**
      * Formats a number as German currency string: "1.234,56 €"
@@ -11520,9 +11526,11 @@ const JobTracker = (function () {
 
     /**
      * V3.1.4: Renders supplementary header content (date chip + quick info chips).
-     * Called at the end of _update() to keep values current.
+     * V3.1.5: Now accepts the aggregated object from _update so the
+     * "Diesen Monat"-Brutto matches the active billing-period figures.
+     * @param {object} [aggregated] - aggregated income object from _update
      */
-    function _renderHeaderExtras() {
+    function _renderHeaderExtras(aggregated) {
       // Today date chip
       var dateEl = document.getElementById('header-date-chip');
       if (dateEl) {
@@ -11546,11 +11554,15 @@ const JobTracker = (function () {
         streakEl.textContent = streak === 1 ? '1 Tag' : streak + ' Tage';
       }
 
-      // This month's brutto across all jobs
+      // V3.1.5: This month's brutto — use aggregated.brutto from _update so it
+      // matches the active billing-period figure shown in the cashflow card.
+      // Falls back to calendar-month brutto when called without aggregated.
       var monthBruttoEl = document.getElementById('chip-month-brutto');
       if (monthBruttoEl) {
-        var monthBrutto = _calcMonthBrutto();
-        monthBruttoEl.textContent = _formatCurrency(monthBrutto);
+        var bruttoVal = (aggregated && typeof aggregated.brutto === 'number')
+          ? aggregated.brutto
+          : _calcMonthBrutto();
+        monthBruttoEl.textContent = _formatCurrency(bruttoVal);
       }
     }
 
@@ -11729,7 +11741,8 @@ const JobTracker = (function () {
       }
 
       // V3.1.4: Refresh header date chip + quick info chips
-      _renderHeaderExtras();
+      // V3.1.5: Pass aggregated so chip-month-brutto matches the billing period
+      _renderHeaderExtras(aggregated);
     }
 
     /**
@@ -11742,7 +11755,17 @@ const JobTracker = (function () {
       var tipsEl = document.getElementById('dashboard-total-tips');
 
       if (hoursEl) hoursEl.textContent = _formatHours(aggregated.hours);
-      if (bruttoEl) bruttoEl.textContent = _formatCurrency(aggregated.brutto);
+      if (bruttoEl) {
+        // V3.1.5: dashboard strip Brutto/Netto toggle
+        var stripLabelEl = document.getElementById('strip-brutto-label');
+        if (_stripShowsNetto) {
+          bruttoEl.textContent = _formatCurrency(aggregated.nettoCashflow);
+          if (stripLabelEl) stripLabelEl.textContent = 'Netto-Cashflow ▾';
+        } else {
+          bruttoEl.textContent = _formatCurrency(aggregated.brutto);
+          if (stripLabelEl) stripLabelEl.textContent = 'Brutto-Einkommen ▾';
+        }
+      }
       if (nettoEl) {
         // V3.0: Dynamic Netto/Brutto header balance toggle
         var balanceLabelEl = document.getElementById('dashboard-header-balance-label');
@@ -12073,7 +12096,12 @@ const JobTracker = (function () {
         if (statRoot) statRoot.classList.remove('is-simulating');
         if (hoursLabel) hoursLabel.textContent = 'Stunden';
         if (hoursEl) hoursEl.textContent = _formatHours(aggregated.hours);
-        if (bruttoEl) bruttoEl.textContent = _formatCurrency(aggregated.brutto);
+        // V3.1.5: dashboard strip Brutto/Netto toggle
+        if (bruttoEl) {
+          var stripLabelEl0 = document.getElementById('strip-brutto-label');
+          bruttoEl.textContent = _formatCurrency(_stripShowsNetto ? aggregated.nettoCashflow : aggregated.brutto);
+          if (stripLabelEl0) stripLabelEl0.textContent = _stripShowsNetto ? 'Netto-Cashflow ▾' : 'Brutto-Einkommen ▾';
+        }
         if (nettoEl) nettoEl.textContent = _formatCurrency(_showHeaderBrutto ? aggregated.brutto : aggregated.nettoCashflow);
         var balanceLabelEl = document.getElementById('dashboard-header-balance-label');
         if (balanceLabelEl) balanceLabelEl.textContent = _showHeaderBrutto ? 'Brutto-Einkommen ▾' : 'Netto-Cashflow ▾';
@@ -12136,7 +12164,12 @@ const JobTracker = (function () {
         }
         
         if (hoursEl) hoursEl.textContent = isDaily ? String(baselineVal) : _formatHours(baselineVal);
-        if (bruttoEl) bruttoEl.textContent = _formatCurrency(aggregated.brutto);
+        // V3.1.5: dashboard strip Brutto/Netto toggle (no simulation = baseline values)
+        if (bruttoEl) {
+          var stripLabelElZ = document.getElementById('strip-brutto-label');
+          bruttoEl.textContent = _formatCurrency(_stripShowsNetto ? aggregated.nettoCashflow : aggregated.brutto);
+          if (stripLabelElZ) stripLabelElZ.textContent = _stripShowsNetto ? 'Netto-Cashflow ▾' : 'Brutto-Einkommen ▾';
+        }
         if (nettoEl) nettoEl.textContent = _formatCurrency(_showHeaderBrutto ? aggregated.brutto : aggregated.nettoCashflow);
         var balanceLabelElZero = document.getElementById('dashboard-header-balance-label');
         if (balanceLabelElZero) balanceLabelElZero.textContent = _showHeaderBrutto ? 'Brutto-Einkommen ▾' : 'Netto-Cashflow ▾';
@@ -12159,11 +12192,30 @@ const JobTracker = (function () {
       if (simulatedBrutto < 0) simulatedBrutto = 0;
 
       var simulatedNetto;
+      // V3.1.5: Netto-delta calculation — only apply primary-job tax/SV rules
+      // to the SIMULATED EXTRA brutto from the primary job; keep the netto
+      // for the other jobs unchanged. This avoids double-taxation when the
+      // user has multiple jobs.
+      var primaryBaselineBrutto = 0;
+      var primaryBaselineNetto = null;
+      for (var pjI = 0; pjI < (aggregated.perJob || []).length; pjI++) {
+        var pjEntry = aggregated.perJob[pjI];
+        if (pjEntry.jobId === primaryJob.id) {
+          primaryBaselineBrutto = pjEntry.brutto || 0;
+          primaryBaselineNetto = pjEntry.nettoAvailable ? (pjEntry.netto || 0) : null;
+          break;
+        }
+      }
+      var primarySimulatedBrutto = primaryBaselineBrutto + (simulatedBrutto - aggregated.brutto);
       var netRes = null;
       try {
-        netRes = IncomeEngine.calculateNetForBrutto(primaryJob.id, simulatedBrutto, year);
+        netRes = IncomeEngine.calculateNetForBrutto(primaryJob.id, primarySimulatedBrutto, year);
       } catch (e) { netRes = null; }
-      if (netRes && netRes.available) {
+      if (netRes && netRes.available && primaryBaselineNetto !== null) {
+        var primaryNettoDelta = netRes.netto - primaryBaselineNetto;
+        simulatedNetto = aggregated.netto + primaryNettoDelta;
+      } else if (netRes && netRes.available) {
+        // No baseline netto for primary job (rare) — fall back to engine result scaled to total
         simulatedNetto = netRes.netto;
       } else if (aggregated.brutto > 0) {
         simulatedNetto = simulatedBrutto * (aggregated.netto / aggregated.brutto);
@@ -12175,7 +12227,12 @@ const JobTracker = (function () {
 
       // Write simulated values to DOM
       if (hoursEl) hoursEl.textContent = isDaily ? String(simulatedVal) : _formatHours(simulatedVal);
-      if (bruttoEl) bruttoEl.textContent = _formatCurrency(simulatedBrutto);
+      // V3.1.5: dashboard strip Brutto/Netto toggle (active simulation = simulated values)
+      if (bruttoEl) {
+        var stripLabelElSim = document.getElementById('strip-brutto-label');
+        bruttoEl.textContent = _formatCurrency(_stripShowsNetto ? simulatedNettoCashflow : simulatedBrutto);
+        if (stripLabelElSim) stripLabelElSim.textContent = _stripShowsNetto ? 'Netto-Cashflow ▾' : 'Brutto-Einkommen ▾';
+      }
       if (nettoEl) nettoEl.textContent = _formatCurrency(_showHeaderBrutto ? simulatedBrutto : simulatedNettoCashflow);
       var balanceLabelElSim = document.getElementById('dashboard-header-balance-label');
       if (balanceLabelElSim) balanceLabelElSim.textContent = _showHeaderBrutto ? 'Brutto-Einkommen ▾' : 'Netto-Cashflow ▾';
@@ -12450,6 +12507,17 @@ const JobTracker = (function () {
         balanceCard._balanceBound = true;
         balanceCard.addEventListener('click', function () {
           _showHeaderBrutto = !_showHeaderBrutto;
+          _update();
+          _triggerMicroHaptic();
+        });
+      }
+
+      // V3.1.5: Dashboard strip Brutto/Netto toggle
+      var stripBruttoBtn = document.getElementById('strip-brutto-btn');
+      if (stripBruttoBtn && !stripBruttoBtn._stripBound) {
+        stripBruttoBtn._stripBound = true;
+        stripBruttoBtn.addEventListener('click', function () {
+          _stripShowsNetto = !_stripShowsNetto;
           _update();
           _triggerMicroHaptic();
         });
@@ -17705,8 +17773,22 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '3.1.4';
+  const APP_VERSION = '3.1.5';
   const APP_CHANGELOG = [
+    {
+      version: '3.1.5',
+      date: '2026-05-24',
+      changes: [
+        'v3.1.5 — Polish-Patch: Header, Simulator, Punch-Clock, Tabs',
+        '🎨 Status-Bar im Home-Tab nimmt jetzt die Farbe des gewählten Gradienten an',
+        '🏠 Gradient-Header erscheint nur noch im Übersicht-Tab (Eintragen/Einstellungen/Monat/Jahr bleiben sauber)',
+        '✨ Quick-Info-Chips: bessere Glas-Optik im Dunkelmodus, „Diesen Monat" zeigt jetzt korrekt den Abrechnungszeitraum-Brutto',
+        '💰 Tippe in der Übersicht auf „Brutto-Einkommen" um zwischen Brutto und Netto zu wechseln',
+        '💶 Steuer-Simulator: kleinere/elegante Buttons, Buttons in Akzentfarbe, Schriften passen wieder ohne Umbruch, korrektes Netto-Delta',
+        '⏱️ Punch-Clock: Größe bleibt fest beim Starten — kein Aufblasen mehr',
+        '🔘 Untere Tab-Buttons: 56×56 statt 48×48 — leichter zu treffen'
+      ]
+    },
     {
       version: '3.1.4',
       date: '2026-05-24',
@@ -18547,6 +18629,32 @@ const JobTracker = (function () {
     // ── V3.1 Gradient Theme Picker ──
     var GRADIENT_CLASSES = ['gradient-warmth', 'gradient-emerald', 'gradient-sunset', 'gradient-ocean', 'gradient-lavender', 'gradient-monochrome'];
 
+    // V3.1.5: Top-color presets used to tint the iOS status bar via theme-color meta.
+    // Each entry maps a gradient key to its top color in dark and light themes.
+    var GRADIENT_TOP_COLORS = {
+      'warmth':     { dark: '#f4d989', light: '#ffe8a8' },
+      'emerald':    { dark: '#6ee0bf', light: '#b8efdc' },
+      'sunset':     { dark: '#ff9f7a', light: '#ffc7ad' },
+      'ocean':      { dark: '#8fb4ff', light: '#c5d8ff' },
+      'lavender':   { dark: '#c5a8ec', light: '#dec9f3' },
+      'monochrome': { dark: '#4a4d5b', light: '#d6d8e0' }
+    };
+
+    /**
+     * V3.1.5: Updates the <meta name="theme-color"> tag to match the active
+     * gradient. iOS Safari (non-standalone) uses this to tint the address bar;
+     * iOS PWAs in standalone mode use apple-mobile-web-app-status-bar-style.
+     * @param {string} gradient — gradient preset key
+     */
+    function _updateThemeColorMeta(gradient) {
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (!meta) return;
+      var key = gradient || 'warmth';
+      var preset = GRADIENT_TOP_COLORS[key] || GRADIENT_TOP_COLORS.warmth;
+      var isLight = document.body.classList.contains('theme-light');
+      meta.setAttribute('content', isLight ? preset.light : preset.dark);
+    }
+
     function _applyHeaderGradientClass(gradient) {
       var header = document.querySelector('.app-header');
       for (var gi = 0; gi < GRADIENT_CLASSES.length; gi++) {
@@ -18556,11 +18664,27 @@ const JobTracker = (function () {
         var cls = 'gradient-' + gradient;
         if (header) header.classList.add(cls);
       }
+      // V3.1.5: Refresh status-bar meta only if we're on the home tab.
+      // _refreshThemeColorMetaForView is defined below; call it through a
+      // safe lookup so the gradient picker (used from settings) doesn't
+      // tint the status bar while the user is on a non-home view.
+      try {
+        var activeView = AppState.get('activeView') || 'view-daily';
+        if (typeof _refreshThemeColorMetaForView === 'function') {
+          _refreshThemeColorMetaForView(activeView);
+        } else {
+          // Bootstrap path before _refreshThemeColorMetaForView is defined
+          _updateThemeColorMeta(gradient);
+        }
+      } catch (e) {
+        _updateThemeColorMeta(gradient);
+      }
     }
 
     // Load saved gradient on startup
     var savedGradient = AppState.get('headerGradientTheme') || 'warmth';
     _applyHeaderGradientClass(savedGradient);
+    _updateThemeColorMeta(savedGradient);
 
     // Bind gradient picker buttons
     var gradientContainer = document.getElementById('gradient-theme-options');
@@ -18600,6 +18724,40 @@ const JobTracker = (function () {
         }
       });
     }
+
+    // V3.1.5: Sync theme-color meta with active view (Home tab → gradient color,
+    // other tabs → neutral surface color).
+    function _refreshThemeColorMetaForView(viewId) {
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (!meta) return;
+      var activeGradient = 'warmth';
+      try {
+        activeGradient = AppState.get('headerGradientTheme') || 'warmth';
+      } catch (e) { /* ignore */ }
+      var isLight = document.body.classList.contains('theme-light');
+      if (viewId === 'view-daily') {
+        var preset = GRADIENT_TOP_COLORS[activeGradient] || GRADIENT_TOP_COLORS.warmth;
+        meta.setAttribute('content', isLight ? preset.light : preset.dark);
+      } else {
+        meta.setAttribute('content', isLight ? '#faf9f7' : '#0a0a14');
+      }
+    }
+
+    EventBus.on('navigation:change', function (data) {
+      if (!data) return;
+      var viewId = data.viewId || data.view;
+      _refreshThemeColorMetaForView(viewId);
+    });
+
+    // V3.1.5: When the theme (light/dark) changes, refresh the meta so the
+    // status bar tint matches the new theme's gradient top color.
+    EventBus.on('theme:applied', function () {
+      var activeView = AppState.get('activeView') || 'view-daily';
+      _refreshThemeColorMetaForView(activeView);
+    });
+
+    // Initialize meta for the currently active view (covers reload scenarios)
+    _refreshThemeColorMetaForView(AppState.get('activeView') || 'view-daily');
 
     // ── Familienversicherung Info Toggle (Onboarding) ──
     var kvRadios = document.querySelectorAll('input[name="onb-krankenversicherung"]');
