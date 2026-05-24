@@ -1401,35 +1401,10 @@ const JobTracker = (function () {
     }
 
     /**
-     * Binds click handlers to the endless Home carousel arrow navigation buttons.
+     * No-op stub kept to avoid breakage — carousel-nav was removed in v3.1.0.
      */
     function _bindCarouselNav() {
-      var prevBtns = document.querySelectorAll('.carousel-nav-btn.prev');
-      var nextBtns = document.querySelectorAll('.carousel-nav-btn.next');
-
-      for (var i = 0; i < prevBtns.length; i++) {
-        prevBtns[i].addEventListener('click', function () {
-          var current = getActiveSubView();
-          var prevView = 'view-daily';
-          if (current === 'view-daily') prevView = 'view-yearly';
-          else if (current === 'view-monthly') prevView = 'view-daily';
-          else if (current === 'view-yearly') prevView = 'view-monthly';
-          switchSubView(prevView);
-          _triggerMicroHaptic();
-        });
-      }
-
-      for (var j = 0; j < nextBtns.length; j++) {
-        nextBtns[j].addEventListener('click', function () {
-          var current = getActiveSubView();
-          var nextView = 'view-daily';
-          if (current === 'view-daily') nextView = 'view-monthly';
-          else if (current === 'view-monthly') nextView = 'view-yearly';
-          else if (current === 'view-yearly') nextView = 'view-daily';
-          switchSubView(nextView);
-          _triggerMicroHaptic();
-        });
-      }
+      // Carousel nav removed in v3.1.0 (home-screen simplified).
     }
 
     function _triggerMicroHaptic() {
@@ -8509,7 +8484,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '3.0.0';
+    const APP_VERSION = '3.1.0';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -11405,6 +11380,7 @@ const JobTracker = (function () {
     let _simHoursDelta = 0; // signed integer; 0 = no simulation
     let _stepperBound = false;
     let _simulatorExpanded = false; // Collapsible simulator panel state
+    let _showHeaderBrutto = false; // Toggle: false = Netto-Cashflow, true = Brutto-Einkommen
 
     /**
      * Formats a number as German currency string: "1.234,56 €"
@@ -11663,7 +11639,17 @@ const JobTracker = (function () {
 
       if (hoursEl) hoursEl.textContent = _formatHours(aggregated.hours);
       if (bruttoEl) bruttoEl.textContent = _formatCurrency(aggregated.brutto);
-      if (nettoEl) nettoEl.textContent = _formatCurrency(aggregated.nettoCashflow);
+      if (nettoEl) {
+        // V3.0: Dynamic Netto/Brutto header balance toggle
+        var balanceLabelEl = document.getElementById('dashboard-header-balance-label');
+        if (_showHeaderBrutto) {
+          nettoEl.textContent = _formatCurrency(aggregated.brutto);
+          if (balanceLabelEl) balanceLabelEl.textContent = 'Brutto-Einkommen';
+        } else {
+          nettoEl.textContent = _formatCurrency(aggregated.nettoCashflow);
+          if (balanceLabelEl) balanceLabelEl.textContent = 'Netto-Cashflow';
+        }
+      }
 
       if (tipsEl) {
         var jobs = AppState.getState().jobs;
@@ -12348,6 +12334,17 @@ const JobTracker = (function () {
       // Initial render
       _update();
 
+      // V3.0: Netto/Brutto header balance card toggle
+      var balanceCard = document.querySelector('.header-balance-card');
+      if (balanceCard && !balanceCard._balanceBound) {
+        balanceCard._balanceBound = true;
+        balanceCard.addEventListener('click', function () {
+          _showHeaderBrutto = !_showHeaderBrutto;
+          _update();
+          _triggerMicroHaptic();
+        });
+      }
+
       // Subscribe to income:updated for reactive updates within 2 seconds
       EventBus.on('income:updated', function () {
         _update();
@@ -12908,10 +12905,14 @@ const JobTracker = (function () {
       card.setAttribute('data-job-id', job.id);
       card.setAttribute('data-job-type', job.type);
 
-      // 1. Header
+      // 1. Header with avatar
+      var avatarHtml = _renderJobAvatar(job);
       var headerHtml = '<div class="goal-job-header">' +
+        avatarHtml +
+        '<div class="goal-job-header-text">' +
         '  <span class="goal-job-title">' + _escapeHtml(job.employerName) + '</span>' +
         '  <span class="goal-job-badge">' + _escapeHtml(job.type) + '</span>' +
+        '</div>' +
         '</div>';
 
       // 2. Mockup Savings Goal Calculations
@@ -17594,8 +17595,23 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '3.0.0';
+  const APP_VERSION = '3.1.0';
   const APP_CHANGELOG = [
+    {
+      version: '3.1.0',
+      date: '2026-05-24',
+      changes: [
+        'v3.1.0 — Großer Gradient-Header, Light Mode neu, Layout-Fixes',
+        '🌅 Großer warmer Gradient-Header (~360px) — wählbar zwischen 6 Presets (Warmth, Emerald, Sunset, Ocean, Lavender, Monochrome)',
+        '☀️ Light Mode komplett neu: warmes Off-White statt kaltes Blaugrau',
+        '💰 Netto/Brutto-Toggle: Tippe auf den Cashflow-Betrag, um zwischen Netto und Brutto zu wechseln',
+        '🏠 Homescreen aufgeräumt: Carousel-Navigation entfernt, Gesamtübersicht-Karte ist wieder zentral',
+        '🏢 Job-Karten zeigen jetzt das Firmenlogo aus den Einstellungen',
+        '🔵 Blaues Glow im Hintergrund entfernt — moderne flache Tab-Leiste',
+        '✨ Aurora-Hintergrund-Blobs entfernt — sauberer iOS-26-Look',
+        '🐛 Info-Button & Diverse Layout-Bugs behoben'
+      ]
+    },
     {
       version: '3.0.0',
       date: '2026-05-24',
@@ -18247,10 +18263,14 @@ const JobTracker = (function () {
     var rulesInfoBtn = document.getElementById('header-rules-info-btn');
     var rulesInfoModal = document.getElementById('rules-info-modal');
     var rulesInfoCloseBtn = document.getElementById('rules-info-close-btn');
-    if (rulesInfoBtn && rulesInfoModal) {
+    if (rulesInfoBtn && rulesInfoModal && !rulesInfoBtn._rulesInfoBound) {
+      rulesInfoBtn._rulesInfoBound = true;
       rulesInfoBtn.addEventListener('click', function() {
         rulesInfoModal.classList.add('active');
         document.body.classList.add('modal-open');
+        if (typeof HapticFeedbackService !== 'undefined' && HapticFeedbackService.micro) {
+          HapticFeedbackService.micro();
+        }
       });
       if (rulesInfoCloseBtn) {
         rulesInfoCloseBtn.addEventListener('click', function() {
@@ -18330,6 +18350,63 @@ const JobTracker = (function () {
 
         // Persist
         AppState.set('accentColor', color);
+      });
+    }
+
+    // ── V3.1 Gradient Theme Picker ──
+    var GRADIENT_CLASSES = ['gradient-warmth', 'gradient-emerald', 'gradient-sunset', 'gradient-ocean', 'gradient-lavender', 'gradient-monochrome'];
+
+    function _applyHeaderGradientClass(gradient) {
+      var header = document.querySelector('.app-header');
+      if (!header) return;
+      for (var gi = 0; gi < GRADIENT_CLASSES.length; gi++) {
+        header.classList.remove(GRADIENT_CLASSES[gi]);
+      }
+      if (gradient && gradient !== 'default') {
+        header.classList.add('gradient-' + gradient);
+      }
+    }
+
+    // Load saved gradient on startup
+    var savedGradient = AppState.get('headerGradientTheme') || 'warmth';
+    _applyHeaderGradientClass(savedGradient);
+
+    // Bind gradient picker buttons
+    var gradientContainer = document.getElementById('gradient-theme-options');
+    if (gradientContainer) {
+      // Mark saved gradient as active
+      var gradientBtns = gradientContainer.querySelectorAll('.gradient-option');
+      for (var gbi = 0; gbi < gradientBtns.length; gbi++) {
+        if (gradientBtns[gbi].getAttribute('data-gradient') === savedGradient) {
+          gradientBtns[gbi].classList.add('active');
+        } else {
+          gradientBtns[gbi].classList.remove('active');
+        }
+      }
+
+      gradientContainer.addEventListener('click', function(e) {
+        var btn = e.target.closest('.gradient-option');
+        if (!btn) return;
+        var gradient = btn.getAttribute('data-gradient');
+        if (!gradient) return;
+
+        // Apply gradient class
+        _applyHeaderGradientClass(gradient);
+
+        // Update active state
+        var allGBtns = gradientContainer.querySelectorAll('.gradient-option');
+        for (var i = 0; i < allGBtns.length; i++) {
+          allGBtns[i].classList.remove('active');
+        }
+        btn.classList.add('active');
+
+        // Persist
+        AppState.set('headerGradientTheme', gradient);
+
+        // Haptic feedback
+        if (typeof HapticFeedbackService !== 'undefined' && HapticFeedbackService.micro) {
+          HapticFeedbackService.micro();
+        }
       });
     }
 
