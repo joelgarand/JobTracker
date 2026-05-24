@@ -8478,7 +8478,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '3.1.3';
+    const APP_VERSION = '3.1.4';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -11519,6 +11519,113 @@ const JobTracker = (function () {
     }
 
     /**
+     * V3.1.4: Renders supplementary header content (date chip + quick info chips).
+     * Called at the end of _update() to keep values current.
+     */
+    function _renderHeaderExtras() {
+      // Today date chip
+      var dateEl = document.getElementById('header-date-chip');
+      if (dateEl) {
+        var now = new Date();
+        var dayShort = ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.'][now.getDay()];
+        var monthLong = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'][now.getMonth()];
+        dateEl.textContent = dayShort + ' ' + now.getDate() + '. ' + monthLong;
+      }
+
+      // This week's hours
+      var weekHoursEl = document.getElementById('chip-week-hours');
+      if (weekHoursEl) {
+        var weekHours = _calcWeekHours();
+        weekHoursEl.textContent = _formatHours(weekHours) + ' Std.';
+      }
+
+      // Streak (consecutive days backwards with at least one 'worked' entry)
+      var streakEl = document.getElementById('chip-streak');
+      if (streakEl) {
+        var streak = _calcStreak();
+        streakEl.textContent = streak === 1 ? '1 Tag' : streak + ' Tage';
+      }
+
+      // This month's brutto across all jobs
+      var monthBruttoEl = document.getElementById('chip-month-brutto');
+      if (monthBruttoEl) {
+        var monthBrutto = _calcMonthBrutto();
+        monthBruttoEl.textContent = _formatCurrency(monthBrutto);
+      }
+    }
+
+    function _calcWeekHours() {
+      var now = new Date();
+      // Monday of current ISO week
+      var monday = new Date(now);
+      var dayOfWeek = monday.getDay() || 7; // Sun=0 → 7
+      monday.setDate(monday.getDate() - (dayOfWeek - 1));
+      monday.setHours(0, 0, 0, 0);
+      var sunday = new Date(monday);
+      sunday.setDate(sunday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+
+      var startStr = _isoDate(monday);
+      var endStr = _isoDate(sunday);
+
+      var workdays = AppState.getState().workdays || [];
+      var total = 0;
+      for (var i = 0; i < workdays.length; i++) {
+        var w = workdays[i];
+        if (w.status !== 'worked') continue;
+        if (!w.date || w.date < startStr || w.date > endStr) continue;
+        if (w.hours) total += w.hours;
+      }
+      return Math.round(total * 10) / 10;
+    }
+
+    function _calcStreak() {
+      var workdays = AppState.getState().workdays || [];
+      if (!workdays.length) return 0;
+      // Build a set of YYYY-MM-DD strings where at least one 'worked' entry exists
+      var workedDays = {};
+      for (var i = 0; i < workdays.length; i++) {
+        if (workdays[i].status === 'worked' && workdays[i].date) {
+          workedDays[workdays[i].date] = true;
+        }
+      }
+      // Walk back from today; count consecutive days. Allow today to be skipped (not yet worked).
+      var streak = 0;
+      var d = new Date();
+      d.setHours(0, 0, 0, 0);
+      if (!workedDays[_isoDate(d)]) {
+        d.setDate(d.getDate() - 1);
+      }
+      while (workedDays[_isoDate(d)]) {
+        streak++;
+        d.setDate(d.getDate() - 1);
+        if (streak > 365) break; // safety
+      }
+      return streak;
+    }
+
+    function _calcMonthBrutto() {
+      var now = new Date();
+      var year = now.getFullYear();
+      var month = now.getMonth() + 1;
+      var jobs = AppState.getState().jobs || [];
+      var total = 0;
+      for (var i = 0; i < jobs.length; i++) {
+        try {
+          total += IncomeEngine.calculateMonthlyBrutto(jobs[i].id, year, month) || 0;
+        } catch (e) { /* ignore */ }
+      }
+      return total;
+    }
+
+    function _isoDate(d) {
+      var y = d.getFullYear();
+      var m = String(d.getMonth() + 1).padStart(2, '0');
+      var dd = String(d.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + dd;
+    }
+
+    /**
      * Calculates current month aggregated totals and updates the DOM.
      * Also populates the Brutto/Netto breakdown dropdown and absence row.
      */
@@ -11620,6 +11727,9 @@ const JobTracker = (function () {
         _renderDashboard(aggregated, year, month);
         _renderStepper(aggregated, year, month);
       }
+
+      // V3.1.4: Refresh header date chip + quick info chips
+      _renderHeaderExtras();
     }
 
     /**
@@ -11638,21 +11748,11 @@ const JobTracker = (function () {
         var balanceLabelEl = document.getElementById('dashboard-header-balance-label');
         if (_showHeaderBrutto) {
           nettoEl.textContent = _formatCurrency(aggregated.brutto);
-          if (balanceLabelEl) balanceLabelEl.textContent = 'Brutto-Einkommen';
+          if (balanceLabelEl) balanceLabelEl.textContent = 'Brutto-Einkommen ▾';
         } else {
           nettoEl.textContent = _formatCurrency(aggregated.nettoCashflow);
-          if (balanceLabelEl) balanceLabelEl.textContent = 'Netto-Cashflow';
+          if (balanceLabelEl) balanceLabelEl.textContent = 'Netto-Cashflow ▾';
         }
-      }
-
-      // V3.1.3: Sync compact bar value
-      var compactValEl = document.getElementById('compact-balance-val');
-      var compactLabelEl = document.getElementById('compact-balance-label');
-      if (compactValEl) {
-        compactValEl.textContent = _showHeaderBrutto ? _formatCurrency(aggregated.brutto) : _formatCurrency(aggregated.nettoCashflow);
-      }
-      if (compactLabelEl) {
-        compactLabelEl.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
       }
 
       if (tipsEl) {
@@ -11976,16 +12076,7 @@ const JobTracker = (function () {
         if (bruttoEl) bruttoEl.textContent = _formatCurrency(aggregated.brutto);
         if (nettoEl) nettoEl.textContent = _formatCurrency(_showHeaderBrutto ? aggregated.brutto : aggregated.nettoCashflow);
         var balanceLabelEl = document.getElementById('dashboard-header-balance-label');
-        if (balanceLabelEl) balanceLabelEl.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
-        // V3.1.3: Sync compact bar value
-        var compactValEl = document.getElementById('compact-balance-val');
-        var compactLabelEl = document.getElementById('compact-balance-label');
-        if (compactValEl) {
-          compactValEl.textContent = nettoEl.textContent;
-        }
-        if (compactLabelEl) {
-          compactLabelEl.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
-        }
+        if (balanceLabelEl) balanceLabelEl.textContent = _showHeaderBrutto ? 'Brutto-Einkommen ▾' : 'Netto-Cashflow ▾';
         return;
       }
 
@@ -12048,16 +12139,7 @@ const JobTracker = (function () {
         if (bruttoEl) bruttoEl.textContent = _formatCurrency(aggregated.brutto);
         if (nettoEl) nettoEl.textContent = _formatCurrency(_showHeaderBrutto ? aggregated.brutto : aggregated.nettoCashflow);
         var balanceLabelElZero = document.getElementById('dashboard-header-balance-label');
-        if (balanceLabelElZero) balanceLabelElZero.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
-        // V3.1.3: Sync compact bar value
-        var compactValElZero = document.getElementById('compact-balance-val');
-        var compactLabelElZero = document.getElementById('compact-balance-label');
-        if (compactValElZero) {
-          compactValElZero.textContent = nettoEl.textContent;
-        }
-        if (compactLabelElZero) {
-          compactLabelElZero.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
-        }
+        if (balanceLabelElZero) balanceLabelElZero.textContent = _showHeaderBrutto ? 'Brutto-Einkommen ▾' : 'Netto-Cashflow ▾';
         
         _renderSimulatorExpandedState();
         return;
@@ -12096,16 +12178,7 @@ const JobTracker = (function () {
       if (bruttoEl) bruttoEl.textContent = _formatCurrency(simulatedBrutto);
       if (nettoEl) nettoEl.textContent = _formatCurrency(_showHeaderBrutto ? simulatedBrutto : simulatedNettoCashflow);
       var balanceLabelElSim = document.getElementById('dashboard-header-balance-label');
-      if (balanceLabelElSim) balanceLabelElSim.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
-      // V3.1.3: Sync compact bar value
-      var compactValElSim = document.getElementById('compact-balance-val');
-      var compactLabelElSim = document.getElementById('compact-balance-label');
-      if (compactValElSim) {
-        compactValElSim.textContent = nettoEl.textContent;
-      }
-      if (compactLabelElSim) {
-        compactLabelElSim.textContent = _showHeaderBrutto ? 'Brutto-Einkommen' : 'Netto-Cashflow';
-      }
+      if (balanceLabelElSim) balanceLabelElSim.textContent = _showHeaderBrutto ? 'Brutto-Einkommen ▾' : 'Netto-Cashflow ▾';
 
       // Calculate Netto delta
       var deltaNetto = simulatedNettoCashflow - aggregated.nettoCashflow;
@@ -12371,23 +12444,11 @@ const JobTracker = (function () {
       // Initial render
       _update();
 
-      // V3.0: Netto/Brutto header balance card toggle
-      var balanceCard = document.querySelector('.header-balance-card');
+      // V3.1.4: Header balance card click → toggle Netto/Brutto
+      var balanceCard = document.getElementById('header-balance-card-btn') || document.querySelector('.header-balance-card');
       if (balanceCard && !balanceCard._balanceBound) {
         balanceCard._balanceBound = true;
         balanceCard.addEventListener('click', function () {
-          _showHeaderBrutto = !_showHeaderBrutto;
-          _update();
-          _triggerMicroHaptic();
-        });
-      }
-
-      // V3.1.3: Compact bar balance button — same toggle as the big card
-      var compactBalanceBtn = document.getElementById('compact-balance-btn');
-      if (compactBalanceBtn && !compactBalanceBtn._balanceBound) {
-        compactBalanceBtn._balanceBound = true;
-        compactBalanceBtn.addEventListener('click', function (e) {
-          e.stopPropagation();
           _showHeaderBrutto = !_showHeaderBrutto;
           _update();
           _triggerMicroHaptic();
@@ -17644,8 +17705,19 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '3.1.3';
+  const APP_VERSION = '3.1.4';
   const APP_CHANGELOG = [
+    {
+      version: '3.1.4',
+      date: '2026-05-24',
+      changes: [
+        'v3.1.4 — Header schrumpft beim Scrollen statt zu verschwinden',
+        '🌅 Der große Gradient-Header schrumpft beim Scrollen sanft zu einer kompakten Version — der Gradient bleibt sichtbar',
+        '✨ Neue Quick-Info-Chips im Header: aktuelle Woche, Streak und Monatsbrutto auf einen Blick',
+        '📅 Heutiges Datum oben im Header',
+        '🔄 Vereinheitlicht: nur noch ein Header (kein separater Compact-Bar mehr)'
+      ]
+    },
     {
       version: '3.1.3',
       date: '2026-05-24',
@@ -18365,90 +18437,44 @@ const JobTracker = (function () {
       });
     }
 
-    // ── V3.1.1: Compact-bar duplicate buttons (same handlers as the big header) ──
-    var headerThemeToggleCompact = document.getElementById('header-theme-toggle-btn-compact');
-    if (headerThemeToggleCompact && !headerThemeToggleCompact._compactBound) {
-      headerThemeToggleCompact._compactBound = true;
-      var updateCompactIcon = function () {
-        var current = ThemeManager.getTheme();
-        var isDark = (current === 'dark' || (current === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches));
-        headerThemeToggleCompact.textContent = isDark ? '☀️' : '🌙';
-      };
-      headerThemeToggleCompact.addEventListener('click', function () {
-        var current = ThemeManager.getTheme();
-        var next = (current === 'dark') ? 'light' : 'dark';
-        ThemeManager.setTheme(next);
-        updateCompactIcon();
-        // Sync the big-header icon too
-        var bigBtn = document.getElementById('header-theme-toggle-btn');
-        if (bigBtn) bigBtn.textContent = headerThemeToggleCompact.textContent;
-        if (typeof HapticFeedbackService !== 'undefined' && HapticFeedbackService.micro) {
-          HapticFeedbackService.micro();
-        }
-      });
-      updateCompactIcon();
-    }
-
-    var rulesInfoBtnCompact = document.getElementById('header-rules-info-btn-compact');
-    if (rulesInfoBtnCompact && !rulesInfoBtnCompact._rulesInfoCompactBound) {
-      rulesInfoBtnCompact._rulesInfoCompactBound = true;
-      rulesInfoBtnCompact.addEventListener('click', function () {
-        var modal = document.getElementById('rules-info-modal');
-        if (modal) {
-          modal.classList.add('active');
-          document.body.classList.add('modal-open');
-        }
-        if (typeof HapticFeedbackService !== 'undefined' && HapticFeedbackService.micro) {
-          HapticFeedbackService.micro();
-        }
-      });
-    }
-
-    // ── V3.1.2: Scroll listener — fade compact header in over a range as the hero scrolls away ──
-    var compactHeader = document.getElementById('app-header-compact');
-    if (compactHeader && !compactHeader._scrollBound) {
-      compactHeader._scrollBound = true;
-      var FADE_START = 80;   // start fading in
-      var FADE_END = 220;    // fully visible
+    // ── V3.1.4: Sticky-shrinking header — write 0..1 to --scroll-collapse on the header ──
+    var stickyHeader = document.getElementById('app-header');
+    if (stickyHeader && !stickyHeader._scrollBound) {
+      stickyHeader._scrollBound = true;
+      var COLLAPSE_START = 20;   // start collapsing
+      var COLLAPSE_END = 180;    // fully collapsed
       var lastScrollY = -1;
-      var compactScrollRaf = null;
+      var scrollRaf = null;
 
-      var updateCompactVisibility = function () {
-        compactScrollRaf = null;
+      var updateHeaderCollapse = function () {
+        scrollRaf = null;
         var y = window.pageYOffset || document.documentElement.scrollTop || 0;
         if (y === lastScrollY) return;
         lastScrollY = y;
 
-        if (y <= FADE_START) {
-          compactHeader.classList.remove('is-visible');
-          compactHeader.style.opacity = '';
-          compactHeader.style.transform = '';
-          compactHeader.style.pointerEvents = '';
-          compactHeader.setAttribute('aria-hidden', 'true');
-        } else if (y >= FADE_END) {
-          compactHeader.classList.add('is-visible');
-          compactHeader.style.opacity = '';
-          compactHeader.style.transform = '';
-          compactHeader.style.pointerEvents = '';
-          compactHeader.setAttribute('aria-hidden', 'false');
+        var t;
+        if (y <= COLLAPSE_START) {
+          t = 0;
+        } else if (y >= COLLAPSE_END) {
+          t = 1;
         } else {
-          // In between — interpolate opacity manually for smooth scroll-tied fade
-          var t = (y - FADE_START) / (FADE_END - FADE_START);
-          compactHeader.classList.remove('is-visible');
-          compactHeader.style.opacity = String(t);
-          compactHeader.style.transform = 'translateY(' + ((1 - t) * -4) + 'px)';
-          compactHeader.style.pointerEvents = t > 0.5 ? 'auto' : 'none';
-          compactHeader.setAttribute('aria-hidden', t > 0.5 ? 'false' : 'true');
+          t = (y - COLLAPSE_START) / (COLLAPSE_END - COLLAPSE_START);
+        }
+        stickyHeader.style.setProperty('--scroll-collapse', String(t));
+        if (t >= 0.95) {
+          stickyHeader.classList.add('is-collapsed');
+        } else {
+          stickyHeader.classList.remove('is-collapsed');
         }
       };
 
       window.addEventListener('scroll', function () {
-        if (compactScrollRaf) return;
-        compactScrollRaf = requestAnimationFrame(updateCompactVisibility);
+        if (scrollRaf) return;
+        scrollRaf = requestAnimationFrame(updateHeaderCollapse);
       }, { passive: true });
 
       // Initial state
-      updateCompactVisibility();
+      updateHeaderCollapse();
     }
 
     // ── Accent Color Picker ──
@@ -18523,15 +18549,12 @@ const JobTracker = (function () {
 
     function _applyHeaderGradientClass(gradient) {
       var header = document.querySelector('.app-header');
-      var compact = document.getElementById('app-header-compact');
       for (var gi = 0; gi < GRADIENT_CLASSES.length; gi++) {
         if (header) header.classList.remove(GRADIENT_CLASSES[gi]);
-        if (compact) compact.classList.remove(GRADIENT_CLASSES[gi]);
       }
       if (gradient && gradient !== 'default') {
         var cls = 'gradient-' + gradient;
         if (header) header.classList.add(cls);
-        if (compact) compact.classList.add(cls);
       }
     }
 
