@@ -8471,7 +8471,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.6.0';
+    const APP_VERSION = '2.7.0';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -17337,8 +17337,21 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.6.0';
+  const APP_VERSION = '2.7.0';
   const APP_CHANGELOG = [
+    {
+      version: '2.7.0',
+      date: '2026-05-24',
+      changes: [
+        'v2.7.0 — Premium Steuer-Simulator & iOS PWA-Splash-Screens',
+        '💶 Steuer-Simulator Redesign: Separates glasmorphisches Panel unter den Stats mit vollem Slider-Umfang von 0 bis +maxDelta (keine Minuswerte mehr)',
+        '📱 iOS Safe-Area & PWA-Optimierung: Responsive, hochauflösende SVG-Splash-Screens für alle gängigen iPhones beim Starten vom Home-Bildschirm',
+        '📊 Intelligente Limits: Simulator skaliert dynamisch bis max. 160 Std. Gesamtstunden für Stundenlohn-Empfänger',
+        '📅 Tagessatz-Unterstützung: Erkennt Tagessatz-Jobs automatisch, zeigt „Tage“ statt „Stunden“ an und simuliert zusätzliche Arbeitstage bis zum Monatsende',
+        '🔘 Tactile Touch Controls: Circular Stepper-Buttons (44x44px), reaktiver Reset-Button und fließende Bubble-Positionierung',
+        '📳 Haptisches Slider-Feedback: Physische Vibrations-Ticks beim Verstellen des Reglers auf unterstützten Geräten'
+      ]
+    },
     {
       version: '2.6.0',
       date: '2026-05-24',
