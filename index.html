@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="JobTracker">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=2.7.0">
+  <link rel="stylesheet" href="style.css?v=2.7.1">
   
   <!-- Apple Touch Startup Images for modern iPhones (high-fidelity glowing inline SVGs) -->
   <link rel="apple-touch-startup-image" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='393' height='852' viewBox='0 0 393 852'><rect width='100%25' height='100%25' fill='%230a0a1a'/><g transform='translate(196.5, 426)'><circle r='50' fill='%230f0f2f' stroke='%234ecca3' stroke-width='2'/><path d='M-15,-10 h30 a3,3 0 0,1 3,3 v20 a3,3 0 0,1 -3,3 h-30 a3,3 0 0,1 -3,-3 v-20 a3,3 0 0,1 3,-3' fill='none' stroke='%234ecca3' stroke-width='2.5'/><path d='M-7,-10 v-4 a2,2 0 0,1 2,-2 h10 a2,2 0 0,1 2,2 v4' fill='none' stroke='%234ecca3' stroke-width='2'/><text y='90' font-family='-apple-system, BlinkMacSystemFont, sans-serif' font-size='24' font-weight='bold' fill='%23ffffff' text-anchor='middle' letter-spacing='1'>JobTracker</text><text y='115' font-family='-apple-system, BlinkMacSystemFont, sans-serif' font-size='12' fill='%23a0a0b0' text-anchor='middle'>Mobiles Schicht-Tracking</text></g></svg>" media='(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)'>
@@ -417,32 +417,45 @@
         </div>
 
         <!-- Steuer-Simulator Panel (gorgeous full-width glass panel inside the card) -->
-        <div id="dashboard-simulator-panel" class="dashboard-simulator-panel" style="display: none;">
-          <div class="simulator-header">
-            <span class="simulator-title">✨ Steuer-Simulator</span>
+        <!-- Steuer-Simulator Panel (gorgeous full-width glass panel inside the card) -->
+        <div id="dashboard-simulator-panel" class="dashboard-simulator-panel collapsed">
+          <div class="simulator-header" id="simulator-toggle-header" style="cursor: pointer;">
+            <span class="simulator-title">
+              <span class="simulator-toggle-arrow">▸</span> ✨ Steuer-Simulator
+            </span>
+            
+            <!-- Compact display when collapsed -->
+            <div id="simulator-compact-summary" class="simulator-compact-summary" style="display: none;">
+              <span id="simulator-compact-delta-val">+0 Std.</span>
+              <span id="simulator-compact-delta-money">( +0,00 € )</span>
+            </div>
+            
+            <!-- Full Delta Badge when expanded -->
             <div id="simulator-delta-badge" class="simulator-delta-badge" style="display: none;">
               <span id="simulator-delta-value">+0,00 € Netto</span>
             </div>
           </div>
           
-          <div class="simulator-controls-row">
-            <button type="button" class="simulator-btn simulator-btn--minus" id="dashboard-hours-down" aria-label="Simulation verringern">−</button>
-            
-            <div class="simulator-slider-container">
-              <input type="range" id="dashboard-hours-slider" class="simulator-range-slider" min="0" max="100" value="0" step="1" aria-label="Simulierte Zusatzstunden">
-              <div class="simulator-slider-labels">
-                <span id="slider-min-label">0</span>
-                <span id="slider-current-bubble" class="slider-bubble">0</span>
-                <span id="slider-max-label">100</span>
+          <!-- Collapsible content container -->
+          <div id="simulator-collapsible-content" class="simulator-collapsible-content" style="display: none;">
+            <div class="simulator-controls-row">
+              <button type="button" class="simulator-btn simulator-btn--minus" id="dashboard-hours-down" aria-label="Simulation verringern">−</button>
+              
+              <div class="simulator-slider-container">
+                <input type="range" id="dashboard-hours-slider" class="simulator-range-slider" min="0" max="100" value="0" step="1" aria-label="Simulierte Zusatzstunden">
+                <div class="simulator-slider-labels">
+                  <span id="slider-min-label">0</span>
+                  <span id="slider-max-label">100</span>
+                </div>
               </div>
+              
+              <button type="button" class="simulator-btn simulator-btn--plus" id="dashboard-hours-up" aria-label="Simulation erhöhen">＋</button>
             </div>
             
-            <button type="button" class="simulator-btn simulator-btn--plus" id="dashboard-hours-up" aria-label="Simulation erhöhen">＋</button>
-          </div>
-          
-          <div class="simulator-footer">
-            <span id="dashboard-hours-sim-info" class="simulator-info-text">Zusatzleistung simulieren</span>
-            <button type="button" id="dashboard-hours-reset" class="simulator-reset-btn" aria-label="Simulation zurücksetzen">↺ Zurücksetzen</button>
+            <div class="simulator-footer">
+              <span id="dashboard-hours-sim-info" class="simulator-info-text">Zusatzleistung simulieren</span>
+              <button type="button" id="dashboard-hours-reset" class="simulator-reset-btn" aria-label="Simulation zurücksetzen">↺ Zurücksetzen</button>
+            </div>
           </div>
         </div>
 
@@ -473,12 +486,6 @@
           <span id="sparkline-tip-container" class="sparkline-container"></span>
           <span class="dashboard-extra-item" id="dashboard-total-provision">Provision: 0,00 €</span>
           <span id="sparkline-provision-container" class="sparkline-container"></span>
-        </div>
-
-        <!-- Prognose -->
-        <div class="dashboard-prognose" id="dashboard-prognose" style="display:none;">
-          <span class="dashboard-prognose-icon">📈</span>
-          <span class="dashboard-prognose-text" id="dashboard-prognose-text"></span>
         </div>
       </div>
 
@@ -773,7 +780,7 @@
         <h2 class="settings-section-title">Version & Updates</h2>
         <div class="settings-version-info">
           <span class="settings-version-label">Aktuelle Version</span>
-          <span class="settings-version-number" id="settings-app-version">2.7.0</span>
+          <span class="settings-version-number" id="settings-app-version">2.7.1</span>
         </div>
         <details class="settings-changelog" id="settings-changelog">
           <summary class="settings-changelog-toggle">📋 Was ist neu?</summary>

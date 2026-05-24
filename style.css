@@ -3929,13 +3929,11 @@ details[open] .dashboard-details-toggle::after {
   flex: 1;
 }
 
-.fv-warning-bar {
-  margin-bottom: var(--spacing-xs);
-}
-
 .fv-warning-detail {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
+  margin-top: var(--spacing-xs);
+  display: block;
 }
 
 /* Prognose */
@@ -5647,10 +5645,13 @@ body.widget-dragging .view-section {
 /* ============================================================
    Steuer-Simulator (Redesigned Full-Width Panel)
    ============================================================ */
+/* ============================================================
+   Steuer-Simulator (Redesigned Collapsible Panel)
+   ============================================================ */
 .dashboard-simulator-panel {
   margin-top: var(--spacing-md);
   padding: var(--spacing-md);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
   display: flex;
@@ -5658,9 +5659,14 @@ body.widget-dragging .view-section {
   gap: var(--spacing-sm);
   position: relative;
   overflow: visible;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.05), 
-              0 8px 32px rgba(0, 0, 0, 0.2);
+              0 8px 24px rgba(0, 0, 0, 0.15);
+  touch-action: manipulation;
+}
+
+.dashboard-simulator-panel:hover {
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .simulator-header {
@@ -5668,17 +5674,59 @@ body.widget-dragging .view-section {
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
 }
 
 .simulator-title {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.8px;
   color: var(--color-text-secondary);
   display: flex;
   align-items: center;
+  gap: 8px;
+  transition: color 0.2s ease;
+}
+
+.dashboard-simulator-panel:not(.collapsed) .simulator-title {
+  color: var(--color-text-primary);
+}
+
+.simulator-toggle-arrow {
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+  display: inline-block;
+  transition: color 0.2s ease;
+}
+
+/* Compact Summary when Collapsed */
+.simulator-compact-summary {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  animation: compact-fade-in 0.25s ease-out;
+}
+
+@keyframes compact-fade-in {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+#simulator-compact-delta-val {
+  color: var(--color-accent);
+  background: rgba(var(--accent-rgb), 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 0.5px solid rgba(var(--accent-rgb), 0.2);
+}
+
+#simulator-compact-delta-money {
+  color: var(--color-success);
 }
 
 /* Glowing Netto-Delta Badges */
@@ -5687,7 +5735,7 @@ body.widget-dragging .view-section {
   align-items: center;
   padding: 4px 10px;
   border-radius: 20px;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.2px;
@@ -5697,29 +5745,41 @@ body.widget-dragging .view-section {
 
 @keyframes badge-pulse {
   0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(78, 204, 163, 0.4); }
-  70% { transform: scale(1.02); box-shadow: 0 0 10px 4px rgba(78, 204, 163, 0); }
+  70% { transform: scale(1.02); box-shadow: 0 0 8px 3px rgba(78, 204, 163, 0); }
   100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(78, 204, 163, 0); }
 }
 
 .simulator-delta-badge.badge--positive {
-  background: rgba(78, 204, 163, 0.15);
+  background: rgba(78, 204, 163, 0.12);
   color: var(--color-success);
-  border: 1px solid rgba(78, 204, 163, 0.3);
-  box-shadow: 0 0 8px rgba(78, 204, 163, 0.2);
+  border: 1px solid rgba(78, 204, 163, 0.25);
+  box-shadow: 0 0 6px rgba(78, 204, 163, 0.15);
 }
 
 .simulator-delta-badge.badge--negative {
-  background: rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.12);
   color: var(--color-danger);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.15);
   animation: badge-pulse-negative 2s infinite ease-in-out;
 }
 
 @keyframes badge-pulse-negative {
   0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-  70% { transform: scale(1.02); box-shadow: 0 0 10px 4px rgba(239, 68, 68, 0); }
+  70% { transform: scale(1.02); box-shadow: 0 0 8px 3px rgba(239, 68, 68, 0); }
   100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.simulator-collapsible-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  animation: slide-down 0.25s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .simulator-controls-row {
@@ -5727,7 +5787,7 @@ body.widget-dragging .view-section {
   align-items: center;
   gap: var(--spacing-sm);
   width: 100%;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 /* Circular Tap-friendly Buttons (iOS optimal) */
@@ -5736,34 +5796,33 @@ body.widget-dragging .view-section {
   height: 44px;
   min-width: 44px;
   border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--color-text-primary);
-  font-size: 1.2rem;
-  font-weight: 500;
+  font-size: 1.3rem;
+  font-weight: 400;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
   font-family: var(--font-family);
   -webkit-tap-highlight-color: transparent;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  touch-action: manipulation;
 }
 
 .simulator-btn:active {
-  transform: scale(0.9);
-  background: var(--color-accent);
-  color: var(--color-accent-text, #fff);
-  border-color: var(--color-accent);
-  box-shadow: 0 0 12px var(--color-accent);
+  transform: scale(0.88);
+  background: rgba(var(--accent-rgb), 0.15);
+  color: var(--color-accent);
+  border-color: rgba(var(--accent-rgb), 0.4);
 }
 
 .simulator-slider-container {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   position: relative;
   overflow: visible;
   padding: 8px 0;
@@ -5775,7 +5834,7 @@ body.widget-dragging .view-section {
   appearance: none;
   width: 100%;
   height: 6px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 3px;
   outline: none;
   margin: 0;
@@ -5790,15 +5849,16 @@ body.widget-dragging .view-section {
   border-radius: 50%;
   background: var(--color-accent);
   border: 2px solid rgba(255, 255, 255, 0.95);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4), 0 0 10px rgba(78, 204, 163, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   cursor: pointer;
   transition: transform 0.1s ease, background 0.15s ease;
   margin-top: -11px;
 }
 
 .simulator-range-slider::-webkit-slider-thumb:active {
-  transform: scale(1.15);
+  transform: scale(1.12);
   background: #ffffff;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
 }
 
 .simulator-range-slider::-moz-range-thumb {
@@ -5807,65 +5867,36 @@ body.widget-dragging .view-section {
   border-radius: 50%;
   background: var(--color-accent);
   border: 2px solid rgba(255, 255, 255, 0.95);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   cursor: pointer;
   transition: transform 0.1s ease;
 }
 
 .simulator-range-slider::-moz-range-thumb:active {
-  transform: scale(1.15);
+  transform: scale(1.12);
 }
 
 .simulator-range-slider::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .simulator-range-slider::-moz-range-track {
   height: 6px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
 }
 
-/* Slider Labels & Bubble */
+/* Slider Labels */
 .simulator-slider-labels {
   display: flex;
   justify-content: space-between;
   font-size: 0.72rem;
   color: var(--color-text-tertiary);
-  margin-top: 2px;
+  margin-top: 1px;
   position: relative;
   width: 100%;
-}
-
-.slider-bubble {
-  position: absolute;
-  top: -38px;
-  transform: translateX(-50%);
-  padding: 4px 8px;
-  background: var(--color-accent);
-  color: var(--color-accent-text, #050510);
-  font-weight: 700;
-  font-size: 0.75rem;
-  border-radius: 6px;
-  pointer-events: none;
-  white-space: nowrap;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3), 0 0 8px rgba(78, 204, 163, 0.4);
-  transition: left 0.1s ease-out;
-}
-
-.slider-bubble::after {
-  content: '';
-  position: absolute;
-  bottom: -4px;
-  left: 50%;
-  transform: translateX(-50%);
-  border-width: 4px 4px 0;
-  border-style: solid;
-  border-color: var(--color-accent) transparent transparent;
-  display: block;
-  width: 0;
 }
 
 /* Footer Section */
@@ -5879,14 +5910,19 @@ body.widget-dragging .view-section {
 }
 
 .simulator-info-text {
-  font-size: 0.75rem;
-  color: var(--color-text-tertiary);
+  font-size: 0.76rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
   transition: color 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70%;
 }
 
 .simulator-reset-btn {
   padding: 4px 12px;
-  font-size: 0.75rem;
+  font-size: 0.74rem;
   font-weight: 600;
   background: transparent;
   color: var(--color-text-secondary);
@@ -5899,6 +5935,7 @@ body.widget-dragging .view-section {
   pointer-events: none;
   font-family: var(--font-family);
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .simulator-reset-btn.visible {
@@ -5916,6 +5953,6 @@ body.widget-dragging .view-section {
 /* Simulator Active Glow on Stat Container */
 #stat-stunden-root.is-simulating .dashboard-stat-value {
   color: var(--color-accent) !important;
-  text-shadow: 0 0 10px rgba(78, 204, 163, 0.5);
+  text-shadow: 0 0 10px rgba(78, 204, 163, 0.4);
   font-style: italic;
 }

@@ -8471,7 +8471,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.7.0';
+    const APP_VERSION = '2.7.1';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -11366,6 +11366,7 @@ const JobTracker = (function () {
     let _showProjected = false; // false = actual (worked only), true = include pending
     let _simHoursDelta = 0; // signed integer; 0 = no simulation
     let _stepperBound = false;
+    let _simulatorExpanded = false; // Collapsible simulator panel state
 
     /**
      * Formats a number as German currency string: "1.234,56 €"
@@ -11643,44 +11644,6 @@ const JobTracker = (function () {
       _updateNettoBreakdown(aggregated, year, month);
       _updateAbsenceRow(aggregated);
       _updateFVWarning(year, month);
-      _updatePrognose(aggregated);
-    }
-
-    /**
-     * Calculates and displays a monthly income prognosis based on current pace.
-     */
-    function _updatePrognose(aggregated) {
-      var prognoseEl = document.getElementById('dashboard-prognose');
-      var textEl = document.getElementById('dashboard-prognose-text');
-      if (!prognoseEl || !textEl) return;
-
-      // Only show prognose in current-month mode and if there's some data
-      if (_showAllTime || aggregated.brutto === 0) {
-        prognoseEl.style.display = 'none';
-        return;
-      }
-
-      var now = new Date();
-      var dayOfMonth = now.getDate();
-      var daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-
-      // Don't show prognose in the last 3 days (data is basically complete)
-      if (dayOfMonth > daysInMonth - 3) {
-        prognoseEl.style.display = 'none';
-        return;
-      }
-
-      // Project: (current brutto / days elapsed) * total days in month
-      var projectedBrutto = (aggregated.brutto / dayOfMonth) * daysInMonth;
-      var projectedNetto = aggregated.nettoAvailable ? (aggregated.nettoCashflow / dayOfMonth) * daysInMonth : null;
-
-      prognoseEl.style.display = '';
-      var text = 'Prognose: ~' + _formatCurrency(projectedBrutto) + ' Brutto';
-      if (projectedNetto !== null) {
-        text += ' / ~' + _formatCurrency(projectedNetto) + ' Netto';
-      }
-      text += ' bis Monatsende';
-      textEl.textContent = text;
     }
 
     /**
@@ -11713,7 +11676,6 @@ const JobTracker = (function () {
         '<span class="fv-warning-title">Familienversicherung</span>' +
         '<span class="fv-warning-badge status-badge ' + fvStatus.warningLevel + '">' + fvStatus.percentage + '%</span>' +
         '</div>' +
-        '<div class="fv-warning-bar"><div class="progress-bar"><div class="progress-bar-fill ' + fvStatus.warningLevel + '" style="width:' + Math.min(fvStatus.percentage, 100) + '%"></div></div></div>' +
         '<span class="fv-warning-detail">' + _formatCurrency(fvStatus.current) + ' / ' + _formatCurrency(fvStatus.limit) + ' Einkommensgrenze</span>';
     }
 
@@ -11870,6 +11832,10 @@ const JobTracker = (function () {
      * Renders the Steuer-Simulator panel. Recomputes simulated hours/days,
      * brutto, and netto, and updates the dashboard values.
      */
+    /**
+     * Renders the Steuer-Simulator panel. Recomputes simulated hours/days,
+     * brutto, and netto, and updates the dashboard values.
+     */
     function _renderStepper(aggregated, year, month) {
       var simPanel = document.getElementById('dashboard-simulator-panel');
       var hoursLabel = document.getElementById('dashboard-hours-label');
@@ -11880,7 +11846,6 @@ const JobTracker = (function () {
       var slider = document.getElementById('dashboard-hours-slider');
       var sliderMin = document.getElementById('slider-min-label');
       var sliderMax = document.getElementById('slider-max-label');
-      var sliderBubble = document.getElementById('slider-current-bubble');
       var btnUp = document.getElementById('dashboard-hours-up');
       var btnDown = document.getElementById('dashboard-hours-down');
       var btnReset = document.getElementById('dashboard-hours-reset');
@@ -11888,6 +11853,10 @@ const JobTracker = (function () {
       var badge = document.getElementById('simulator-delta-badge');
       var badgeVal = document.getElementById('simulator-delta-value');
       var statRoot = document.getElementById('stat-stunden-root');
+      
+      var compactSummary = document.getElementById('simulator-compact-summary');
+      var compDeltaVal = document.getElementById('simulator-compact-delta-val');
+      var compDeltaMoney = document.getElementById('simulator-compact-delta-money');
 
       var primaryJob = _getPrimarySimulatableJob();
 
@@ -11948,23 +11917,21 @@ const JobTracker = (function () {
       }
       if (sliderMin) sliderMin.textContent = '0' + unit;
       if (sliderMax) sliderMax.textContent = '+' + maxDelta + unit;
-      if (sliderBubble) {
-        sliderBubble.textContent = (_simHoursDelta > 0 ? '+' : '') + _simHoursDelta + unit;
-        var pct = (maxDelta > 0) ? (_simHoursDelta / maxDelta) * 100 : 0;
-        sliderBubble.style.left = 'calc(' + pct + '% + (' + (8 - pct * 0.16) + 'px))';
-      }
 
       if (_simHoursDelta === 0) {
         if (statRoot) statRoot.classList.remove('is-simulating');
         if (btnReset) btnReset.classList.remove('visible');
         if (badge) badge.style.display = 'none';
+        if (compactSummary) compactSummary.style.display = 'none';
         if (simInfo) {
-          simInfo.textContent = 'Zusatzleistung simulieren (' + (primaryJob.employerName || '') + ')';
+          simInfo.textContent = 'Simulieren (' + (primaryJob.employerName || '') + ')';
         }
         
         if (hoursEl) hoursEl.textContent = isDaily ? String(baselineVal) : _formatHours(baselineVal);
         if (bruttoEl) bruttoEl.textContent = _formatCurrency(aggregated.brutto);
         if (nettoEl) nettoEl.textContent = _formatCurrency(aggregated.nettoCashflow);
+        
+        _renderSimulatorExpandedState();
         return;
       }
 
@@ -12001,16 +11968,58 @@ const JobTracker = (function () {
       if (bruttoEl) bruttoEl.textContent = _formatCurrency(simulatedBrutto);
       if (nettoEl) nettoEl.textContent = _formatCurrency(simulatedNettoCashflow);
 
-      // Render delta badge
+      // Calculate Netto delta
       var deltaNetto = simulatedNettoCashflow - aggregated.nettoCashflow;
+
+      // Render delta badge
       if (badge && badgeVal) {
-        badge.style.display = 'inline-flex';
+        badge.style.display = (_simHoursDelta > 0 && _simulatorExpanded) ? 'inline-flex' : 'none';
         badge.className = 'simulator-delta-badge ' + (deltaNetto >= 0 ? 'badge--positive' : 'badge--negative');
         badgeVal.textContent = (deltaNetto >= 0 ? '+' : '') + _formatCurrency(deltaNetto) + ' Netto';
       }
 
+      // Render compact collapsed summary
+      if (compDeltaVal && compDeltaMoney) {
+        compDeltaVal.textContent = '+' + _simHoursDelta + (isDaily ? ' Tage' : ' Std.');
+        compDeltaMoney.textContent = '( +' + _formatCurrency(deltaNetto) + ' )';
+        if (compactSummary) {
+          compactSummary.style.display = (_simHoursDelta > 0 && !_simulatorExpanded) ? 'inline-flex' : 'none';
+        }
+      }
+
       if (simInfo) {
-        simInfo.textContent = '+' + _simHoursDelta + ' ' + (isDaily ? 'Tag' : 'Std.') + (_simHoursDelta > 1 ? (isDaily ? 'e' : '.)') : (isDaily ? '' : '.')) + ' simuliert für ' + (primaryJob.employerName || '');
+        simInfo.textContent = '+' + _simHoursDelta + ' ' + (isDaily ? 'Tage' : 'Std.') + ' (' + (primaryJob.employerName || '') + ')';
+      }
+
+      _renderSimulatorExpandedState();
+    }
+
+    /**
+     * Renders the expanded/collapsed state of the simulator panel.
+     */
+    function _renderSimulatorExpandedState() {
+      var panel = document.getElementById('dashboard-simulator-panel');
+      var collapsibleContent = document.getElementById('simulator-collapsible-content');
+      var arrow = document.querySelector('.simulator-toggle-arrow');
+      var compactSummary = document.getElementById('simulator-compact-summary');
+      var fullBadge = document.getElementById('simulator-delta-badge');
+
+      if (!panel) return;
+
+      if (_simulatorExpanded) {
+        panel.classList.remove('collapsed');
+        if (collapsibleContent) collapsibleContent.style.display = 'block';
+        if (arrow) arrow.textContent = '▾';
+        if (compactSummary) compactSummary.style.display = 'none';
+        if (fullBadge && _simHoursDelta > 0) fullBadge.style.display = 'inline-flex';
+      } else {
+        panel.classList.add('collapsed');
+        if (collapsibleContent) collapsibleContent.style.display = 'none';
+        if (arrow) arrow.textContent = '▸';
+        if (fullBadge) fullBadge.style.display = 'none';
+        if (compactSummary) {
+          compactSummary.style.display = (_simHoursDelta > 0) ? 'inline-flex' : 'none';
+        }
       }
     }
 
@@ -12023,10 +12032,21 @@ const JobTracker = (function () {
       var btnDown = document.getElementById('dashboard-hours-down');
       var btnReset = document.getElementById('dashboard-hours-reset');
       var slider = document.getElementById('dashboard-hours-slider');
+      var toggleHeader = document.getElementById('simulator-toggle-header');
+      
       if (!btnUp || !btnDown) return;
       _stepperBound = true;
 
-      btnUp.addEventListener('click', function () {
+      if (toggleHeader) {
+        toggleHeader.addEventListener('click', function () {
+          _simulatorExpanded = !_simulatorExpanded;
+          _renderSimulatorExpandedState();
+          _triggerMicroHaptic();
+        });
+      }
+
+      btnUp.addEventListener('click', function (e) {
+        e.stopPropagation(); // Prevent toggling the header collapse state
         var primaryJob = _getPrimarySimulatableJob();
         if (!primaryJob) return;
         var isDaily = primaryJob.salaryType === 'daily';
@@ -12075,7 +12095,8 @@ const JobTracker = (function () {
         }
       });
 
-      btnDown.addEventListener('click', function () {
+      btnDown.addEventListener('click', function (e) {
+        e.stopPropagation(); // Prevent toggling the header collapse state
         if (_simHoursDelta > 0) {
           _simHoursDelta -= 1;
           _update();
@@ -12084,6 +12105,9 @@ const JobTracker = (function () {
       });
 
       if (slider) {
+        slider.addEventListener('click', function (e) {
+          e.stopPropagation(); // Prevent toggling header collapse state
+        });
         slider.addEventListener('input', function (e) {
           var val = parseInt(e.target.value, 10) || 0;
           if (_simHoursDelta !== val) {
@@ -12095,7 +12119,8 @@ const JobTracker = (function () {
       }
 
       if (btnReset) {
-        btnReset.addEventListener('click', function () {
+        btnReset.addEventListener('click', function (e) {
+          e.stopPropagation(); // Prevent toggling header collapse state
           if (_simHoursDelta !== 0) {
             _simHoursDelta = 0;
             _update();
@@ -17337,8 +17362,21 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.7.0';
+  const APP_VERSION = '2.7.1';
   const APP_CHANGELOG = [
+    {
+      version: '2.7.1',
+      date: '2026-05-24',
+      changes: [
+        'v2.7.1 — Klappbarer Steuer-Simulator & iOS Touch-Fixes',
+        '📂 Klappbares Design: Simulator-Panel einklappbar, im geschlossenen Zustand wird eine schicke, kompakte Zusatz-Stunden- und Geld-Zusammenfassung angezeigt',
+        '🚫 Slider-Bereinigung: Störende orange stündliche Blasenanzeige im Slider-Track vollständig entfernt für sauberes Layout',
+        '📳 Doppelklick- & Scroll-Schutz: Deaktivierung des Safari double-tap Delays mittels touch-action: manipulation; verhindert Verrutschen des Bildschirms bei schnellem Klicken',
+        '📊 Prognose entfernt: Das Dashboard-Prognose-Widget wurde komplett entfernt für einen aufgeräumteren Look',
+        '⚙️ Event-Isolation: Klick-Ereignisse auf Buttons, Regler und Reset-Felder isoliert (e.stopPropagation()), sodass kein versehentliches Einklappen getriggert wird',
+        '📋 Einzeiliger Info-Text: Keine unschönen Zeilenumbrüche mit einzelnen Worten mehr im Simulator-Footer dank Ellipsis-Kürzung'
+      ]
+    },
     {
       version: '2.7.0',
       date: '2026-05-24',
