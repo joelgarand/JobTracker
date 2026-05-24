@@ -5473,3 +5473,29 @@ body.widget-dragging .view-section {
   border-color: rgba(245, 158, 11, 0.32);
   color: var(--color-warning);
 }
+
+/* ============================================================
+   v2.3.0 Edit Recent Entries — tappable entries + edit-mode form
+   ============================================================ */
+
+/* Make recent-entry items feel tappable; provide a brief active-state press
+   feedback. Suppress the press effect when the item is in its swiped-open
+   state so the swipe-to-delete affordance stays visually distinct. */
+.entry-recent-item {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.entry-recent-item:active:not(.swipeable-entry--swiped) {
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
+/* Edit-mode visual indicator on the entry form card */
+#entry-form-title {
+  transition: color 0.2s ease;
+}
+
+.entry-form-card.editing {
+  border-color: rgba(var(--accent-rgb), 0.4);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.2);
+}

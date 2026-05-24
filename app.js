@@ -8452,7 +8452,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '2.2.1';
+    const APP_VERSION = '2.3.0';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -10324,6 +10324,8 @@ const JobTracker = (function () {
   // Uses TimeTrackerModule.createEntry and EarningsExtraModule.addEarning for persistence.
   const EntryViewModule = (function () {
     let _initialized = false;
+    let _editingEntryId = null; // null = create new entry, otherwise editing existing entry
+    let _recentListClickBound = false; // ensure tap-to-edit delegation is bound only once
 
     /**
      * Formats a date string (YYYY-MM-DD) to German format (DD.MM.YYYY).
@@ -10464,6 +10466,73 @@ const JobTracker = (function () {
         entryData.dailyRateOverride = dailyRateValue;
       }
 
+      // ── EDIT MODE: update existing entry + replace earnings ──
+      if (_editingEntryId) {
+        // Capture old entry data BEFORE updateEntry mutates state, so we can find
+        // the right job+date to clear earnings from (in case the user changed them).
+        var oldEntry = null;
+        var workdaysBefore = AppState.getState().workdays;
+        for (var wb = 0; wb < workdaysBefore.length; wb++) {
+          if (workdaysBefore[wb].id === _editingEntryId) {
+            oldEntry = workdaysBefore[wb];
+            break;
+          }
+        }
+
+        var updateResult = TimeTrackerModule.updateEntry(_editingEntryId, entryData);
+        if (!updateResult.success) {
+          if (errorEl) errorEl.textContent = updateResult.error || 'Fehler beim Aktualisieren.';
+          return;
+        }
+
+        // Delete old earnings for the entry's previous job+date AND for the new
+        // job+date (if either changed). This prevents stale provision/tip rows.
+        function _clearEarningsForJobAndDate(targetJobId, targetDate) {
+          if (!targetJobId || !targetDate) return;
+          var year = parseInt(String(targetDate).substring(0, 4), 10);
+          if (!year) return;
+          var earnings = EarningsExtraModule.getForJob(targetJobId, year);
+          for (var oe = 0; oe < earnings.length; oe++) {
+            if (earnings[oe].date === targetDate) {
+              EarningsExtraModule.deleteEarning(earnings[oe].id);
+            }
+          }
+        }
+        if (oldEntry) {
+          _clearEarningsForJobAndDate(oldEntry.jobId, oldEntry.date);
+        }
+        if (!oldEntry || oldEntry.jobId !== jobId || oldEntry.date !== date) {
+          _clearEarningsForJobAndDate(jobId, date);
+        }
+
+        // Save new provision if entered (only if the field is visible/applicable)
+        var editProvisionAmount = parseFloat(provisionInput ? provisionInput.value : '');
+        if (!isNaN(editProvisionAmount) && editProvisionAmount > 0) {
+          EarningsExtraModule.addEarning({
+            jobId: jobId,
+            date: date,
+            type: 'provision',
+            amount: editProvisionAmount
+          });
+        }
+        // Save new tip if entered
+        var editTipAmount = parseFloat(tipInput ? tipInput.value : '');
+        if (!isNaN(editTipAmount) && editTipAmount > 0) {
+          EarningsExtraModule.addEarning({
+            jobId: jobId,
+            date: date,
+            type: 'tip',
+            amount: editTipAmount
+          });
+        }
+
+        showToast('Eintrag aktualisiert ✓');
+        _exitEditMode();
+        _renderRecentEntries();
+        return;
+      }
+
+      // ── CREATE MODE: existing logic ──
       var result = TimeTrackerModule.createEntry(entryData);
 
       if (result.success) {
@@ -10502,6 +10571,181 @@ const JobTracker = (function () {
       } else {
         if (errorEl) errorEl.textContent = result.error || 'Fehler beim Speichern.';
       }
+    }
+
+    /**
+     * Enters edit mode for an existing workday entry: populates the form with
+     * the entry's current values (job, date, status, hours, daily-rate override),
+     * loads any existing provision/tip earnings for that day+job into the form,
+     * relabels the form to "Eintrag bearbeiten", and shows a Cancel button.
+     * @param {string} entryId
+     */
+    function _enterEditMode(entryId) {
+      var workdays = AppState.getState().workdays;
+      var entry = null;
+      for (var i = 0; i < workdays.length; i++) {
+        if (workdays[i].id === entryId) { entry = workdays[i]; break; }
+      }
+      if (!entry) return;
+
+      _editingEntryId = entryId;
+
+      var jobSelect = document.getElementById('entry-job');
+      var dateInput = document.getElementById('entry-date');
+      var statusSelect = document.getElementById('entry-status');
+      var hoursInput = document.getElementById('entry-hours');
+      var provisionInput = document.getElementById('entry-provision');
+      var tipInput = document.getElementById('entry-tip');
+      var dailyRateInput = document.getElementById('entry-daily-rate');
+      var errorEl = document.getElementById('entry-error');
+
+      if (errorEl) errorEl.textContent = '';
+      if (jobSelect) jobSelect.value = entry.jobId;
+      if (dateInput) dateInput.value = entry.date;
+      if (statusSelect) statusSelect.value = entry.status || 'worked';
+      if (hoursInput) hoursInput.value = (entry.hours != null && entry.hours !== '') ? entry.hours : '';
+      if (dailyRateInput) {
+        dailyRateInput.value = entry.dailyRateOverride ? entry.dailyRateOverride : '';
+      }
+
+      // Update extra-fields visibility based on selected job + status
+      _updateExtraFields();
+      var hoursGroup = document.getElementById('entry-hours-group');
+      if (hoursGroup) {
+        // Hours visibility follows status (and isDaily, handled inside _updateExtraFields)
+        var jobs = JobManager.getActiveJobs();
+        var selectedJob = null;
+        for (var sj = 0; sj < jobs.length; sj++) {
+          if (jobs[sj].id === entry.jobId) { selectedJob = jobs[sj]; break; }
+        }
+        var isDailyJob = selectedJob && selectedJob.salaryType === 'daily';
+        if (entry.status !== 'worked') {
+          hoursGroup.style.display = 'none';
+        } else if (isDailyJob) {
+          hoursGroup.style.display = 'none';
+        } else {
+          hoursGroup.style.display = '';
+        }
+      }
+
+      // Load existing provision + tip earnings for this date+job into the form
+      var year = parseInt(String(entry.date).substring(0, 4), 10);
+      var existingEarnings = year ? EarningsExtraModule.getForJob(entry.jobId, year) : [];
+      var totalProvision = 0;
+      var totalTip = 0;
+      for (var e = 0; e < existingEarnings.length; e++) {
+        if (existingEarnings[e].date === entry.date) {
+          if (existingEarnings[e].type === 'provision') totalProvision += existingEarnings[e].amount;
+          else if (existingEarnings[e].type === 'tip') totalTip += existingEarnings[e].amount;
+        }
+      }
+      if (provisionInput) {
+        provisionInput.value = totalProvision > 0 ? totalProvision.toFixed(2) : '';
+      }
+      if (tipInput) {
+        tipInput.value = totalTip > 0 ? totalTip.toFixed(2) : '';
+      }
+
+      // Relabel form for edit mode
+      var formTitle = document.getElementById('entry-form-title');
+      var submitBtn = document.getElementById('entry-submit-btn');
+      if (formTitle) formTitle.textContent = 'Eintrag bearbeiten';
+      if (submitBtn) submitBtn.textContent = 'Änderungen speichern';
+
+      // Highlight the form card so the user sees they're in edit mode
+      var formCard = document.querySelector('.entry-form-card');
+      if (formCard) formCard.classList.add('editing');
+
+      _showEditCancelButton();
+
+      // Scroll the form into view so the user sees the populated fields immediately
+      if (formCard && typeof formCard.scrollIntoView === 'function') {
+        try {
+          formCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch (err) {
+          // Older Safari versions: fall back to plain scroll
+          formCard.scrollIntoView();
+        }
+      }
+    }
+
+    /**
+     * Exits edit mode and restores the form to its default "create new entry" state.
+     */
+    function _exitEditMode() {
+      _editingEntryId = null;
+
+      var formTitle = document.getElementById('entry-form-title');
+      var submitBtn = document.getElementById('entry-submit-btn');
+      if (formTitle) formTitle.textContent = 'Neuer Eintrag';
+      if (submitBtn) submitBtn.textContent = 'Eintrag speichern';
+
+      var form = document.getElementById('entry-form');
+      if (form) form.reset();
+
+      // Restore today's date as the default
+      var dateInput = document.getElementById('entry-date');
+      if (dateInput) {
+        var today = new Date();
+        dateInput.value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+      }
+      // Default status back to "worked"
+      var statusSelect = document.getElementById('entry-status');
+      if (statusSelect) statusSelect.value = 'worked';
+
+      var formCard = document.querySelector('.entry-form-card');
+      if (formCard) formCard.classList.remove('editing');
+
+      _hideEditCancelButton();
+      _updateExtraFields();
+    }
+
+    /**
+     * Inserts (or shows) the "Abbrechen" button used to leave edit mode without saving.
+     */
+    function _showEditCancelButton() {
+      var actions = document.querySelector('#entry-form .form-actions');
+      if (!actions) return;
+      var cancelBtn = document.getElementById('entry-edit-cancel-btn');
+      if (!cancelBtn) {
+        cancelBtn = document.createElement('button');
+        cancelBtn.id = 'entry-edit-cancel-btn';
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'btn btn-secondary';
+        cancelBtn.style.width = '100%';
+        cancelBtn.textContent = 'Abbrechen';
+        cancelBtn.addEventListener('click', _exitEditMode);
+        actions.appendChild(cancelBtn);
+      }
+      cancelBtn.style.display = '';
+    }
+
+    function _hideEditCancelButton() {
+      var cancelBtn = document.getElementById('entry-edit-cancel-btn');
+      if (cancelBtn) cancelBtn.style.display = 'none';
+    }
+
+    /**
+     * Binds a single delegated click handler on the recent-entries list. The
+     * handler enters edit mode for the tapped entry, while ignoring taps on the
+     * swipe-delete button or on entries currently in the swiped-open state.
+     */
+    function _bindRecentListClickHandler() {
+      if (_recentListClickBound) return;
+      var listEl = document.getElementById('entry-recent-list');
+      if (!listEl) return;
+      listEl.addEventListener('click', function (e) {
+        var entryEl = e.target.closest ? e.target.closest('.entry-recent-item') : null;
+        if (!entryEl) return;
+        // Don't enter edit mode when the entry is swiped open (the user is
+        // interacting with the swipe-to-delete affordance).
+        if (entryEl.classList.contains('swipeable-entry--swiped')) return;
+        if (e.target.closest && e.target.closest('.swipe-delete-btn')) return;
+        var entryId = entryEl.getAttribute('data-entry-id');
+        if (!entryId) return;
+        _enterEditMode(entryId);
+      });
+      _recentListClickBound = true;
     }
 
     /**
@@ -10633,6 +10877,10 @@ const JobTracker = (function () {
         form.addEventListener('submit', _handleSubmit);
       }
 
+      // Bind tap-to-edit on recent entries (event delegation, bound once for the
+      // lifetime of the app so list re-renders don't accumulate listeners).
+      _bindRecentListClickHandler();
+
       // Initialize shift templates
       _renderTemplates();
       _bindAddTemplate();
@@ -10646,7 +10894,11 @@ const JobTracker = (function () {
           _renderRecentEntries();
         }
       });
-      EventBus.on('workday:deleted', function () {
+      EventBus.on('workday:deleted', function (data) {
+        // If the entry currently being edited was deleted (e.g. via swipe), exit edit mode.
+        if (_editingEntryId && data && data.id === _editingEntryId) {
+          _exitEditMode();
+        }
         if (NavigationController.getActiveView() === 'view-entry') {
           _renderRecentEntries();
         }
@@ -10654,6 +10906,10 @@ const JobTracker = (function () {
       EventBus.on('navigation:change', function (data) {
         if (data && (data.viewId === 'view-entry' || data.view === 'view-entry')) {
           _renderRecentEntries();
+        } else {
+          // Leaving the Eintragen tab while in edit mode? Drop edit mode so the
+          // next visit starts with a clean "Neuer Eintrag" form.
+          if (_editingEntryId) _exitEditMode();
         }
       });
       EventBus.on('job:created', function () {
@@ -16597,8 +16853,19 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '2.2.1';
+  const APP_VERSION = '2.3.0';
   const APP_CHANGELOG = [
+    {
+      version: '2.3.0',
+      date: '2026-06-06',
+      changes: [
+        'v2.3.0 — Einträge bearbeiten',
+        '✏️ Tippe in „Letzte Einträge" auf einen Eintrag, um ihn zu bearbeiten — Stunden, Status, Datum, Job, Provision, Trinkgeld und Notizen lassen sich anpassen',
+        '💰 Beim Speichern werden Provision und Trinkgeld vollständig ersetzt und Brutto/Netto neu berechnet',
+        '🔁 „Abbrechen"-Button verlässt den Bearbeitungsmodus ohne Speichern',
+        '🎯 Visuelle Hervorhebung des Formulars im Bearbeitungsmodus'
+      ]
+    },
     {
       version: '2.2.1',
       date: '2026-06-05',
