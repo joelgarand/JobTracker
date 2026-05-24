@@ -1132,7 +1132,7 @@ const JobTracker = (function () {
         activeTabView = 'view-daily'; // Übersicht tab always highlighted for sub-views
       }
 
-      var tabs = document.querySelectorAll('.header-tab, .nav-tab, .bottom-tab-btn');
+      var tabs = document.querySelectorAll('.header-tab, .nav-tab');
       for (var i = 0; i < tabs.length; i++) {
         var tab = tabs[i];
         if (tab.getAttribute('data-view') === activeTabView) {
@@ -1373,8 +1373,11 @@ const JobTracker = (function () {
       EventBus.emit('navigation:change', { viewId: subViewId, subView: subViewId });
     }
 
+    /**
+     * Binds click handlers to top header tab buttons (and legacy bottom nav .nav-tab).
+     */
     function _bindNavTabs() {
-      var tabs = document.querySelectorAll('.header-tab, .nav-tab, .bottom-tab-btn');
+      var tabs = document.querySelectorAll('.header-tab, .nav-tab');
       for (var i = 0; i < tabs.length; i++) {
         tabs[i].addEventListener('click', function () {
           var viewId = this.getAttribute('data-view');
@@ -1401,44 +1404,6 @@ const JobTracker = (function () {
     }
 
     /**
-     * Binds click handlers to the endless Home carousel arrow navigation buttons.
-     */
-    function _bindCarouselNav() {
-      var prevBtns = document.querySelectorAll('.carousel-nav-btn.prev');
-      var nextBtns = document.querySelectorAll('.carousel-nav-btn.next');
-
-      for (var i = 0; i < prevBtns.length; i++) {
-        prevBtns[i].addEventListener('click', function () {
-          var current = getActiveSubView();
-          var prevView = 'view-daily';
-          if (current === 'view-daily') prevView = 'view-yearly';
-          else if (current === 'view-monthly') prevView = 'view-daily';
-          else if (current === 'view-yearly') prevView = 'view-monthly';
-          switchSubView(prevView);
-          _triggerMicroHaptic();
-        });
-      }
-
-      for (var j = 0; j < nextBtns.length; j++) {
-        nextBtns[j].addEventListener('click', function () {
-          var current = getActiveSubView();
-          var nextView = 'view-daily';
-          if (current === 'view-daily') nextView = 'view-monthly';
-          else if (current === 'view-monthly') nextView = 'view-yearly';
-          else if (current === 'view-yearly') nextView = 'view-daily';
-          switchSubView(nextView);
-          _triggerMicroHaptic();
-        });
-      }
-    }
-
-    function _triggerMicroHaptic() {
-      if (typeof HapticFeedbackService !== 'undefined' && HapticFeedbackService.micro) {
-        HapticFeedbackService.micro();
-      }
-    }
-
-    /**
      * Initializes the NavigationController.
      * Reads active view from AppState and shows the correct section.
      * If onboarding is not complete, forces view-onboarding and hides bottom nav.
@@ -1452,9 +1417,6 @@ const JobTracker = (function () {
 
       // Bind sub-nav button click handlers
       _bindSubNavButtons();
-
-      // Bind carousel navigation buttons
-      _bindCarouselNav();
 
       // Check onboarding status
       if (!AppState.isOnboardingComplete()) {
@@ -8509,7 +8471,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '3.0.0';
+    const APP_VERSION = '2.8.0';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -11679,25 +11641,23 @@ const JobTracker = (function () {
         }
       }
 
-      // Dynamic Greeting & Theme Toggle Icon Sync (Rebranding v3.0)
+      // Dynamic Greeting & Avatar Initials
       var profile = AppState.getState().userProfile;
       var name = (profile && (profile.name || profile.username)) ? (profile.name || profile.username) : 'Joel';
       var greetingEl = document.getElementById('header-greeting-title');
       if (greetingEl) {
-        var prefix = "Servus";
-        var hours = new Date().getHours();
-        if (hours >= 5 && hours < 12) {
-          prefix = "Guten Morgen";
-        } else if (hours >= 12 && hours < 18) {
-          prefix = "Guten Tag";
-        } else if (hours >= 18 && hours < 23) {
-          prefix = "Guten Abend";
-        } else {
-          prefix = "Gute Nacht";
-        }
-        greetingEl.textContent = prefix + ' ' + name + '!';
+        greetingEl.textContent = 'Servus ' + name + '!';
       }
-      _updateThemeToggleButtonIcon();
+      var avatarEl = document.getElementById('header-user-avatar');
+      if (avatarEl) {
+        if (profile && (profile.name || profile.username)) {
+          var nameVal = profile.name || profile.username;
+          var initials = nameVal.trim().split(/\s+/).map(function(n) { return n.charAt(0); }).join('').toUpperCase();
+          avatarEl.textContent = initials || 'JG';
+        } else {
+          avatarEl.textContent = 'JG';
+        }
+      }
 
       _updateNettoBreakdown(aggregated, year, month);
       _updateAbsenceRow(aggregated);
@@ -12252,17 +12212,6 @@ const JobTracker = (function () {
       }
     }
 
-    function _updateThemeToggleButtonIcon() {
-      var btn = document.getElementById('header-theme-toggle-btn');
-      if (!btn) return;
-      var current = ThemeManager.getTheme();
-      var effective = current;
-      if (current === 'system') {
-        effective = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      }
-      btn.textContent = effective === 'dark' ? '☀️' : '🌙';
-    }
-
 
     /**
      * Initializes the module: performs initial calculation and subscribes to
@@ -12300,18 +12249,19 @@ const JobTracker = (function () {
       // Bind stepper buttons (idempotent)
       _bindStepper();
 
-      // Bind dynamic Theme Toggle Button (Rebranding v3.0)
-      var themeBtn = document.getElementById('header-theme-toggle-btn');
-      if (themeBtn) {
-        themeBtn.addEventListener('click', function () {
-          var current = ThemeManager.getTheme();
-          var effective = current;
-          if (current === 'system') {
-            effective = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-          }
-          var next = effective === 'dark' ? 'light' : 'dark';
-          ThemeManager.setTheme(next);
-          _updateThemeToggleButtonIcon();
+      // Bind dynamic Mockup Layout buttons
+      var settingsBtn = document.getElementById('header-settings-btn');
+      if (settingsBtn) {
+        settingsBtn.addEventListener('click', function () {
+          NavigationController.switchTo('view-settings');
+          _triggerMicroHaptic();
+        });
+      }
+
+      var avatarBtn = document.getElementById('header-user-avatar');
+      if (avatarBtn) {
+        avatarBtn.addEventListener('click', function () {
+          NavigationController.switchTo('view-settings');
           _triggerMicroHaptic();
         });
       }
@@ -17594,23 +17544,8 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '3.0.0';
+  const APP_VERSION = '2.8.0';
   const APP_CHANGELOG = [
-    {
-      version: '3.0.0',
-      date: '2026-05-24',
-      changes: [
-        'v3.0.0 — Major Rebranding (Version 3.0)',
-        '🏠 Schwebende Navigation: Drei schwebende, kreisrunde Buttons (Home 🏠, Eintragen ➕, Einstellungen ⚙️) unten im Viewport sorgen für ein erstklassiges App-Gefühl und vergrößern sich beim Anklicken sanft',
-        '🌌 Großer Gradient-Header: Die Kopfzeile glänzt mit einem riesigen, wunderschönen, fließenden Pastel-Verlaufshintergrund mit eleganten 32px-Abrundungen',
-        '☀️ Dunkel/Hell-Toggle: Direkter circularer Theme-Wechsler (Sonne ☀️ / Mond 🌙) oben links zum schnellen Umschalten der Helligkeit',
-        'ℹ️ Circularer Info-Button: Oben rechts platziert, um sämtliche Gesetze, Arbeitszeitregeln und Familienversicherungsgrenzen blitzschnell anzuzeigen',
-        '⏰ Dynamische Begrüßung: Die persönliche Begrüßung passt sich automatisch der aktuellen Uhrzeit auf Deutsch an (Guten Morgen, Guten Tag, Guten Abend, Gute Nacht)',
-        '🔄 Endloser Home-Karussell: Navigiere kinderleicht per Pfeile (‹ / ›) endlos schleifenweise durch die Übersicht, den Monat und das Jahr',
-        '💳 Netto-Cashflow Balance Card: Prominente Platzierung deines monatlichen Netto-Cashflows als Kontostand direkt im Gradient-Header',
-        '📊 Kompakter Brutto/Stunden-Streifen: Die Brutto- und Stundenwerte werden in einem schlanken Querstreifen im Dashboard präsentiert'
-      ]
-    },
     {
       version: '2.8.0',
       date: '2026-05-24',

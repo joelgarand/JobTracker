@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="JobTracker">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=3.0.0">
+  <link rel="stylesheet" href="style.css?v=2.8.0">
   
   <!-- Apple Touch Startup Images for modern iPhones (high-fidelity glowing inline SVGs) -->
   <link rel="apple-touch-startup-image" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='393' height='852' viewBox='0 0 393 852'><rect width='100%25' height='100%25' fill='%230a0a1a'/><g transform='translate(196.5, 426)'><circle r='50' fill='%230f0f2f' stroke='%234ecca3' stroke-width='2'/><path d='M-15,-10 h30 a3,3 0 0,1 3,3 v20 a3,3 0 0,1 -3,3 h-30 a3,3 0 0,1 -3,-3 v-20 a3,3 0 0,1 3,-3' fill='none' stroke='%234ecca3' stroke-width='2.5'/><path d='M-7,-10 v-4 a2,2 0 0,1 2,-2 h10 a2,2 0 0,1 2,2 v4' fill='none' stroke='%234ecca3' stroke-width='2'/><text y='90' font-family='-apple-system, BlinkMacSystemFont, sans-serif' font-size='24' font-weight='bold' fill='%23ffffff' text-anchor='middle' letter-spacing='1'>JobTracker</text><text y='115' font-family='-apple-system, BlinkMacSystemFont, sans-serif' font-size='12' fill='%23a0a0b0' text-anchor='middle'>Mobiles Schicht-Tracking</text></g></svg>" media='(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)'>
@@ -27,17 +27,27 @@
   <!-- Header Bar -->
   <header class="app-header">
     <div class="app-header__top">
-      <button type="button" id="header-theme-toggle-btn" class="header-menu-btn" aria-label="Theme wechseln">🌙</button>
-      <button type="button" id="header-rules-info-btn" class="header-menu-btn header-info-circle-btn" aria-label="Arbeitsrecht-Info">ℹ️</button>
+      <button type="button" id="header-settings-btn" class="header-menu-btn" aria-label="Einstellungen">☰</button>
+      <span class="app-header__logo" style="display: none;">JobTracker</span>
+      <div class="header-avatar" id="header-user-avatar" aria-label="Benutzerprofil">JG</div>
     </div>
     <div class="app-header__greeting-row">
       <h1 class="header-greeting" id="header-greeting-title">Servus Joel!</h1>
+      <button type="button" class="header-search-capsule" id="header-rules-info-btn" aria-label="Arbeitsrecht-Info">🔍</button>
     </div>
-    <div class="header-balance-card glass-surface">
-      <span class="balance-label">Netto-Cashflow</span>
-      <span class="balance-val" id="dashboard-total-netto">0,00 €</span>
-    </div>
+    <nav class="app-header__tabs" aria-label="Hauptnavigation">
+      <button class="header-tab active" data-view="view-daily" aria-current="page" type="button">Übersicht</button>
+      <button class="header-tab" data-view="view-entry" type="button">Eintragen</button>
+      <button class="header-tab" data-view="view-settings" type="button">Einstellungen</button>
+    </nav>
   </header>
+
+  <!-- Shared Sub-Nav Bar (fixed below header, only visible for tracking views) -->
+  <nav class="sub-nav-bar" id="tracking-sub-nav" aria-label="Tracking Unter-Navigation" style="display:none;">
+    <button class="sub-nav-btn active" data-target="view-daily" type="button">Übersicht</button>
+    <button class="sub-nav-btn" data-target="view-monthly" type="button">Monat</button>
+    <button class="sub-nav-btn" data-target="view-yearly" type="button">Jahr</button>
+  </nav>
 
   <!-- Error banner for localStorage errors -->
   <div id="error-banner" class="error-banner" role="alert" aria-live="assertive">
@@ -381,13 +391,6 @@
         </svg>
       </div>
 
-      <!-- Carousel navigation -->
-      <div class="carousel-nav">
-        <button type="button" class="carousel-nav-btn prev" aria-label="Vorherige Übersicht">‹</button>
-        <span class="carousel-nav-label">Übersicht</span>
-        <button type="button" class="carousel-nav-btn next" aria-label="Nächste Übersicht">›</button>
-      </div>
-
       <!-- Dashboard Edit Done Button (shown in edit mode) -->
       <button id="dashboard-edit-done" class="dashboard-edit-done" type="button">✓ Fertig</button>
 
@@ -397,7 +400,7 @@
       <!-- Gesamtübersicht Card -->
       <div id="daily-dashboard" class="glass-surface layer-content daily-dashboard-card" data-reorderable="true" data-widget-id="gesamtuebersicht" data-widget-size="full">
         <div class="dashboard-header-row">
-          <span class="dashboard-balance-label">Übersicht Details</span>
+          <span class="dashboard-balance-label">Netto-Cashflow</span>
           <button type="button" id="dashboard-period-toggle" class="dashboard-period-btn" aria-label="Zeitraum wechseln">
             <span id="dashboard-period-label">Aktueller Monat</span>
           </button>
@@ -405,15 +408,19 @@
             <span id="dashboard-source-label">Tatsächlich</span>
           </button>
         </div>
+        
+        <div class="dashboard-balance-container">
+          <span class="dashboard-balance-value" id="dashboard-total-netto">0,00 €</span>
+        </div>
 
-        <div class="dashboard-brutto-hours-strip">
-          <div class="strip-item">
-            <span class="strip-label">Brutto-Einkommen</span>
-            <span class="strip-val" id="dashboard-total-brutto">0,00 €</span>
+        <div class="dashboard-balance-details">
+          <div class="balance-detail-item">
+            <span class="balance-detail-label">Brutto-Einkommen</span>
+            <span class="balance-detail-value" id="dashboard-total-brutto">0,00 €</span>
           </div>
-          <div class="strip-item" id="stat-stunden-root">
-            <span class="strip-label" id="dashboard-hours-label">Geleistete Stunden</span>
-            <span class="strip-val" id="dashboard-total-hours">0</span>
+          <div class="balance-detail-item" id="stat-stunden-root">
+            <span class="balance-detail-label" id="dashboard-hours-label">Geleistete Stunden</span>
+            <span class="balance-detail-value" id="dashboard-total-hours">0</span>
           </div>
         </div>
 
@@ -563,12 +570,7 @@
   <!-- View: Monthly Overview -->
   <section id="view-monthly" class="view-section">
     <div class="scroll-content">
-      <!-- Carousel navigation -->
-      <div class="carousel-nav">
-        <button type="button" class="carousel-nav-btn prev" aria-label="Vorherige Übersicht">‹</button>
-        <span class="carousel-nav-label">Monat</span>
-        <button type="button" class="carousel-nav-btn next" aria-label="Nächste Übersicht">›</button>
-      </div>
+      <h1 class="monthly-title">Monatsübersicht</h1>
 
       <div class="glass-surface layer-content monthly-selector-card">
         <div class="monthly-selector">
@@ -617,12 +619,7 @@
   <!-- View: Yearly Overview -->
   <section id="view-yearly" class="view-section">
     <div class="scroll-content">
-      <!-- Carousel navigation -->
-      <div class="carousel-nav">
-        <button type="button" class="carousel-nav-btn prev" aria-label="Vorherige Übersicht">‹</button>
-        <span class="carousel-nav-label">Jahr</span>
-        <button type="button" class="carousel-nav-btn next" aria-label="Nächste Übersicht">›</button>
-      </div>
+      <h1 class="yearly-title">Jahresübersicht</h1>
 
       <div class="glass-surface layer-content yearly-selector-card">
         <div class="yearly-selector">
@@ -1357,18 +1354,6 @@
       </div>
     </div>
   </div>
-
-  <nav class="bottom-tab-bar" id="bottom-tab-bar">
-    <button type="button" class="bottom-tab-btn active" data-view="view-daily" aria-label="Home">
-      <span class="tab-icon">🏠</span>
-    </button>
-    <button type="button" class="bottom-tab-btn" data-view="view-entry" aria-label="Eintragen">
-      <span class="tab-icon">➕</span>
-    </button>
-    <button type="button" class="bottom-tab-btn" data-view="view-settings" aria-label="Einstellungen">
-      <span class="tab-icon">⚙️</span>
-    </button>
-  </nav>
 
   <script src="app.js?v=41" defer></script>
 </body>
