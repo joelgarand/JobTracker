@@ -102,7 +102,9 @@ const JobTracker = (function () {
    * change so the tracking views' padding-top stays in sync with the bar.
    */
   function _setSubNavHeightVar() {
-    var subNav = document.getElementById('tracking-sub-nav');
+    // V3.1.7: each tracking view has its own sub-nav-bar inside .scroll-content.
+    // Pick the first one we can measure.
+    var subNav = document.querySelector('.sub-nav-bar');
     if (!subNav) return;
     var h = subNav.offsetHeight;
     if (h > 0) {
@@ -1163,19 +1165,15 @@ const JobTracker = (function () {
      * @param {string} viewId
      */
     function _updateSubNavVisibility(viewId) {
-      var subNav = document.getElementById('tracking-sub-nav');
-      if (!subNav) return;
+      // V3.1.7: sub-nav lives inside each tracking view's .scroll-content.
+      // We just toggle a body class so .has-sub-nav-aware rules can react.
       var TRACKING_VIEWS_LOCAL = ['view-daily', 'view-monthly', 'view-yearly'];
       if (TRACKING_VIEWS_LOCAL.indexOf(viewId) !== -1) {
-        subNav.style.display = 'flex';
         document.body.classList.add('has-sub-nav');
-        // Re-measure the bar height now that it's visible (offsetHeight is 0
-        // while display:none, so we have to do this after toggling visibility).
         if (typeof _setSubNavHeightVar === 'function') {
           _setSubNavHeightVar();
         }
       } else {
-        subNav.style.display = 'none';
         document.body.classList.remove('has-sub-nav');
       }
     }
@@ -8515,7 +8513,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '3.1.6';
+    const APP_VERSION = '3.1.7';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -17807,8 +17805,22 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '3.1.6';
+  const APP_VERSION = '3.1.7';
   const APP_CHANGELOG = [
+    {
+      version: '3.1.7',
+      date: '2026-05-25',
+      changes: [
+        'v3.1.7 — Sub-Tabs zurück, Header beruhigt, Dark-Mode entzerrt',
+        '📑 Übersicht / Monat / Jahr Sub-Tabs sind wieder da (sticky direkt unter dem Header)',
+        '🌅 Header schrumpft nicht mehr beim Scrollen — er scrollt einfach natürlich weg',
+        '🎨 Gradients ohne harten Schwarz-Übergang am unteren Rand und ohne weißen Saum oben',
+        '🌙 Dark-Mode: Widget-Hintergründe sind neutrales Charcoal statt Blau-Tönung',
+        '✨ Quick-Info-Chips: Beschriftung und Werte im Dark-Mode jetzt in Weiß',
+        '👋 Begrüßung: kleinere Schrift, mehr Atemraum — kein Cutoff mehr beim "Guten Tag"',
+        '📢 Update-Banner sitzt jetzt über der Tab-Bar statt darunter'
+      ]
+    },
     {
       version: '3.1.6',
       date: '2026-05-25',
@@ -18564,45 +18576,7 @@ const JobTracker = (function () {
       });
     }
 
-    // ── V3.1.4: Sticky-shrinking header — write 0..1 to --scroll-collapse on the header ──
-    var stickyHeader = document.getElementById('app-header');
-    if (stickyHeader && !stickyHeader._scrollBound) {
-      stickyHeader._scrollBound = true;
-      var COLLAPSE_START = 20;   // start collapsing
-      var COLLAPSE_END = 180;    // fully collapsed
-      var lastScrollY = -1;
-      var scrollRaf = null;
-
-      var updateHeaderCollapse = function () {
-        scrollRaf = null;
-        var y = window.pageYOffset || document.documentElement.scrollTop || 0;
-        if (y === lastScrollY) return;
-        lastScrollY = y;
-
-        var t;
-        if (y <= COLLAPSE_START) {
-          t = 0;
-        } else if (y >= COLLAPSE_END) {
-          t = 1;
-        } else {
-          t = (y - COLLAPSE_START) / (COLLAPSE_END - COLLAPSE_START);
-        }
-        stickyHeader.style.setProperty('--scroll-collapse', String(t));
-        if (t >= 0.95) {
-          stickyHeader.classList.add('is-collapsed');
-        } else {
-          stickyHeader.classList.remove('is-collapsed');
-        }
-      };
-
-      window.addEventListener('scroll', function () {
-        if (scrollRaf) return;
-        scrollRaf = requestAnimationFrame(updateHeaderCollapse);
-      }, { passive: true });
-
-      // Initial state
-      updateHeaderCollapse();
-    }
+    // ── V3.1.7: Scroll-collapse animation removed (user feedback). Header just scrolls naturally. ──
 
     // ── Accent Color Picker ──
     var accentOptions = document.getElementById('accent-color-options');

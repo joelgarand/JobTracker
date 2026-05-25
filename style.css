@@ -276,18 +276,26 @@ a {
    vs compact's 100) so the round buttons stay accessible.
    ============================================================ */
 .sub-nav-bar {
+  /* V3.1.7: sub-nav lives inside each tracking view's .scroll-content.
+     In #view-daily it scrolls naturally below the gradient header and then
+     pins to top. In other tracking views it pins from the start. */
   position: sticky;
-  top: 0;
+  top: env(safe-area-inset-top, 0px);
   left: 0;
   right: 0;
   z-index: 50;
   display: flex;
-  gap: var(--spacing-xs);
-  padding: 8px 12px;
-  background: rgba(13, 13, 23, 0.65);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  gap: 6px;
+  padding: 10px 12px;
+  margin: 0 calc(-1 * var(--spacing-md)) 12px;  /* edge-to-edge inside scroll-content */
+  background: rgba(13, 13, 23, 0.7);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+body.theme-light .sub-nav-bar {
+  background: rgba(255, 255, 255, 0.78);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .sub-nav-bar .sub-nav-btn {
@@ -949,7 +957,8 @@ body.theme-light .toast {
    ============================================================ */
 .update-banner {
   position: fixed;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--spacing-md));
+  /* V3.1.7: lift above floating bottom-tab-bar (≈72px button + 16px gap = ~96px) */
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
   left: var(--spacing-md);
   right: var(--spacing-md);
   z-index: calc(var(--z-glass-overlay) + 5);
@@ -3277,20 +3286,21 @@ body.theme-light .glass-surface {
 }
 
 body.theme-dark {
-  --color-bg: #0a0a1a;
-  --color-surface: #1a1a2e;
-  --color-surface-solid: #1a1a2e;
-  --color-text-primary: #e0e0e0;
-  --color-text-secondary: #a0a0b0;
-  --color-text-tertiary: #6b6b80;
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-accent-text: #0a0a1a;
-  --color-content-bg: #1a1a2e;
-  --color-content-bg-solid: #1a1a2e;
-  --nav-bg: #0f0f1f;
+  /* V3.1.7: neutral charcoal — no more blue tint */
+  --color-bg: #0b0b0f;
+  --color-surface: #16161c;
+  --color-surface-solid: #16161c;
+  --color-text-primary: #e8e8ec;
+  --color-text-secondary: #a4a4ad;
+  --color-text-tertiary: #6e6e78;
+  --color-border: rgba(255, 255, 255, 0.07);
+  --color-accent-text: #0b0b0f;
+  --color-content-bg: #16161c;
+  --color-content-bg-solid: #16161c;
+  --nav-bg: #0f0f15;
   --nav-border: rgba(255, 255, 255, 0.06);
-  --shadow-content: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-overlay: 0 -2px 12px rgba(0, 0, 0, 0.4);
+  --shadow-content: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-overlay: 0 -2px 12px rgba(0, 0, 0, 0.45);
 }
 
 /* Light theme specific overrides */
@@ -6403,27 +6413,24 @@ body.widget-dragging .view-section {
   --app-header-height: 0px;
 }
 
-/* Big warm gradient hero — V3.1.4: sticky shrinking single header (no separate compact bar)
-   V3.1.6: Header is full-width edge-to-edge. Negative side margins kill the parent padding,
-   internal padding handles the safe-area + horizontal breathing room. */
+/* Big warm gradient hero — V3.1.7: simple in-flow header that scrolls away.
+   Sub-Nav handles sticky pinning. No more --scroll-collapse animation —
+   the header just stays its full size and scrolls naturally. */
 .app-header {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 100;
   display: flex;
   flex-direction: column;
   padding: max(env(safe-area-inset-top, 0px), 12px) 20px 16px;
   border-bottom-left-radius: 32px;
   border-bottom-right-radius: 32px;
-  /* Warm cream/sunlight gradient — wide & buttery — matches reference */
+  /* V3.1.7: warm gradient that fades into the page bg (no hard black/white at the bottom) */
   background:
     radial-gradient(ellipse 110% 80% at 50% 0%, rgba(255, 226, 165, 0.55) 0%, rgba(255, 226, 165, 0) 60%),
-    linear-gradient(180deg, #f4d989 0%, #f0c764 28%, #1a1a24 100%);
+    linear-gradient(180deg, #f4d989 0%, #f0c764 50%, #f4d989 100%);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
   border-bottom: none;
-  margin: 0 0 16px 0;
-  /* Dynamic collapse via CSS variable set by JS scroll listener (0 = full, 1 = compact) */
-  --scroll-collapse: 0;
+  margin: 0 0 0 0;
   transition: box-shadow 0.2s ease, background 0.4s ease;
 }
 
@@ -6431,78 +6438,78 @@ body.widget-dragging .view-section {
 body.theme-light .app-header {
   background:
     radial-gradient(ellipse 110% 80% at 50% 0%, rgba(255, 244, 220, 0.7) 0%, rgba(255, 244, 220, 0) 60%),
-    linear-gradient(180deg, #ffe8a8 0%, #f8d97f 32%, #faf9f7 100%);
+    linear-gradient(180deg, #ffe8a8 0%, #f8d97f 50%, #ffe8a8 100%);
   box-shadow: 0 12px 32px rgba(166, 144, 100, 0.15);
   border-bottom: none;
 }
 
 /* ─── V3.1.4 Compact bar removed — single sticky shrinking header replaces it ─── */
 
-/* ─── V3.1 Gradient Presets ─── */
+/* ─── V3.1 Gradient Presets — V3.1.7: no harsh black/white edges ─── */
 .app-header.gradient-warmth {
   background:
     radial-gradient(ellipse 110% 80% at 50% 0%, rgba(255, 226, 165, 0.55) 0%, rgba(255, 226, 165, 0) 60%),
-    linear-gradient(180deg, #f4d989 0%, #f0c764 28%, #1a1a24 100%);
+    linear-gradient(180deg, #f4d989 0%, #f0c764 50%, #f4d989 100%);
 }
 body.theme-light .app-header.gradient-warmth {
   background:
     radial-gradient(ellipse 110% 80% at 50% 0%, rgba(255, 244, 220, 0.7) 0%, rgba(255, 244, 220, 0) 60%),
-    linear-gradient(180deg, #ffe8a8 0%, #f8d97f 32%, #faf9f7 100%);
+    linear-gradient(180deg, #ffe8a8 0%, #f8d97f 50%, #ffe8a8 100%);
 }
 
 .app-header.gradient-emerald {
   background:
     radial-gradient(ellipse 110% 80% at 50% 0%, rgba(120, 230, 200, 0.55) 0%, rgba(120, 230, 200, 0) 60%),
-    linear-gradient(180deg, #6ee0bf 0%, #2eb59a 28%, #0e1a18 100%);
+    linear-gradient(180deg, #6ee0bf 0%, #2eb59a 50%, #6ee0bf 100%);
 }
 body.theme-light .app-header.gradient-emerald {
   background:
     radial-gradient(ellipse 110% 80% at 50% 0%, rgba(180, 240, 220, 0.7) 0%, rgba(180, 240, 220, 0) 60%),
-    linear-gradient(180deg, #b8efdc 0%, #7eddc1 32%, #f6fbf9 100%);
+    linear-gradient(180deg, #b8efdc 0%, #7eddc1 50%, #b8efdc 100%);
 }
 
 .app-header.gradient-sunset {
   background:
     radial-gradient(ellipse 110% 80% at 50% 0%, rgba(255, 180, 140, 0.55) 0%, rgba(255, 180, 140, 0) 60%),
-    linear-gradient(180deg, #ff9f7a 0%, #ef6c5b 28%, #1c1216 100%);
+    linear-gradient(180deg, #ff9f7a 0%, #ef6c5b 50%, #ff9f7a 100%);
 }
 body.theme-light .app-header.gradient-sunset {
   background:
     radial-gradient(ellipse 110% 80% at 50% 0%, rgba(255, 220, 200, 0.7) 0%, rgba(255, 220, 200, 0) 60%),
-    linear-gradient(180deg, #ffc7ad 0%, #ff9d80 32%, #fbf6f4 100%);
+    linear-gradient(180deg, #ffc7ad 0%, #ff9d80 50%, #ffc7ad 100%);
 }
 
 .app-header.gradient-ocean {
   background:
     radial-gradient(ellipse 110% 80% at 50% 0%, rgba(150, 190, 255, 0.55) 0%, rgba(150, 190, 255, 0) 60%),
-    linear-gradient(180deg, #8fb4ff 0%, #5b8def 28%, #0e1422 100%);
+    linear-gradient(180deg, #8fb4ff 0%, #5b8def 50%, #8fb4ff 100%);
 }
 body.theme-light .app-header.gradient-ocean {
   background:
     radial-gradient(ellipse 110% 80% at 50% 0%, rgba(190, 215, 255, 0.7) 0%, rgba(190, 215, 255, 0) 60%),
-    linear-gradient(180deg, #c5d8ff 0%, #9dbcff 32%, #f5f7fb 100%);
+    linear-gradient(180deg, #c5d8ff 0%, #9dbcff 50%, #c5d8ff 100%);
 }
 
 .app-header.gradient-lavender {
   background:
     radial-gradient(ellipse 110% 80% at 50% 0%, rgba(210, 180, 240, 0.55) 0%, rgba(210, 180, 240, 0) 60%),
-    linear-gradient(180deg, #c5a8ec 0%, #9b7fd1 28%, #18141e 100%);
+    linear-gradient(180deg, #c5a8ec 0%, #9b7fd1 50%, #c5a8ec 100%);
 }
 body.theme-light .app-header.gradient-lavender {
   background:
     radial-gradient(ellipse 110% 80% at 50% 0%, rgba(225, 205, 245, 0.7) 0%, rgba(225, 205, 245, 0) 60%),
-    linear-gradient(180deg, #dec9f3 0%, #b8a0e2 32%, #f9f7fc 100%);
+    linear-gradient(180deg, #dec9f3 0%, #b8a0e2 50%, #dec9f3 100%);
 }
 
 .app-header.gradient-monochrome {
   background:
     radial-gradient(ellipse 110% 80% at 50% 0%, rgba(200, 200, 215, 0.4) 0%, rgba(200, 200, 215, 0) 60%),
-    linear-gradient(180deg, #4a4d5b 0%, #2a2c36 28%, #0a0a14 100%);
+    linear-gradient(180deg, #4a4d5b 0%, #2a2c36 50%, #4a4d5b 100%);
 }
 body.theme-light .app-header.gradient-monochrome {
   background:
     radial-gradient(ellipse 110% 80% at 50% 0%, rgba(220, 220, 230, 0.6) 0%, rgba(220, 220, 230, 0) 60%),
-    linear-gradient(180deg, #d6d8e0 0%, #b6b9c5 32%, #f4f5f8 100%);
+    linear-gradient(180deg, #d6d8e0 0%, #b6b9c5 50%, #d6d8e0 100%);
 }
 
 /* ─── Top row: pill buttons sitting on the gradient ─── */
@@ -6557,15 +6564,11 @@ body.theme-light .header-info-circle-btn {
   position: relative;
 }
 
-/* ─── Greeting row: fades out as scroll-collapse → 1 ─── */
+/* ─── Greeting row: V3.1.7 stays visible while scrolling, just subtle padding tweak ─── */
 .app-header__greeting-row {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  opacity: calc(1 - var(--scroll-collapse));
-  max-height: calc(80px * (1 - var(--scroll-collapse)));
-  overflow: hidden;
-  transition: opacity 0.15s ease;
 }
 
 .app-header__date {
@@ -6575,22 +6578,28 @@ body.theme-light .header-info-circle-btn {
   text-transform: capitalize;
   letter-spacing: 0.2px;
 }
+body.theme-dark .app-header__date {
+  color: rgba(255, 255, 255, 0.78);
+}
 body.theme-dark .app-header.gradient-monochrome .app-header__date {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .header-greeting {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 700;
   color: #1a1a1a;
   margin: 0;
-  letter-spacing: -0.6px;
-  line-height: 1.05;
+  letter-spacing: -0.5px;
+  line-height: 1.15;
   font-family: var(--font-family);
   text-shadow: none;
+  padding-bottom: 2px;
 }
 
-body.theme-dark .header-greeting,
+body.theme-dark .header-greeting {
+  color: #ffffff;
+}
 body.theme-light .header-greeting {
   color: #1a1a1a;
 }
@@ -6598,13 +6607,13 @@ body.theme-dark .app-header.gradient-monochrome .header-greeting {
   color: #ffffff;
 }
 
-/* ─── Balance card: SHRINKS but stays visible ─── */
+/* ─── Balance card: V3.1.7 stays put, no shrink ─── */
 .header-balance-card {
   background: rgba(20, 20, 28, 0.85);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
-  border-radius: calc(24px - (var(--scroll-collapse) * 8px));
-  padding: calc(16px - (var(--scroll-collapse) * 8px)) calc(20px - (var(--scroll-collapse) * 6px));
+  border-radius: 24px;
+  padding: 16px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -6632,7 +6641,7 @@ body.theme-light .header-balance-card {
 }
 
 .balance-label {
-  font-size: calc(13px - (var(--scroll-collapse) * 2px));
+  font-size: 13px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.7);
   letter-spacing: 0.2px;
@@ -6643,7 +6652,7 @@ body.theme-light .balance-label {
 }
 
 .balance-val {
-  font-size: calc(28px - (var(--scroll-collapse) * 10px));
+  font-size: 28px;
   font-weight: 700;
   color: #ffffff;
   font-variant-numeric: tabular-nums;
@@ -6655,15 +6664,11 @@ body.theme-light .balance-val {
   color: #1a1a1a;
 }
 
-/* ─── Quick info chips: fade out as scroll-collapse → 1 ─── */
+/* ─── Quick info chips: V3.1.7 always visible, no scroll animation ─── */
 .app-header__chips {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  opacity: calc(1 - var(--scroll-collapse));
-  max-height: calc(70px * (1 - var(--scroll-collapse)));
-  overflow: hidden;
-  transition: opacity 0.15s ease;
 }
 
 .header-chip {
@@ -6695,13 +6700,17 @@ body.theme-dark .app-header.gradient-monochrome .header-chip {
 .header-chip__label {
   font-size: 10px;
   font-weight: 700;
+  /* Light mode keeps dark label, dark mode flips to white */
   color: rgba(0, 0, 0, 0.62);
   text-transform: uppercase;
   letter-spacing: 0.6px;
   line-height: 1;
 }
+body.theme-dark .header-chip__label {
+  color: rgba(255, 255, 255, 0.78);
+}
 body.theme-dark .app-header.gradient-monochrome .header-chip__label {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .header-chip__val {
@@ -6714,6 +6723,9 @@ body.theme-dark .app-header.gradient-monochrome .header-chip__label {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+body.theme-dark .header-chip__val {
+  color: #ffffff;
 }
 body.theme-dark .app-header.gradient-monochrome .header-chip__val {
   color: #ffffff;

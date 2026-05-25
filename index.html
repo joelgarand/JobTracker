@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="JobTracker">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=3.1.6">
+  <link rel="stylesheet" href="style.css?v=3.1.7">
   
   <!-- Apple Touch Startup Images for modern iPhones (high-fidelity glowing inline SVGs) -->
   <link rel="apple-touch-startup-image" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='393' height='852' viewBox='0 0 393 852'><rect width='100%25' height='100%25' fill='%230a0a1a'/><g transform='translate(196.5, 426)'><circle r='50' fill='%230f0f2f' stroke='%234ecca3' stroke-width='2'/><path d='M-15,-10 h30 a3,3 0 0,1 3,3 v20 a3,3 0 0,1 -3,3 h-30 a3,3 0 0,1 -3,-3 v-20 a3,3 0 0,1 3,-3' fill='none' stroke='%234ecca3' stroke-width='2.5'/><path d='M-7,-10 v-4 a2,2 0 0,1 2,-2 h10 a2,2 0 0,1 2,2 v4' fill='none' stroke='%234ecca3' stroke-width='2'/><text y='90' font-family='-apple-system, BlinkMacSystemFont, sans-serif' font-size='24' font-weight='bold' fill='%23ffffff' text-anchor='middle' letter-spacing='1'>JobTracker</text><text y='115' font-family='-apple-system, BlinkMacSystemFont, sans-serif' font-size='12' fill='%23a0a0b0' text-anchor='middle'>Mobiles Schicht-Tracking</text></g></svg>" media='(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)'>
@@ -399,6 +399,13 @@
     </header>
 
     <div class="scroll-content" id="view-daily-scroll">
+      <!-- Sub-Nav (Übersicht / Monat / Jahr) — V3.1.7 zurück -->
+      <nav class="sub-nav-bar" id="tracking-sub-nav-daily" aria-label="Tracking Unter-Navigation">
+        <button class="sub-nav-btn active" data-target="view-daily" type="button">Übersicht</button>
+        <button class="sub-nav-btn" data-target="view-monthly" type="button">Monat</button>
+        <button class="sub-nav-btn" data-target="view-yearly" type="button">Jahr</button>
+      </nav>
+
       <!-- Pull-to-Refresh Spinner (iOS-style) -->
       <div id="pull-refresh-indicator" class="pull-spinner" aria-hidden="true">
         <svg class="pull-spinner__svg" viewBox="0 0 24 24" width="24" height="24">
@@ -552,6 +559,13 @@
   <!-- View: Monthly Overview -->
   <section id="view-monthly" class="view-section">
     <div class="scroll-content">
+      <!-- Sub-Nav (Übersicht / Monat / Jahr) — V3.1.7 zurück -->
+      <nav class="sub-nav-bar" aria-label="Tracking Unter-Navigation">
+        <button class="sub-nav-btn" data-target="view-daily" type="button">Übersicht</button>
+        <button class="sub-nav-btn active" data-target="view-monthly" type="button">Monat</button>
+        <button class="sub-nav-btn" data-target="view-yearly" type="button">Jahr</button>
+      </nav>
+
       <div class="glass-surface layer-content monthly-selector-card">
         <div class="monthly-selector">
           <button type="button" id="monthly-prev-btn" class="btn btn-secondary monthly-nav-btn" aria-label="Vorheriger Monat">‹</button>
@@ -599,6 +613,13 @@
   <!-- View: Yearly Overview -->
   <section id="view-yearly" class="view-section">
     <div class="scroll-content">
+      <!-- Sub-Nav (Übersicht / Monat / Jahr) — V3.1.7 zurück -->
+      <nav class="sub-nav-bar" aria-label="Tracking Unter-Navigation">
+        <button class="sub-nav-btn" data-target="view-daily" type="button">Übersicht</button>
+        <button class="sub-nav-btn" data-target="view-monthly" type="button">Monat</button>
+        <button class="sub-nav-btn active" data-target="view-yearly" type="button">Jahr</button>
+      </nav>
+
       <div class="glass-surface layer-content yearly-selector-card">
         <div class="yearly-selector">
           <button type="button" id="yearly-prev-btn" class="btn btn-secondary yearly-nav-btn" aria-label="Vorheriges Jahr">◀</button>
