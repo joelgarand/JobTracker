@@ -3156,6 +3156,14 @@ const JobTracker = (function () {
       var errors = [];
       _clearErrors();
 
+      // Vorname (V3.1.6)
+      var nameEl = document.getElementById('onb-name');
+      var nameVal = nameEl ? nameEl.value.trim() : '';
+      if (!nameVal || nameVal.length < 1 || nameVal.length > 40) {
+        errors.push('Vorname ist erforderlich');
+        _setError('error-name', 'Bitte deinen Vornamen eingeben (1–40 Zeichen)');
+      }
+
       // Steuerklasse
       var steuerklasse = document.getElementById('onb-steuerklasse');
       var skVal = steuerklasse ? steuerklasse.value : '';
@@ -3275,6 +3283,10 @@ const JobTracker = (function () {
       }
 
       _personalData = {
+        name: (function () {
+          var nameEl = document.getElementById('onb-name');
+          return nameEl ? nameEl.value.trim() : '';
+        })(),
         steuerklasse: parseInt(steuerklasse.value, 10),
         bundesland: bundesland.value,
         kirchensteuer: kirchensteuer ? kirchensteuer.checked : false,
@@ -8163,6 +8175,7 @@ const JobTracker = (function () {
       var html = '';
       html += '<div class="personal-data-display">';
       html += '<dl class="personal-data-list">';
+      html += '<div class="personal-data-item"><dt>Vorname</dt><dd>' + _escapeHtml(profile && profile.name ? profile.name : '—') + '</dd></div>';
       html += '<div class="personal-data-item"><dt>Steuerklasse</dt><dd>' + _escapeHtml(String(steuerklasse)) + '</dd></div>';
       html += '<div class="personal-data-item"><dt>Bundesland</dt><dd>' + _escapeHtml(String(bundesland)) + '</dd></div>';
       html += '<div class="personal-data-item"><dt>Kirchensteuer</dt><dd>' + _escapeHtml(kirchensteuer) + '</dd></div>';
@@ -8198,6 +8211,13 @@ const JobTracker = (function () {
 
       var html = '';
       html += '<form id="personal-data-form" class="personal-data-form" novalidate>';
+
+      // Vorname (V3.1.6)
+      html += '<div class="form-group">';
+      html += '<label class="form-label" for="pd-name">Vorname *</label>';
+      html += '<input type="text" id="pd-name" class="form-input" maxlength="40" required value="' + _escapeHtml(profile && profile.name ? profile.name : '') + '" placeholder="z.B. Joel" autocomplete="given-name">';
+      html += '<span class="field-error" id="pd-name-error" aria-live="polite"></span>';
+      html += '</div>';
 
       // Steuerklasse
       html += '<div class="form-group">';
@@ -8337,12 +8357,14 @@ const JobTracker = (function () {
       e.preventDefault();
 
       // Collect values
+      var nameEl = document.getElementById('pd-name');
       var steuerklasseEl = document.getElementById('pd-steuerklasse');
       var bundeslandEl = document.getElementById('pd-bundesland');
       var kirchensteuerEl = document.getElementById('pd-kirchensteuer');
       var hasChildrenEl = document.getElementById('pd-has-children');
       var kvRadios = document.querySelectorAll('input[name="pd-krankenversicherung"]');
 
+      var name = nameEl ? nameEl.value.trim() : '';
       var steuerklasse = steuerklasseEl ? steuerklasseEl.value : '';
       var bundesland = bundeslandEl ? bundeslandEl.value : '';
       var kirchensteuer = kirchensteuerEl ? kirchensteuerEl.checked : false;
@@ -8359,9 +8381,18 @@ const JobTracker = (function () {
       var valid = true;
 
       // Clear previous errors
+      _clearError('pd-name-error');
       _clearError('pd-steuerklasse-error');
       _clearError('pd-bundesland-error');
       _clearError('pd-kv-error');
+
+      if (!name || name.length < 1 || name.length > 40) {
+        _setError('pd-name-error', 'Vorname ist erforderlich (1–40 Zeichen).');
+        if (nameEl) nameEl.classList.add('input-error');
+        valid = false;
+      } else {
+        if (nameEl) nameEl.classList.remove('input-error');
+      }
 
       if (!steuerklasse) {
         _setError('pd-steuerklasse-error', 'Steuerklasse ist erforderlich.');
@@ -8388,6 +8419,7 @@ const JobTracker = (function () {
 
       // Build profile object
       var profile = _getProfile() || {};
+      profile.name = name;
       profile.steuerklasse = parseInt(steuerklasse, 10);
       profile.bundesland = bundesland;
       profile.kirchensteuer = kirchensteuer;
@@ -8483,7 +8515,7 @@ const JobTracker = (function () {
   // Handles data backup (export) and restore (import) via JSON files.
   // Wires export/import buttons in the settings view.
   const ExportImportModule = (function () {
-    const APP_VERSION = '3.1.5';
+    const APP_VERSION = '3.1.6';
     const CURRENT_SCHEMA_VERSION = 1;
 
     /**
@@ -11793,8 +11825,10 @@ const JobTracker = (function () {
       }
 
       // Dynamic Greeting & Theme Toggle Icon Sync (Rebranding v3.0)
+      // V3.1.6: No hardcoded fallback. If no name is stored, show "Hallo" without name
+      //         and trigger a one-time prompt so existing users can fill it in.
       var profile = AppState.getState().userProfile;
-      var name = (profile && (profile.name || profile.username)) ? (profile.name || profile.username) : 'Joel';
+      var name = (profile && (profile.name || profile.username)) ? (profile.name || profile.username) : '';
       var greetingEl = document.getElementById('header-greeting-title');
       if (greetingEl) {
         var prefix = "Servus";
@@ -11808,7 +11842,7 @@ const JobTracker = (function () {
         } else {
           prefix = "Gute Nacht";
         }
-        greetingEl.textContent = prefix + ' ' + name + '!';
+        greetingEl.textContent = name ? (prefix + ' ' + name + '!') : (prefix + '!');
       }
       _updateThemeToggleButtonIcon();
 
@@ -17773,8 +17807,19 @@ const JobTracker = (function () {
   }
 
   // ─── App Version & Changelog ─────────────────────────────────────────────────
-  const APP_VERSION = '3.1.5';
+  const APP_VERSION = '3.1.6';
   const APP_CHANGELOG = [
+    {
+      version: '3.1.6',
+      date: '2026-05-25',
+      changes: [
+        'v3.1.6 — Vorname, Edge-to-Edge Header & cleanere Chips',
+        '👋 Begrüßung zeigt jetzt deinen echten Vornamen — beim Onboarding wird er abgefragt, bestehende Nutzer werden einmalig gefragt',
+        '⚙️ Vorname jederzeit über Einstellungen → Persönliche Daten änderbar',
+        '🖼️ Gradient-Header geht jetzt randlos über die volle Bildschirmbreite (keine schwarzen Balken mehr)',
+        '✨ Quick-Info-Chips im Dunkelmodus deutlich aufgeräumt — echtes Frosted Glass statt grauem Wash'
+      ]
+    },
     {
       version: '3.1.5',
       date: '2026-05-24',
@@ -18843,6 +18888,31 @@ const JobTracker = (function () {
     YearChangePrompt.init();
     if (AppState.isOnboardingComplete()) {
       YearChangePrompt.check();
+    }
+
+    // ── Phase 6b: One-time Name Capture (V3.1.6) ──
+    // Existing users who onboarded before name field was added need to fill it in once.
+    if (AppState.isOnboardingComplete()) {
+      var profileForName = AppState.getState().userProfile;
+      var hasName = profileForName && (profileForName.name || profileForName.username);
+      if (!hasName) {
+        // Defer prompt slightly so the home view paints first
+        setTimeout(function () {
+          var entered = window.prompt('Wie heißt du? (Wird nur für die persönliche Begrüßung verwendet)');
+          if (entered && entered.trim()) {
+            var p = AppState.getState().userProfile || {};
+            p.name = entered.trim().slice(0, 40);
+            p.updatedAt = new Date().toISOString();
+            if (!p.createdAt) p.createdAt = p.updatedAt;
+            AppState.setState('userProfile', p);
+            EventBus.emit('profile:updated', { profile: p });
+            // Re-render dashboard to update greeting
+            if (typeof GesamtübersichtModule !== 'undefined' && GesamtübersichtModule.init) {
+              try { GesamtübersichtModule.init(); } catch (e) { /* ignore */ }
+            }
+          }
+        }, 800);
+      }
     }
 
     // ── Phase 7: Utilities ──

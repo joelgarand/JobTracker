@@ -398,8 +398,14 @@ body.has-sub-nav #view-yearly {
 /* V3.1.5: Gradient header lives inside #view-daily; other views need
    their own safe-area-aware top padding so titles don't stick to the
    iPhone notch. */
+/* V3.1.6: #view-daily must be edge-to-edge so the gradient header runs full-width.
+   Inner content gets its side-padding back via .scroll-content. */
 #view-daily {
-  padding-top: 0;
+  padding: 0;
+}
+#view-daily > .scroll-content {
+  padding-left: var(--spacing-md);
+  padding-right: var(--spacing-md);
 }
 #view-entry,
 #view-settings,
@@ -6397,7 +6403,9 @@ body.widget-dragging .view-section {
   --app-header-height: 0px;
 }
 
-/* Big warm gradient hero — V3.1.4: sticky shrinking single header (no separate compact bar) */
+/* Big warm gradient hero — V3.1.4: sticky shrinking single header (no separate compact bar)
+   V3.1.6: Header is full-width edge-to-edge. Negative side margins kill the parent padding,
+   internal padding handles the safe-area + horizontal breathing room. */
 .app-header {
   position: sticky;
   top: 0;
@@ -6413,7 +6421,7 @@ body.widget-dragging .view-section {
     linear-gradient(180deg, #f4d989 0%, #f0c764 28%, #1a1a24 100%);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
   border-bottom: none;
-  margin-bottom: 16px;
+  margin: 0 0 16px 0;
   /* Dynamic collapse via CSS variable set by JS scroll listener (0 = full, 1 = compact) */
   --scroll-collapse: 0;
   transition: box-shadow 0.2s ease, background 0.4s ease;
@@ -6659,44 +6667,45 @@ body.theme-light .balance-val {
 }
 
 .header-chip {
-  background: rgba(255, 255, 255, 0.30);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
-  border-radius: 14px;
-  padding: 8px 10px;
+  /* V3.1.6: cleaner per-theme tinted glass — no grey wash in dark mode */
+  background: rgba(255, 255, 255, 0.14);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-radius: 16px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.40);
+  gap: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
   min-width: 0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 body.theme-light .header-chip {
-  background: rgba(255, 255, 255, 0.65);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  box-shadow: 0 2px 8px rgba(166, 144, 100, 0.08);
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 4px 14px rgba(166, 144, 100, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 body.theme-dark .app-header.gradient-monochrome .header-chip {
-  background: rgba(255, 255, 255, 0.10);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .header-chip__label {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
-  color: rgba(0, 0, 0, 0.55);
+  color: rgba(0, 0, 0, 0.62);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
   line-height: 1;
 }
 body.theme-dark .app-header.gradient-monochrome .header-chip__label {
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .header-chip__val {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 800;
   color: #1a1a1a;
   font-variant-numeric: tabular-nums;
